@@ -1,0 +1,12 @@
+[Unit]
+Description=torgi.kz: публикация новых лотов в Telegram-канал
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=torgi
+WorkingDirectory=/opt/torgi/backend
+EnvironmentFile=/etc/torgi/torgi.env
+# пока токен и канал не заданы — тихо пропускаем
+ExecCondition=/bin/sh -c 'test -n "$TORGI_TELEGRAM_BOT_TOKEN" && test -n "$TORGI_TELEGRAM_CHANNEL"'
+ExecStart=/opt/torgi/backend/.venv/bin/python -m torgi.cli post --limit 5

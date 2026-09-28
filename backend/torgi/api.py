@@ -1,0 +1,206 @@
+"""REST API для сайта, Telegram-бота и приложения."""
+
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Annotated, Literal
+
+from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, selectinload
+
+from torgi import normalize as nz
+from torgi.config import settings
+from torgi.db import get_session, init_db
+from torgi.models import Lot, ParseRun, utcnow
+from torgi.parsers import PARSERS
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="torgi.kz API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET"], allow_headers=["*"])
+
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+class LotShort(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source: str
+    url: str
+    origin: str
+    sale_type: str | None
+    category: str
+    title: str
+    region: str | None
+    city: str | None
+    address: str | None
+    lat: float | None
+    lon: float | None
+    area_m2: float | None
+    land_area_ha: float | None
+    rooms: int | None
+    floor: int | None
+    floors_total: int | None
+    price: float | None
+    price_per_m2: float | None
+    auction_start: datetime | None
+    auction_end: datetime | None
+    applications_deadline: datetime | None
+    image: str | None = None
+    flags: list[str]
+    status: str
+    first_seen_at: datetime
+    price_drop_pct: float | None = None
+
+
+class PricePoint(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    price: float | None
+    seen_at: datetime
+
+
+class LotFull(LotShort):
+    description: str | None
+    year_built: int | None
+    cadastral: str | None
+    deposit: float | None
+    images: list[str]
+    contacts: dict
+    extra: dict
+    published_at: datetime | None
+    last_seen_at: datetime
+    price_history: list[PricePoint]
+
+
+class LotPage(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    items: list[LotShort]
+
+
+def _drop_pct(lot: Lot) -> float | None:
+    prices = [p.price for p in lot.price_history if p.price]
+    if len(prices) < 2 or not lot.price or prices[0] <= lot.price:
+        return None
+    return round((prices[0] - lot.price) / prices[0] * 100, 1)
+
+
+def _short(lot: Lot) -> LotShort:
+    item = LotShort.model_validate(lot)
+    item.image = lot.images[0] if lot.images else None
+    item.price_drop_pct = _drop_pct(lot)
+    return item
+
+
+SORTS = {
+    "new": Lot.first_seen_at.desc(),
+    "price_asc": Lot.price.asc(),
+    "price_desc": Lot.price.desc(),
+    "price_m2_asc": Lot.price_per_m2.asc(),
+    "deadline": Lot.auction_start.asc(),
+}
+
+
+@app.get("/api/lots", response_model=LotPage)
+def list_lots(
+    session: SessionDep,
+    q: str | None = None,
+    category: Annotated[list[str] | None, Query()] = None,
+    source: Annotated[list[str] | None, Query()] = None,
+    origin: Annotated[list[str] | None, Query()] = None,
+    sale_type: Annotated[list[str] | None, Query()] = None,
+    region: str | None = None,
+    city: str | None = None,
+    price_min: float | None = None,
+    price_max: float | None = None,
+    area_min: float | None = None,
+    area_max: float | None = None,
+    rooms: Annotated[list[int] | None, Query()] = None,
+    with_auction_date: bool = False,
+    include_removed: bool = False,
+    sort: Literal["new", "price_asc", "price_desc", "price_m2_asc", "deadline"] = "new",
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 24,
+):
+    stmt = select(Lot)
+    if not include_removed:
+        stmt = stmt.where(Lot.status == "active")
+    if q:
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(or_(Lot.title.ilike(like), Lot.address.ilike(like), Lot.cadastral.ilike(like)))
+    for column, values in ((Lot.category, category), (Lot.source, source), (Lot.origin, origin),
+                           (Lot.sale_type, sale_type), (Lot.rooms, rooms)):
+        if values:
+            stmt = stmt.where(column.in_(values))
+    if region:
+        stmt = stmt.where(Lot.region == region)
+    if city:
+        stmt = stmt.where(Lot.city == city)
+    if price_min is not None:
+        stmt = stmt.where(Lot.price >= price_min)
+    if price_max is not None:
+        stmt = stmt.where(Lot.price <= price_max)
+    if area_min is not None:
+        stmt = stmt.where(Lot.area_m2 >= area_min)
+    if area_max is not None:
+        stmt = stmt.where(Lot.area_m2 <= area_max)
+    if with_auction_date or sort == "deadline":
+        # только предстоящие или идущие торги
+        stmt = stmt.where(func.coalesce(Lot.auction_end, Lot.auction_start) >= utcnow())
+
+    total = session.scalar(select(func.count()).select_from(stmt.subquery()))
+    stmt = stmt.order_by(SORTS[sort].nulls_last(), Lot.id.desc()).offset((page - 1) * page_size).limit(page_size)
+    lots = session.scalars(stmt.options(selectinload(Lot.price_history))).all()
+    return LotPage(total=total or 0, page=page, page_size=page_size, items=[_short(lot) for lot in lots])
+
+
+@app.get("/api/lots/{lot_id}", response_model=LotFull)
+def get_lot(lot_id: int, session: SessionDep):
+    lot = session.get(Lot, lot_id, options=[selectinload(Lot.price_history)])
+    if lot is None:
+        raise HTTPException(404, "Лот не найден")
+    item = LotFull.model_validate(lot)
+    item.image = lot.images[0] if lot.images else None
+    item.price_drop_pct = _drop_pct(lot)
+    return item
+
+
+@app.get("/api/meta")
+def meta(session: SessionDep):
+    """Справочники для фильтров + счётчики активных лотов."""
+    active = Lot.status == "active"
+
+    def counts(column):
+        rows = session.execute(select(column, func.count()).where(active).group_by(column)).all()
+        return {k: v for k, v in rows if k is not None}
+
+    return {
+        "categories": [{"id": k, "title": v, "count": counts(Lot.category).get(k, 0)} for k, v in nz.CATEGORIES.items()],
+        "origins": [{"id": k, "title": v} for k, v in nz.ORIGINS.items()],
+        "sale_types": [{"id": k, "title": v} for k, v in nz.SALE_TYPES.items()],
+        "sources": [{"id": k, "title": p.title, "url": p.base_url, "count": counts(Lot.source).get(k, 0)}
+                    for k, p in PARSERS.items()],
+        "regions": [{"id": r, "count": counts(Lot.region).get(r, 0)} for r in nz.REGIONS],
+        "total": session.scalar(select(func.count()).where(active)),
+    }
+
+
+@app.get("/api/health")
+def health(session: SessionDep):
+    last = {}
+    for name in PARSERS:
+        run = session.scalars(
+            select(ParseRun).where(ParseRun.source == name).order_by(ParseRun.started_at.desc()).limit(1)
+        ).first()
+        last[name] = None if run is None else {
+            "status": run.status, "started_at": run.started_at, "found": run.found, "error": run.error,
+        }
+    return {"ok": True, "parsers": last}

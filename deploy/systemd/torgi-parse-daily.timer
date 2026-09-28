@@ -1,0 +1,10 @@
+[Unit]
+Description=torgi.kz: банки раз в сутки (ночью по Алматы)
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

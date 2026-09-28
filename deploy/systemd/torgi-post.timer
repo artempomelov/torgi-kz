@@ -1,0 +1,9 @@
+[Unit]
+Description=torgi.kz: Telegram каждые 30 минут с 8:00 до 22:00
+
+[Timer]
+OnCalendar=*-*-* 08..22:00,30:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

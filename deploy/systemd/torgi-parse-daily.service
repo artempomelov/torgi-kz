@@ -1,0 +1,11 @@
+[Unit]
+Description=torgi.kz: парсинг банков (Halyk, Alatau, Forte, BCC, Freedom)
+After=network-online.target postgresql.service
+
+[Service]
+Type=oneshot
+User=torgi
+WorkingDirectory=/opt/torgi/backend
+EnvironmentFile=/etc/torgi/torgi.env
+ExecStart=/opt/torgi/backend/.venv/bin/python -m torgi.cli parse halyk alatau forte bcc freedom
+TimeoutStartSec=2h

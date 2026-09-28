@@ -1,0 +1,15 @@
+[Unit]
+Description=torgi.kz site (Next.js)
+After=network.target torgi-api.service
+
+[Service]
+User=torgi
+WorkingDirectory=/opt/torgi/web
+Environment=NODE_ENV=production
+Environment=TORGI_API_URL=http://127.0.0.1:8000
+ExecStart=/usr/bin/npm run start -- -H 127.0.0.1 -p 3000
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
