@@ -249,7 +249,7 @@ def parse_land_ha(text: str | None) -> float | None:
     return value if value and value >= 0.001 else None
 
 
-_ROOMS_RE = re.compile(r"(\d{1,2})\s*[-–]?\s*(?:х\s*)?(?:комн|бөлмелі)", re.I)
+_ROOMS_RE = re.compile(r"(\d{1,2})\s*[-–]?\s*(?:х\s*)?(?:комн|ком\.|бөлмелі)", re.I)
 _FLOOR_SLASH_RE = re.compile(r"(\d{1,2})\s*/\s*(\d{1,2})\s*эт", re.I)
 _FLOOR_RE = re.compile(r"(?:на\s+)?(\d{1,2})\s*[-–]?\s*(?:м|ом|ем)?\s*этаж(?!н)", re.I)
 _FLOOR_LABEL_RE = re.compile(r"этаж\w*\s*[:\-]?\s*(\d{1,2})(?:\s*/\s*(\d{1,2}))?", re.I)

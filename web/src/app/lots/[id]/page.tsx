@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/LotCard";
-import { getLot } from "@/lib/api";
+import { getAllLotsFull, getLot } from "@/lib/data";
 import {
   CATEGORY_LABELS,
   ORIGIN_LABELS,
@@ -24,8 +24,15 @@ const CONTACT_LABELS: Record<string, string> = {
   position: "Должность",
 };
 
+// Статическая сборка: страница на каждый лот из выгрузки, остальные адреса — 404
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return getAllLotsFull().map((lot) => ({ id: String(lot.id) }));
+}
+
 export async function generateMetadata({ params }: PageProps<"/lots/[id]">): Promise<Metadata> {
-  const lot = await getLot((await params).id);
+  const lot = getLot((await params).id);
   if (!lot) return { title: "Лот не найден" };
   const subtitle = lotSubtitle(lot);
   return {
@@ -36,7 +43,7 @@ export async function generateMetadata({ params }: PageProps<"/lots/[id]">): Pro
 }
 
 export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
-  const lot = await getLot((await params).id);
+  const lot = getLot((await params).id);
   if (!lot) notFound();
 
   const specs: [string, React.ReactNode][] = (
@@ -68,7 +75,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <Link href="/lots" className="text-sm text-muted hover:text-brand">← Каталог</Link>
+      <Link href="/lots/" className="text-sm text-muted hover:text-brand">← Каталог</Link>
 
       {lot.status !== "active" && (
         <div className="mt-4 rounded-lg border border-accent/30 bg-accent/10 p-3 text-sm text-accent">

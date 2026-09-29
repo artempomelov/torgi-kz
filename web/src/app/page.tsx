@@ -1,15 +1,13 @@
 import Link from "next/link";
 
 import { LotCard } from "@/components/LotCard";
-import { getLots, getMeta } from "@/lib/api";
-import { CATEGORY_PLURAL, plural } from "@/lib/format";
+import { getLots, getMeta, getUpcomingAuctions } from "@/lib/data";
+import { CATEGORY_PLURAL, formatDate, plural } from "@/lib/format";
 
-export default async function Home() {
-  const [meta, latest, auctions] = await Promise.all([
-    getMeta(),
-    getLots({ sort: "new" }, 8),
-    getLots({ with_auction_date: "true", sort: "deadline" }, 4),
-  ]);
+export default function Home() {
+  const meta = getMeta();
+  const latest = { items: getLots().slice(0, 8) }; // lots.json уже отсортирован: новые первыми
+  const auctions = getUpcomingAuctions(4);
   const categories = meta.categories.filter((c) => c.count > 0);
 
   return (
@@ -21,12 +19,12 @@ export default async function Home() {
           </h1>
           <p className="mt-4 max-w-2xl text-base text-white/80 md:text-lg">
             {meta.total.toLocaleString("ru-RU")} {plural(meta.total, ["объект", "объекта", "объектов"])}: арестованное
-            имущество с площадки Минюста, залоги и имущество банков. Обновляем каждый день.
+            имущество с площадки Минюста, залоги и имущество банков. Обновлено {formatDate(meta.updated_at, true)}.
           </p>
-          <form action="/lots" className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row">
+          <form action="/lots/" className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row">
             <input
               name="q"
-              placeholder="Город, улица или кадастровый номер"
+              placeholder="Город или улица"
               className="flex-1 rounded-lg bg-white px-4 py-3 text-foreground outline-none placeholder:text-muted"
             />
             <button className="rounded-lg bg-accent px-6 py-3 font-semibold text-white hover:brightness-110">
@@ -37,7 +35,7 @@ export default async function Home() {
             {categories.map((c) => (
               <Link
                 key={c.id}
-                href={`/lots?category=${c.id}`}
+                href={`/lots/?category=${c.id}`}
                 className="rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20"
               >
                 {CATEGORY_PLURAL[c.id] ?? c.title} <span className="text-white/60">{c.count}</span>
@@ -51,7 +49,7 @@ export default async function Home() {
         <section className="mx-auto max-w-7xl px-4 pt-10">
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="text-2xl font-bold">Ближайшие торги</h2>
-            <Link href="/lots?with_auction_date=true&sort=deadline" className="text-sm font-medium text-brand">
+            <Link href="/lots/?with_auction_date=true&sort=deadline" className="text-sm font-medium text-brand">
               Все {auctions.total} →
             </Link>
           </div>
@@ -66,7 +64,7 @@ export default async function Home() {
       <section className="mx-auto max-w-7xl px-4 pt-10">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-2xl font-bold">Новые объекты</h2>
-          <Link href="/lots" className="text-sm font-medium text-brand">
+          <Link href="/lots/" className="text-sm font-medium text-brand">
             Весь каталог →
           </Link>
         </div>
@@ -83,7 +81,7 @@ export default async function Home() {
           {meta.sources.map((s) => (
             <Link
               key={s.id}
-              href={`/lots?source=${s.id}`}
+              href={`/lots/?source=${s.id}`}
               className="rounded-xl border border-border bg-surface p-4 hover:border-brand/40"
             >
               <div className="text-sm font-semibold">{s.title}</div>

@@ -1,13 +1,16 @@
 # torgi.kz — агрегатор торгов недвижимостью в Казахстане
 
-Сайт **torgi.kz** (+ 301-редиректы с vsetorgi.kz и torgi-nedvizhimost.kz), Telegram-канал и мобильное приложение
-на общем API.
+Сайт **torgi.kz**, Telegram-канал и (позже) мобильное приложение.
+
+Сейчас работает **без сервера**: GitHub Actions по расписанию парсит источники, собирает статический сайт
+и публикует его на GitHub Pages. Когда понадобится (приложение, API, рост нагрузки) — переезд на VPS, скрипты в `deploy/`.
 
 ```
-backend/   Python: парсеры источников, база (SQLite локально / PostgreSQL на сервере), REST API (FastAPI)
-web/       Сайт: Next.js 16 (App Router, Tailwind)
-deploy/    nginx: основной домен и редиректы
-docs/      Исследование источников
+backend/            Python: парсеры, база SQLite/PostgreSQL, выгрузка JSON, REST API (FastAPI), Telegram
+web/                Сайт: Next.js 16, статический экспорт (output: export)
+.github/workflows/  Расписание парсинга, сборка и публикация на GitHub Pages
+deploy/             Вариант на VPS: nginx, systemd, скрипты установки
+docs/               Исследование источников
 ```
 
 ## Источники
@@ -38,9 +41,11 @@ uv run python -m pytest                     # тесты на сохранённ
 ```
 
 ```bash
+cd backend && uv run python -m torgi.cli export ../web/data   # JSON для сайта из локальной базы
 cd web
 npm install
-npm run dev                                 # сайт: http://localhost:3000 (API берёт из TORGI_API_URL)
+npm run dev                                 # сайт: http://localhost:3000
+npm run build                               # статический сайт в web/out
 ```
 
 ## Как устроена загрузка
@@ -60,8 +65,7 @@ npm run dev                                 # сайт: http://localhost:3000 (A
    TORGI_TELEGRAM_BOT_TOKEN=...
    TORGI_TELEGRAM_CHANNEL=@имя_канала
    ```
-3. Один раз пометить текущую базу как опубликованную, чтобы не выгрузить в канал 1400 постов:
-   `uv run python -m torgi.cli post --mark-all`
+3. При первом запуске для канала текущие лоты автоматически помечаются опубликованными — в канал идут только новые.
 4. Дальше по расписанию после парсинга: `uv run python -m torgi.cli post --limit 10`
    (`--dry-run` — показать посты без отправки). Лоты с флагами качества в канал не попадают.
 
@@ -73,7 +77,26 @@ npm run dev                                 # сайт: http://localhost:3000 (A
 - `GET /api/meta` — справочники и счётчики для фильтров
 - `GET /api/health` — состояние парсеров
 
-## Деплой
+## Публикация: GitHub Pages (текущий вариант)
+
+Workflow [.github/workflows/update.yml](.github/workflows/update.yml):
+- каждый час — etp.adilet; в 04:00 по Алматы — банки; при push в `main` — только пересборка сайта;
+  вручную — Actions → «Парсинг и публикация сайта» → Run workflow (можно указать источники);
+- база SQLite хранится между запусками в релизе `data` (файл `torgi.db.gz`) — там же история цен;
+- после парсинга: выгрузка JSON → `next build` → публикация на Pages → посты в Telegram.
+
+Настройка (один раз):
+1. Settings → Pages → Source: **GitHub Actions**; Custom domain: `torgi.kz`, включить Enforce HTTPS.
+2. DNS torgi.kz (hoster.kz): A-записи `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`;
+   `www` — CNAME на `<логин>.github.io`.
+3. Telegram: Settings → Secrets and variables → Actions: секрет `TORGI_TELEGRAM_BOT_TOKEN`,
+   переменная `TORGI_TELEGRAM_CHANNEL` (`@имя_канала`). При первом запуске текущие лоты помечаются опубликованными.
+4. vsetorgi.kz и torgi-nedvizhimost.kz: переадресация на https://torgi.kz в панели регистратора.
+
+Ограничения: запросы идут с серверов GitHub (США/Европа) — если источник блокирует зарубежные IP, его парсинг
+упадёт с предупреждением в логе; расписание в публичном репозитории GitHub отключает после 60 дней без коммитов.
+
+## Деплой на VPS (на будущее)
 
 Сервер: VPS с Ubuntu 24.04, от 2 ГБ RAM (сборке Next.js нужно ~1,5 ГБ), root-доступ по SSH-ключу.
 DNS: A-записи `torgi.kz`, `www.torgi.kz`, `vsetorgi.kz`, `www.vsetorgi.kz`, `torgi-nedvizhimost.kz`,
@@ -86,7 +109,7 @@ deploy/deploy.sh root@IP                          # обновления
 
 На сервере:
 - код — `/opt/torgi`, настройки и пароль БД — `/etc/torgi/torgi.env`;
-- `torgi-api` (uvicorn :8000) и `torgi-web` (next start :3000) за nginx;
+- `torgi-api` (uvicorn :8000) за nginx, сайт — статика из `web/out`, пересобирается после каждого парсинга;
 - таймеры: `torgi-parse-hourly` (etp.adilet, каждый час), `torgi-parse-daily` (банки, 04:00 по Алматы),
   `torgi-post` (Telegram, каждые 30 минут с 8 до 22 — работает, когда заданы токен и канал);
 - логи: `journalctl -u torgi-parse-daily -n 100`, состояние парсеров: `https://torgi.kz/api/health`.

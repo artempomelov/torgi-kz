@@ -1,0 +1,83 @@
+// Фильтрация и сортировка каталога в браузере (повторяет логику /api/lots бэкенда).
+import type { Lot } from "./api";
+
+export const PAGE_SIZE = 24;
+
+export const SORTS = [
+  ["new", "Сначала новые"],
+  ["price_asc", "Сначала дешёвые"],
+  ["price_desc", "Сначала дорогие"],
+  ["price_m2_asc", "Дешевле за м²"],
+  ["deadline", "По дате торгов"],
+] as const;
+
+export type Filters = {
+  q: string;
+  category: string[];
+  source: string[];
+  origin: string[];
+  region: string;
+  price_min: string;
+  price_max: string;
+  area_min: string;
+  area_max: string;
+  with_auction_date: boolean;
+  sort: string;
+  page: number;
+};
+
+export function parseFilters(params: URLSearchParams): Filters {
+  return {
+    q: params.get("q") ?? "",
+    category: params.getAll("category"),
+    source: params.getAll("source"),
+    origin: params.getAll("origin"),
+    region: params.get("region") ?? "",
+    price_min: params.get("price_min") ?? "",
+    price_max: params.get("price_max") ?? "",
+    area_min: params.get("area_min") ?? "",
+    area_max: params.get("area_max") ?? "",
+    with_auction_date: params.get("with_auction_date") === "true",
+    sort: params.get("sort") ?? "new",
+    page: Math.max(1, Number(params.get("page")) || 1),
+  };
+}
+
+export function isUpcoming(lot: Lot, now = Date.now()): boolean {
+  const end = lot.auction_end ?? lot.auction_start;
+  return !!lot.auction_start && !!end && Date.parse(end) >= now;
+}
+
+const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+export function applyFilters(lots: Lot[], f: Filters): Lot[] {
+  const q = f.q.trim().toLowerCase();
+  const [pMin, pMax, aMin, aMax] = [num(f.price_min), num(f.price_max), num(f.area_min), num(f.area_max)];
+  const now = Date.now();
+  const onlyAuctions = f.with_auction_date || f.sort === "deadline";
+
+  const result = lots.filter((lot) => {
+    if (f.category.length && !f.category.includes(lot.category)) return false;
+    if (f.source.length && !f.source.includes(lot.source)) return false;
+    if (f.origin.length && !f.origin.includes(lot.origin)) return false;
+    if (f.region && lot.region !== f.region) return false;
+    if (pMin !== null && (lot.price ?? -1) < pMin) return false;
+    if (pMax !== null && (lot.price == null || lot.price > pMax)) return false;
+    if (aMin !== null && (lot.area_m2 ?? -1) < aMin) return false;
+    if (aMax !== null && (lot.area_m2 == null || lot.area_m2 > aMax)) return false;
+    if (onlyAuctions && !isUpcoming(lot, now)) return false;
+    if (q && ![lot.title, lot.address, lot.city].some((s) => s?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  const nullsLast = (a: number | null, b: number | null, dir: 1 | -1) =>
+    a == null ? (b == null ? 0 : 1) : b == null ? -1 : (a - b) * dir;
+  const sorters: Record<string, (a: Lot, b: Lot) => number> = {
+    new: (a, b) => Date.parse(b.first_seen_at) - Date.parse(a.first_seen_at) || b.id - a.id,
+    price_asc: (a, b) => nullsLast(a.price, b.price, 1),
+    price_desc: (a, b) => nullsLast(a.price, b.price, -1),
+    price_m2_asc: (a, b) => nullsLast(a.price_per_m2, b.price_per_m2, 1),
+    deadline: (a, b) => Date.parse(a.auction_start!) - Date.parse(b.auction_start!),
+  };
+  return result.sort(sorters[f.sort] ?? sorters.new);
+}

@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/prepare-data.mjs",
     "build": "next build",
+    "predev": "node scripts/prepare-data.mjs",
     "start": "next start",
     "lint": "eslint"
   },

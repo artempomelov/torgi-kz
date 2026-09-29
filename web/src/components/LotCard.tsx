@@ -27,7 +27,7 @@ export function LotCard({ lot }: { lot: Lot }) {
   const subtitle = lotSubtitle(lot);
   return (
     <Link
-      href={`/lots/${lot.id}`}
+      href={`/lots/${lot.id}/`}
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand/40 hover:shadow-md"
     >
       <div className="relative aspect-[4/3] bg-background">

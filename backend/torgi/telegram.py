@@ -137,6 +137,11 @@ def run(session: Session, limit: int = 10, since_days: int = 3, dry_run: bool = 
         log.info("помечено как опубликованное: %d", len(lots))
         return len(lots)
 
+    if not dry_run and session.scalar(select(ChannelPost.id).where(ChannelPost.channel == channel).limit(1)) is None:
+        # Первый запуск для канала: текущую базу не выгружаем, публикуем только новое
+        log.info("канал %s: первый запуск — текущие лоты помечены опубликованными", channel)
+        return run(session, mark_all=True)
+
     lots = pending_lots(session, channel, limit, since_days)
     if dry_run:
         for lot in lots:

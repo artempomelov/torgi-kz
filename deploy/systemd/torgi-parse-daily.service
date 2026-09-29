@@ -7,5 +7,6 @@ Type=oneshot
 User=torgi
 WorkingDirectory=/opt/torgi/backend
 EnvironmentFile=/etc/torgi/torgi.env
-ExecStart=/opt/torgi/backend/.venv/bin/python -m torgi.cli parse halyk alatau forte bcc freedom
+ExecStart=-/opt/torgi/backend/.venv/bin/python -m torgi.cli parse halyk alatau forte bcc freedom
+ExecStartPost=/bin/bash /opt/torgi/deploy/rebuild-site.sh
 TimeoutStartSec=2h

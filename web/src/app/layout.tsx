@@ -18,11 +18,11 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
-  { href: "/lots?category=apartment", label: "Квартиры" },
-  { href: "/lots?category=house", label: "Дома" },
-  { href: "/lots?category=commercial", label: "Коммерция" },
-  { href: "/lots?category=land", label: "Земля" },
-  { href: "/lots?with_auction_date=true&sort=deadline", label: "Ближайшие торги" },
+  { href: "/lots/?category=apartment", label: "Квартиры" },
+  { href: "/lots/?category=house", label: "Дома" },
+  { href: "/lots/?category=commercial", label: "Коммерция" },
+  { href: "/lots/?category=land", label: "Земля" },
+  { href: "/lots/?with_auction_date=true&sort=deadline", label: "Ближайшие торги" },
 ];
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

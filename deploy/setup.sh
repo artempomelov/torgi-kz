@@ -87,6 +87,6 @@ nginx -t && systemctl reload nginx
 echo "==> systemd"
 cp "$APP"/deploy/systemd/*.service "$APP"/deploy/systemd/*.timer /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable torgi-api torgi-web torgi-parse-hourly.timer torgi-parse-daily.timer torgi-post.timer
+systemctl enable torgi-api torgi-parse-hourly.timer torgi-parse-daily.timer torgi-post.timer
 
 echo "==> Готово. Сертификат на: ${DOMAINS[*]}"

@@ -1,0 +1,110 @@
+name: Парсинг и публикация сайта
+
+on:
+  schedule:
+    - cron: "5 * * * *"    # каждый час — etp.adilet (арестованное имущество)
+    - cron: "0 22 * * *"   # 04:00 по Алматы — банки
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: "Источники через пробел (adilet halyk alatau forte bcc freedom); пусто — только пересобрать сайт"
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths: ["backend/**", "web/**", ".github/workflows/**"]
+
+permissions:
+  contents: write   # релиз «data» хранит базу SQLite между запусками
+  pages: write
+  id-token: write
+
+concurrency:
+  group: torgi-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TORGI_DATABASE_URL: sqlite:///${{ github.workspace }}/torgi.db
+      PYTHONIOENCODING: utf-8
+      # Telegram: секрет TORGI_TELEGRAM_BOT_TOKEN и переменная TORGI_TELEGRAM_CHANNEL в настройках репозитория
+      TORGI_TELEGRAM_BOT_TOKEN: ${{ secrets.TORGI_TELEGRAM_BOT_TOKEN }}
+      TORGI_TELEGRAM_CHANNEL: ${{ vars.TORGI_TELEGRAM_CHANNEL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Скачать базу из релиза «data»
+        run: |
+          if gh release download data --pattern torgi.db.gz --dir . 2>/dev/null; then
+            gunzip -f torgi.db.gz && ls -la torgi.db
+          else
+            echo "Базы ещё нет — будет первый полный парсинг"
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: Зависимости backend
+        working-directory: backend
+        run: uv sync --frozen
+
+      - name: Парсинг
+        id: parse
+        working-directory: backend
+        run: |
+          case "${{ github.event_name }}|${{ github.event.schedule }}" in
+            "schedule|5 * * * *")  SOURCES="adilet" ;;
+            "schedule|0 22 * * *") SOURCES="halyk alatau forte bcc freedom" ;;
+            workflow_dispatch*)    SOURCES="${{ inputs.sources }}" ;;
+            *)                     SOURCES="" ;;
+          esac
+          [ -f ../torgi.db ] || SOURCES="adilet halyk alatau forte bcc freedom"
+          echo "sources=$SOURCES" >> "$GITHUB_OUTPUT"
+          if [ -n "$SOURCES" ]; then
+            uv run python -m torgi.cli parse $SOURCES \
+              || echo "::warning::Часть источников завершилась с ошибкой — см. лог выше"
+          fi
+
+      - name: Сохранить базу в релиз «data»
+        if: steps.parse.outputs.sources != ''
+        run: |
+          gzip -kf torgi.db
+          gh release view data >/dev/null 2>&1 || gh release create data --title "База данных" \
+            --notes "SQLite-база лотов, обновляется автоматически workflow «Парсинг и публикация сайта»." --latest=false
+          gh release upload data torgi.db.gz --clobber
+
+      - name: Выгрузка JSON для сайта
+        working-directory: backend
+        run: uv run python -m torgi.cli export ../web/data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Сборка сайта
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npm run build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/out
+      - name: Публикация на GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Telegram-канал
+        if: env.TORGI_TELEGRAM_BOT_TOKEN != '' && env.TORGI_TELEGRAM_CHANNEL != '' && steps.parse.outputs.sources != ''
+        working-directory: backend
+        run: |
+          uv run python -m torgi.cli post --limit 5
+          gzip -kf ../torgi.db && gh release upload data ../torgi.db.gz --clobber

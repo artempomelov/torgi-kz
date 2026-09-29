@@ -19,3 +19,8 @@ next-env.d.ts
 Thumbs.db
 .vscode/
 .idea/
+
+# Сгенерированные данные сайта
+web/data/
+web/public/data/
+web/public/CNAME
