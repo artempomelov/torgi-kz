@@ -85,13 +85,14 @@ Workflow [.github/workflows/update.yml](.github/workflows/update.yml):
 - база SQLite хранится между запусками в релизе `data` (файл `torgi.db.gz`) — там же история цен;
 - после парсинга: выгрузка JSON → `next build` → публикация на Pages → посты в Telegram.
 
-Настройка (один раз):
-1. Settings → Pages → Source: **GitHub Actions**; Custom domain: `torgi.kz`, включить Enforce HTTPS.
-2. DNS torgi.kz (hoster.kz): A-записи `185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`;
-   `www` — CNAME на `<логин>.github.io`.
-3. Telegram: Settings → Secrets and variables → Actions: секрет `TORGI_TELEGRAM_BOT_TOKEN`,
-   переменная `TORGI_TELEGRAM_CHANNEL` (`@имя_канала`). При первом запуске текущие лоты помечаются опубликованными.
-4. vsetorgi.kz и torgi-nedvizhimost.kz: переадресация на https://torgi.kz в панели регистратора.
+Текущая настройка (сделано 29.09.2026):
+- репозиторий https://github.com/artempomelov/torgi-kz, Pages из Actions, custom domain `torgi.kz`, Enforce HTTPS;
+- DNS torgi.kz в кабинете hoster.kz (DNS-хостинг): A `185.199.108.153`, `.109.153`, `.110.153`, `.111.153`,
+  `www` — CNAME `artempomelov.github.io.`; записи почты (mail, MX, SPF) не трогали;
+- vsetorgi.kz и torgi-nedvizhimost.kz — «Редирект на домене» в кабинете hoster.kz, 301 на https://torgi.kz.
+
+Telegram: Settings → Secrets and variables → Actions: секрет `TORGI_TELEGRAM_BOT_TOKEN`,
+переменная `TORGI_TELEGRAM_CHANNEL` (`@имя_канала`). При первом запуске текущие лоты помечаются опубликованными.
 
 Ограничения: запросы идут с серверов GitHub (США/Европа) — если источник блокирует зарубежные IP, его парсинг
 упадёт с предупреждением в логе; расписание в публичном репозитории GitHub отключает после 60 дней без коммитов.
