@@ -19,6 +19,12 @@ fi
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 timedatectl set-timezone Asia/Almaty
 
+# подкачка 2 ГБ — страховка для сборки Next.js на сервере с 2 ГБ RAM
+if ! swapon --show | grep -q .; then
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 echo "==> Пользователь и каталоги"
 id torgi >/dev/null 2>&1 || useradd --system --create-home --home-dir /home/torgi --shell /usr/sbin/nologin torgi
 chown -R torgi:torgi "$APP"
