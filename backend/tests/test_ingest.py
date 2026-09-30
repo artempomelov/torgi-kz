@@ -63,6 +63,9 @@ def test_ingest_and_api(monkeypatch):
 
     assert client.get("/api/lots", params={"source": "fake", "price_max": 21_000_000}).json()["total"] == 1
     assert client.get("/api/lots", params={"source": "fake", "q": "Квартира 2"}).json()["total"] == 1
+    # цена за м²: 20 млн / 50 м² = 400 000, 27 млн / 50 м² = 540 000
+    assert client.get("/api/lots", params={"source": "fake", "ppm_max": 450_000}).json()["total"] == 1
+    assert client.get("/api/lots", params={"source": "fake", "ppm_min": 500_000}).json()["total"] == 1
     assert client.get("/api/lots/999999").status_code == 404
     meta = client.get("/api/meta").json()
     assert next(src["count"] for src in meta["sources"] if src["id"] == "fake") == 2

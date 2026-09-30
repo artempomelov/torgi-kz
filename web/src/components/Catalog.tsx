@@ -98,6 +98,15 @@ export function Catalog({ meta }: { meta: Meta }) {
             </div>
           </div>
 
+          <div>
+            <span className="label">Цена за м², ₸</span>
+            <div className="flex gap-2">
+              <input name="ppm_min" type="number" min={0} step={1000} placeholder="от" defaultValue={f.ppm_min} className="field" />
+              <input name="ppm_max" type="number" min={0} step={1000} placeholder="до" defaultValue={f.ppm_max} className="field" />
+            </div>
+            <p className="mt-1 text-xs text-muted">Для квартир и коммерции</p>
+          </div>
+
           <fieldset>
             <legend className="label">Вид продажи</legend>
             <div className="space-y-1">

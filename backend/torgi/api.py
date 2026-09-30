@@ -126,6 +126,8 @@ def list_lots(
     price_max: float | None = None,
     area_min: float | None = None,
     area_max: float | None = None,
+    ppm_min: float | None = None,  # цена за м² — квартиры и коммерция
+    ppm_max: float | None = None,
     rooms: Annotated[list[int] | None, Query()] = None,
     with_auction_date: bool = False,
     include_removed: bool = False,
@@ -155,6 +157,12 @@ def list_lots(
         stmt = stmt.where(Lot.area_m2 >= area_min)
     if area_max is not None:
         stmt = stmt.where(Lot.area_m2 <= area_max)
+    if ppm_min is not None or ppm_max is not None:
+        stmt = stmt.where(Lot.category.in_(("apartment", "commercial")), Lot.price_per_m2.is_not(None))
+        if ppm_min is not None:
+            stmt = stmt.where(Lot.price_per_m2 >= ppm_min)
+        if ppm_max is not None:
+            stmt = stmt.where(Lot.price_per_m2 <= ppm_max)
     if with_auction_date or sort == "deadline":
         # только предстоящие или идущие торги
         stmt = stmt.where(func.coalesce(Lot.auction_end, Lot.auction_start) >= utcnow())

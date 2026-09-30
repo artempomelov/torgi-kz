@@ -3,6 +3,8 @@ import type { Lot } from "./api";
 
 export const PAGE_SIZE = 24;
 
+export const PPM_CATEGORIES = new Set(["apartment", "commercial"]);
+
 export const SORTS = [
   ["new", "Сначала новые"],
   ["price_asc", "Сначала дешёвые"],
@@ -21,6 +23,8 @@ export type Filters = {
   price_max: string;
   area_min: string;
   area_max: string;
+  ppm_min: string; // цена за м² — квартиры и коммерция
+  ppm_max: string;
   with_auction_date: boolean;
   sort: string;
   page: number;
@@ -37,6 +41,8 @@ export function parseFilters(params: URLSearchParams): Filters {
     price_max: params.get("price_max") ?? "",
     area_min: params.get("area_min") ?? "",
     area_max: params.get("area_max") ?? "",
+    ppm_min: params.get("ppm_min") ?? "",
+    ppm_max: params.get("ppm_max") ?? "",
     with_auction_date: params.get("with_auction_date") === "true",
     sort: params.get("sort") ?? "new",
     page: Math.max(1, Number(params.get("page")) || 1),
@@ -53,6 +59,7 @@ const num = (v: string) => (v.trim() === "" ? null : Number(v));
 export function applyFilters(lots: Lot[], f: Filters): Lot[] {
   const q = f.q.trim().toLowerCase();
   const [pMin, pMax, aMin, aMax] = [num(f.price_min), num(f.price_max), num(f.area_min), num(f.area_max)];
+  const [mMin, mMax] = [num(f.ppm_min), num(f.ppm_max)];
   const now = Date.now();
   const onlyAuctions = f.with_auction_date || f.sort === "deadline";
 
@@ -65,6 +72,11 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
     if (pMax !== null && (lot.price == null || lot.price > pMax)) return false;
     if (aMin !== null && (lot.area_m2 ?? -1) < aMin) return false;
     if (aMax !== null && (lot.area_m2 == null || lot.area_m2 > aMax)) return false;
+    if (mMin !== null || mMax !== null) {
+      // цена за м² считается только для квартир и коммерции (как на карточках)
+      const ppm = PPM_CATEGORIES.has(lot.category) ? lot.price_per_m2 : null;
+      if (ppm == null || (mMin !== null && ppm < mMin) || (mMax !== null && ppm > mMax)) return false;
+    }
     if (onlyAuctions && !isUpcoming(lot, now)) return false;
     if (q && ![lot.title, lot.address, lot.city].some((s) => s?.toLowerCase().includes(q))) return false;
     return true;
