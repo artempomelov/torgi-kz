@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 
+import { AccountButton } from "@/components/AccountButton";
 import { YandexMetrika } from "@/components/YandexMetrika";
 import { FEATURES } from "@/lib/features";
 import "./globals.css";
@@ -51,11 +52,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   Telegram
                 </a>
               )}
-              {FEATURES.auth && (
-                <button type="button" className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white hover:bg-brand-hover">
-                  Войти
-                </button>
-              )}
+              {FEATURES.auth && <AccountButton />}
             </div>
           </div>
         </header>

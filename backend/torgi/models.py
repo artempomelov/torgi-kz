@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy import DateTime as _DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -106,6 +106,38 @@ class PriceChange(Base):
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     lot: Mapped[Lot] = relationship(back_populates="price_history")
+
+
+class User(Base):
+    """Посетитель, вошедший через Telegram."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)  # id Telegram больше 2^31
+    first_name: Mapped[str | None] = mapped_column(String(128))
+    last_name: Mapped[str | None] = mapped_column(String(128))
+    username: Mapped[str | None] = mapped_column(String(64))
+    photo_url: Mapped[str | None] = mapped_column(String(512))
+    subscription_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    def has_subscription(self, now: datetime | None = None) -> bool:
+        return self.subscription_until is not None and self.subscription_until > (now or utcnow())
+
+
+class DetailView(Base):
+    """Открытие закрытых данных лота — для дневного лимита бесплатных просмотров."""
+
+    __tablename__ = "detail_views"
+    __table_args__ = (UniqueConstraint("user_id", "lot_id", "day", name="uq_detail_view"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"))
+    day: Mapped[str] = mapped_column(String(10), index=True)  # дата по Алматы, YYYY-MM-DD
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ChannelPost(Base):

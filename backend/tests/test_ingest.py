@@ -1,17 +1,14 @@
-"""Загрузка в базу и API на временной SQLite."""
+"""Загрузка в базу и API на временной SQLite (см. conftest.py)."""
 
-import os
 import tempfile
 
-os.environ["TORGI_DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/test.db"
+from fastapi.testclient import TestClient
 
-from fastapi.testclient import TestClient  # noqa: E402
-
-from torgi import ingest  # noqa: E402
-from torgi.api import app  # noqa: E402
-from torgi.db import SessionLocal, init_db  # noqa: E402
-from torgi.models import Lot  # noqa: E402
-from torgi.parsers.base import ParsedLot, Parser  # noqa: E402
+from torgi import ingest
+from torgi.api import app
+from torgi.db import SessionLocal, init_db
+from torgi.models import Lot
+from torgi.parsers.base import ParsedLot, Parser
 
 
 class FakeParser(Parser):
@@ -64,11 +61,11 @@ def test_ingest_and_api(monkeypatch):
     detail = client.get(f"/api/lots/{page['items'][1]['id']}").json()
     assert len(detail["price_history"]) == 2
 
-    assert client.get("/api/lots", params={"price_max": 21_000_000}).json()["total"] == 1
-    assert client.get("/api/lots", params={"q": "Квартира 2"}).json()["total"] == 1
+    assert client.get("/api/lots", params={"source": "fake", "price_max": 21_000_000}).json()["total"] == 1
+    assert client.get("/api/lots", params={"source": "fake", "q": "Квартира 2"}).json()["total"] == 1
     assert client.get("/api/lots/999999").status_code == 404
     meta = client.get("/api/meta").json()
-    assert meta["total"] == 2
+    assert next(src["count"] for src in meta["sources"] if src["id"] == "fake") == 2
 
     # Выгрузка для сайта: открытый режим — всё есть; платный — закрытых полей нет нигде
     import json
@@ -80,7 +77,8 @@ def test_ingest_and_api(monkeypatch):
     with SessionLocal() as session:
         export(session, out)
         opened = json.loads((out / "lots-full.json").read_text(encoding="utf-8"))
-        assert opened[0]["url"] and opened[0]["headline"].startswith("Квартира, 50 м² — Алматы")
+        fake = next(item for item in opened if item["source"] == "fake")
+        assert fake["url"] and fake["headline"].startswith("Квартира, 50 м² — Алматы")
 
         export(session, out, gated=True)
     for name in ("lots.json", "lots-full.json"):

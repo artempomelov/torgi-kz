@@ -109,7 +109,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             </dl>
           </section>
 
-          <LotDetails details={lot} isAuction={isAuction} />
+          <LotDetails lotId={lot.id} details={lot} isAuction={isAuction} />
         </div>
 
         <aside className="space-y-4">

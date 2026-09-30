@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     telegram_channel: str | None = None  # "@имя_канала" или числовой id
     telegram_post_delay: float = 4.0  # секунд между постами (лимит Telegram ~20 сообщений/мин в канал)
 
+    # Вход и платный доступ (готово заранее, включается на сайте флагами NEXT_PUBLIC_PAYWALL/AUTH).
+    # Вход — Telegram Login Widget того же бота (в @BotFather: /setdomain torgi.kz).
+    secret_key: str = "dev-secret-change-me"  # подпись сессий; на сервере — длинная случайная строка
+    session_days: int = 30
+    free_details_per_day: int = 5
+    cookie_secure: bool = True  # локально по http — TORGI_COOKIE_SECURE=false
+
     cors_origins: list[str] = [
         "http://localhost:3000",
         "https://torgi.kz",

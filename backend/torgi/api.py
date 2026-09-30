@@ -4,16 +4,17 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from torgi import auth
 from torgi import normalize as nz
 from torgi.config import settings
 from torgi.db import get_session, init_db
-from torgi.models import Lot, ParseRun, utcnow
+from torgi.models import Lot, ParseRun, User, utcnow
 from torgi.parsers import PARSERS
 
 @asynccontextmanager
@@ -23,7 +24,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="torgi.kz API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
+                   allow_headers=["*"], allow_credentials=True)
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -204,3 +206,109 @@ def health(session: SessionDep):
             "status": run.status, "started_at": run.started_at, "found": run.found, "error": run.error,
         }
     return {"ok": True, "parsers": last}
+
+
+# --- Вход и закрытые данные (платный режим) ----------------------------------------
+
+
+def current_user(request: Request, session: SessionDep) -> User | None:
+    uid = auth.read_session_token(request.cookies.get(auth.COOKIE_NAME))
+    return session.get(User, uid) if uid else None
+
+
+UserDep = Annotated[User | None, Depends(current_user)]
+
+
+class TelegramAuthIn(BaseModel):
+    id: int
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    auth_date: int
+    hash: str
+
+
+class MeOut(BaseModel):
+    authenticated: bool
+    name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+    subscription_until: datetime | None = None
+    free_per_day: int
+    remaining_today: int | None = None
+
+
+def _me(session: Session, user: User | None) -> MeOut:
+    limit = settings.free_details_per_day
+    if user is None:
+        return MeOut(authenticated=False, free_per_day=limit)
+    remaining = limit if user.has_subscription() else max(0, limit - auth.views_today(session, user))
+    return MeOut(
+        authenticated=True,
+        name=" ".join(x for x in (user.first_name, user.last_name) if x) or user.username,
+        username=user.username,
+        photo_url=user.photo_url,
+        subscription_until=user.subscription_until if user.has_subscription() else None,
+        free_per_day=limit,
+        remaining_today=remaining,
+    )
+
+
+@app.post("/api/auth/telegram", response_model=MeOut)
+def auth_telegram(payload: TelegramAuthIn, response: Response, session: SessionDep):
+    if not settings.telegram_bot_token:
+        raise HTTPException(503, "Вход через Telegram не настроен")
+    try:
+        tg = auth.check_telegram_auth(payload.model_dump(), settings.telegram_bot_token)
+    except auth.AuthError as exc:
+        raise HTTPException(401, f"Не удалось войти: {exc}") from exc
+    user = auth.upsert_user(session, tg)
+    response.set_cookie(
+        auth.COOKIE_NAME, auth.make_session_token(user.id), max_age=settings.session_days * 86400,
+        httponly=True, secure=settings.cookie_secure, samesite="lax", path="/",
+    )
+    return _me(session, user)
+
+
+@app.post("/api/auth/logout")
+def auth_logout(response: Response):
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/me", response_model=MeOut)
+def me(session: SessionDep, user: UserDep):
+    return _me(session, user)
+
+
+class LotDetailsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    title: str
+    address: str | None
+    lat: float | None
+    lon: float | None
+    cadastral: str | None
+    url: str
+    contacts: dict
+    description: str | None
+    extra: dict
+    price_history: list[PricePoint]
+    remaining_today: int | None = None
+
+
+@app.get("/api/lots/{lot_id}/details", response_model=LotDetailsOut)
+def lot_details(lot_id: int, session: SessionDep, user: UserDep):
+    """Закрытые поля лота (GATED_FIELDS): только после входа, бесплатно N лотов в день, по подписке — все."""
+    lot = session.get(Lot, lot_id, options=[selectinload(Lot.price_history)])
+    if lot is None:
+        raise HTTPException(404, "Лот не найден")
+    if user is None:
+        raise HTTPException(401, "Войдите, чтобы открыть адрес и контакты")
+    allowed, remaining = auth.grant_details(session, user, lot.id)
+    if not allowed:
+        raise HTTPException(402, f"Бесплатный лимит — {settings.free_details_per_day} объектов в день — исчерпан")
+    out = LotDetailsOut.model_validate(lot)
+    out.remaining_today = None if user.has_subscription() else remaining
+    return out

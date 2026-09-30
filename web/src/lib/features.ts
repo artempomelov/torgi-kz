@@ -11,6 +11,8 @@ export const FEATURES = {
   paywall: process.env.NEXT_PUBLIC_PAYWALL === "1",
   auth: process.env.NEXT_PUBLIC_AUTH === "1",
   freeDetailsPerDay: 5,
+  telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT || null, // имя бота для входа, без @ (в @BotFather: /setdomain)
+  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "", // по умолчанию тот же домен: https://torgi.kz/api/...
   telegramUrl: process.env.NEXT_PUBLIC_TELEGRAM_URL || null, // ссылка на канал, например https://t.me/torgi_kz
   yandexMetrikaId: process.env.NEXT_PUBLIC_YM_ID || null,
 } as const;
