@@ -49,7 +49,7 @@ export function GatedDetails({ lotId, isAuction }: { lotId: number; isAuction: b
       isAuction={isAuction}
       note={left === null ? "Подписка активна — без ограничений." : (
         <>Бесплатно сегодня осталось: {left} {plural(left, ["объект", "объекта", "объектов"])}.{" "}
-          <Link href="/account/" className="text-brand">Без ограничений — по подписке</Link></>
+          <Link href="/account/" className="text-brand-ink">Без ограничений — по подписке</Link></>
       )}
     />
   );

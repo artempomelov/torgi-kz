@@ -35,12 +35,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col font-sans">
         <header className="border-b border-border bg-surface">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3">
-            <Link href="/" className="text-xl font-bold tracking-tight text-brand">
-              torgi<span className="text-accent">.kz</span>
+            <Link href="/" className="text-xl font-bold tracking-tight text-foreground">
+              torgi<span className="text-brand">.kz</span>
             </Link>
             <nav className="flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium text-muted">
               {NAV.map((item) => (
-                <Link key={item.href} href={item.href} className="hover:text-brand">
+                <Link key={item.href} href={item.href} className="hover:text-brand-ink">
                   {item.label}
                 </Link>
               ))}
@@ -48,7 +48,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             {/* Место под вход и подписку — появится в платном режиме */}
             <div className="ml-auto flex items-center gap-3 text-sm">
               {FEATURES.telegramUrl && (
-                <a href={FEATURES.telegramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-brand">
+                <a href={FEATURES.telegramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-ink">
                   Telegram
                 </a>
               )}

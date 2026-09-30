@@ -11,7 +11,7 @@ export function TelegramCta({ compact = false }: { compact?: boolean }) {
       rel="noopener noreferrer"
       className={`block rounded-xl border border-brand/20 bg-brand/5 hover:border-brand/40 ${compact ? "p-4" : "p-5"}`}
     >
-      <div className="font-semibold text-brand">Новые лоты — в Telegram</div>
+      <div className="font-semibold text-brand-ink">Новые лоты — в Telegram</div>
       <p className="mt-1 text-sm text-muted">
         Каждый день публикуем свежие объекты с торгов и залогов банков. Подпишитесь, чтобы не пропустить.
       </p>

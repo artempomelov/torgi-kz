@@ -14,7 +14,7 @@ export function AccountButton() {
 
   if (me?.authenticated) {
     return (
-      <Link href="/account/" className="font-medium text-foreground hover:text-brand">
+      <Link href="/account/" className="font-medium text-foreground hover:text-brand-ink">
         {me.name ?? "Кабинет"}
       </Link>
     );

@@ -55,7 +55,7 @@ export function AccountPanel() {
               Лимит обновляется каждый день в 00:00 по Алматы.
             </p>
             <div className="mt-4 rounded-lg bg-brand/5 p-4">
-              <div className="font-semibold text-brand">Подписка torgi.kz</div>
+              <div className="font-semibold text-brand-ink">Подписка torgi.kz</div>
               <ul className="mt-2 list-inside list-disc text-sm text-muted">
                 <li>полные данные всех объектов без дневного лимита</li>
                 <li>уведомления о новых лотах по вашим фильтрам в Telegram</li>

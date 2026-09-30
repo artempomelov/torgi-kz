@@ -40,7 +40,7 @@ export function LotDetailsView({ details, isAuction, note }: {
         {details.cadastral && <Row label="Кадастровый номер">{details.cadastral}</Row>}
         {contacts.map(([k, v]) => (
           <Row key={k} label={CONTACT_LABELS[k] ?? k}>
-            {k === "phone" ? <a href={`tel:${v}`} className="text-brand">{v}</a> : v}
+            {k === "phone" ? <a href={`tel:${v}`} className="text-brand-ink">{v}</a> : v}
           </Row>
         ))}
       </dl>

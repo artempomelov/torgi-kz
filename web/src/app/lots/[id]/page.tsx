@@ -66,10 +66,10 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
-      <Link href="/lots/" className="text-sm text-muted hover:text-brand">← Каталог</Link>
+      <Link href="/lots/" className="text-sm text-muted hover:text-brand-ink">← Каталог</Link>
 
       {lot.status !== "active" && (
-        <div className="mt-4 rounded-lg border border-accent/30 bg-accent/10 p-3 text-sm text-accent">
+        <div className="mt-4 rounded-lg border border-accent/40 bg-accent/15 p-3 text-sm text-accent-ink">
           Объект снят с продажи у источника {formatDate(lot.last_seen_at)}.
         </div>
       )}
@@ -117,12 +117,12 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             <div className="text-sm text-muted">{isAuction ? "Стартовая цена" : "Цена"}</div>
             <div className="mt-1 text-3xl font-bold">{formatPrice(lot.price)}</div>
             {lot.price_drop_pct ? (
-              <div className="mt-1 text-sm font-medium text-accent">
+              <div className="mt-1 text-sm font-medium text-accent-ink">
                 Снижена на {lot.price_drop_pct}% с момента появления
               </div>
             ) : null}
             {lot.flags.length > 0 && (
-              <div className="mt-2 text-xs text-accent">
+              <div className="mt-2 text-xs text-accent-ink">
                 В данных источника похоже на ошибку ввода — уточняйте цену и площадь у продавца.
               </div>
             )}

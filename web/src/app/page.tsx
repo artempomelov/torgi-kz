@@ -12,12 +12,12 @@ export default function Home() {
 
   return (
     <div>
-      <section className="bg-brand text-white">
+      <section className="hero-bg border-b border-border">
         <div className="mx-auto max-w-7xl px-4 py-12 md:py-16">
-          <h1 className="max-w-3xl text-3xl font-bold leading-tight md:text-5xl">
+          <h1 className="max-w-3xl text-3xl font-bold leading-tight text-foreground md:text-5xl">
             Все торги недвижимостью Казахстана в одном месте
           </h1>
-          <p className="mt-4 max-w-2xl text-base text-white/80 md:text-lg">
+          <p className="mt-4 max-w-2xl text-base text-muted md:text-lg">
             {meta.total.toLocaleString("ru-RU")} {plural(meta.total, ["объект", "объекта", "объектов"])}: арестованное
             имущество с площадки Минюста, залоги и имущество банков. Обновлено {formatDate(meta.updated_at, true)}.
           </p>
@@ -25,9 +25,9 @@ export default function Home() {
             <input
               name="q"
               placeholder="Город или улица"
-              className="flex-1 rounded-lg bg-white px-4 py-3 text-foreground outline-none placeholder:text-muted"
+              className="flex-1 rounded-[10px] border border-border bg-white px-4 py-3 text-foreground shadow-card outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20"
             />
-            <button className="rounded-lg bg-accent px-6 py-3 font-semibold text-white hover:brightness-110">
+            <button className="rounded-[10px] bg-brand px-6 py-3 font-semibold text-white hover:bg-brand-hover">
               Найти
             </button>
           </form>
@@ -36,9 +36,9 @@ export default function Home() {
               <Link
                 key={c.id}
                 href={`/lots/?category=${c.id}`}
-                className="rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20"
+                className="rounded-full border border-border bg-white px-4 py-1.5 text-sm text-foreground hover:border-brand hover:text-brand-ink"
               >
-                {CATEGORY_PLURAL[c.id] ?? c.title} <span className="text-white/60">{c.count}</span>
+                {CATEGORY_PLURAL[c.id] ?? c.title} <span className="text-muted">{c.count}</span>
               </Link>
             ))}
           </div>
@@ -49,7 +49,7 @@ export default function Home() {
         <section className="mx-auto max-w-7xl px-4 pt-10">
           <div className="mb-4 flex items-baseline justify-between">
             <h2 className="text-2xl font-bold">Ближайшие торги</h2>
-            <Link href="/lots/?with_auction_date=true&sort=deadline" className="text-sm font-medium text-brand">
+            <Link href="/lots/?with_auction_date=true&sort=deadline" className="text-sm font-medium text-brand-ink">
               Все {auctions.total} →
             </Link>
           </div>
@@ -64,7 +64,7 @@ export default function Home() {
       <section className="mx-auto max-w-7xl px-4 pt-10">
         <div className="mb-4 flex items-baseline justify-between">
           <h2 className="text-2xl font-bold">Новые объекты</h2>
-          <Link href="/lots/" className="text-sm font-medium text-brand">
+          <Link href="/lots/" className="text-sm font-medium text-brand-ink">
             Весь каталог →
           </Link>
         </div>
@@ -85,7 +85,7 @@ export default function Home() {
               className="rounded-xl border border-border bg-surface p-4 hover:border-brand/40"
             >
               <div className="text-sm font-semibold">{s.title}</div>
-              <div className="mt-1 text-2xl font-bold text-brand">{s.count}</div>
+              <div className="mt-1 text-2xl font-bold text-brand-ink">{s.count}</div>
             </Link>
           ))}
         </div>

@@ -46,7 +46,7 @@ export function TelegramLogin({ onLogin }: { onLogin: (me: Me) => void }) {
   return (
     <div className="flex flex-col items-center gap-2">
       <div ref={ref} />
-      {error && <p className="text-sm text-accent">{error}</p>}
+      {error && <p className="text-sm text-accent-ink">{error}</p>}
     </div>
   );
 }
