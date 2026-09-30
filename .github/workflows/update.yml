@@ -10,6 +10,10 @@ on:
         description: "Источники через пробел (adilet halyk alatau forte bcc freedom); пусто — только пересобрать сайт"
         required: false
         default: ""
+      full:
+        description: "Заново загрузить детали всех лотов выбранных источников (документы, координаты, контакты)"
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths: ["backend/**", "web/**", ".github/workflows/**"]
@@ -69,7 +73,8 @@ jobs:
           [ -f ../torgi.db ] || SOURCES="adilet halyk alatau forte bcc freedom"
           echo "sources=$SOURCES" >> "$GITHUB_OUTPUT"
           if [ -n "$SOURCES" ]; then
-            uv run python -m torgi.cli parse $SOURCES \
+            FULL=""; [ "${{ inputs.full }}" = "true" ] && FULL="--full"
+            uv run python -m torgi.cli parse $FULL $SOURCES \
               || echo "::warning::Часть источников завершилась с ошибкой — см. лог выше"
           fi
 
