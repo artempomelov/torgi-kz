@@ -43,6 +43,7 @@ export type LotDetailsData = {
   description?: string | null;
   extra?: Record<string, unknown>;
   price_history?: { price: number | null; seen_at: string }[];
+  documents?: { title: string; url: string; size?: number | null }[] | null;
 };
 
 export type LotFull = Lot &

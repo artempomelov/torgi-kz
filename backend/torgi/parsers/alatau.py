@@ -47,6 +47,7 @@ query {
   propertyById(id: $id) {
     contactDetails { type title { ru } link }
     propertyMapCoordinate { latitude longitude }
+    propertyDocuments { title { ru } link { ru } }
   }
 }
 """
@@ -152,6 +153,11 @@ def apply_detail(lot: ParsedLot, detail: dict) -> None:
         if c.get("link"):
             contacts[c.get("type") or _ru(c.get("title")) or "contact"] = c["link"]
     lot.contacts = contacts
+    lot.documents = [
+        {"title": _ru(d.get("title")) or "Документ", "url": f"{BASE}/file-server/filename?{link}"}
+        for d in detail.get("propertyDocuments") or []
+        if (link := _ru(d.get("link")))
+    ]
 
 
 class AlatauParser(Parser):

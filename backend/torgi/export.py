@@ -37,6 +37,7 @@ GATED_FIELDS = frozenset({
     "description",
     "extra",
     "price_history",
+    "documents",      # отчёты об оценке, техпаспорта, госакты
 })
 
 

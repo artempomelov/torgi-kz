@@ -79,6 +79,7 @@ class Lot(Base):
     applications_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     images: Mapped[list] = mapped_column(JSON, default=list)
+    documents: Mapped[list | None] = mapped_column(JSON, default=list)  # [{title, url, size}] — файлы источника
     contacts: Mapped[dict] = mapped_column(JSON, default=dict)
     extra: Mapped[dict] = mapped_column(JSON, default=dict)  # прочие характеристики источника
     flags: Mapped[list] = mapped_column(JSON, default=list)  # например, suspicious_price

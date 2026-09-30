@@ -10,6 +10,7 @@ import {
   formatPrice,
   formatPriceShort,
   lotSubtitle,
+  unitPrice,
 } from "@/lib/format";
 
 import { LotImage } from "./LotImage";
@@ -49,11 +50,7 @@ export function LotCard({ lot }: { lot: Lot }) {
       <div className="flex flex-1 flex-col gap-2 p-4">
         <div className="text-lg font-semibold" title={formatPrice(lot.price)}>
           {formatPriceShort(lot.price)}
-          {lot.price_per_m2 ? (
-            <span className="ml-2 text-xs font-normal text-muted">
-              {Math.round(lot.price_per_m2).toLocaleString("ru-RU")} ₸/м²
-            </span>
-          ) : null}
+          {unitPrice(lot) && <span className="ml-2 text-xs font-normal text-muted">{unitPrice(lot)!.label}</span>}
         </div>
         {subtitle && <div className="text-sm text-foreground">{subtitle}</div>}
         <div className="line-clamp-2 text-sm text-muted group-hover:text-foreground">

@@ -67,7 +67,8 @@ def apply(session: Session, source: str, parsed: ParsedLot, existing: Lot | None
     return lot
 
 
-def run_source(session: Session, source: str, http: HttpClient | None = None) -> Stats:
+def run_source(session: Session, source: str, http: HttpClient | None = None, full: bool = False) -> Stats:
+    """full=True — заново загрузить детальные данные всех лотов (документы, координаты, контакты)."""
     parser = PARSERS[source]()
     run = ParseRun(source=source)
     session.add(run)
@@ -80,7 +81,7 @@ def run_source(session: Session, source: str, http: HttpClient | None = None) ->
     own_http = http is None
     http = http or HttpClient()
     try:
-        for parsed in parser.fetch(http, known):
+        for parsed in parser.fetch(http, {} if full else known):
             if parsed.source_id in seen:
                 continue
             seen.add(parsed.source_id)

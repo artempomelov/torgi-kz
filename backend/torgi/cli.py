@@ -21,6 +21,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("initdb", help="создать таблицы")
     p = sub.add_parser("parse", help="запустить парсеры")
+    p.add_argument("--full", action="store_true", help="заново загрузить детали всех лотов (документы и т.п.)")
     p.add_argument("sources", nargs="*", metavar="source",
                    help=f"источники: {', '.join(PARSERS)} (по умолчанию все)")
     t = sub.add_parser("post", help="опубликовать новые лоты в Telegram-канал")
@@ -49,7 +50,7 @@ def main() -> None:
         for name in args.sources or list(PARSERS):
             with SessionLocal() as session:
                 try:
-                    run_source(session, name)
+                    run_source(session, name, full=args.full)
                 except Exception:
                     failed.append(name)
         if failed:

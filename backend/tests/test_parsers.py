@@ -147,3 +147,26 @@ def test_freedom():
     for lot in lots:
         dumped = json.dumps(lot.extra, ensure_ascii=False) + json.dumps(lot.contacts, ensure_ascii=False)
         assert "contract" not in dumped and "collateral" not in dumped
+
+
+def test_adilet_trade_info():
+    info = json.loads(text("adilet_info_113513781.json"))
+    documents, contacts = adilet.parse_trade_info(info)
+    titles = [d["title"] for d in documents]
+    assert "ФОТО" in titles
+    assert any(t.startswith("Отчет №2932026 об оценке") for t in titles)
+    assert all(d["url"].startswith("https://etp.adilet.gov.kz/files/get/") for d in documents)
+    assert all(not d["url"].endswith(".png") for d in documents)  # картинки — в галерее, не в документах
+    assert contacts == {"officer": "Карпеков Ерик Серикулы", "phone": "+77054002626"}
+
+
+def test_alatau_documents():
+    lot = alatau.parse_item(json.loads(text("alatau_all.json"))["data"]["allProperties"]["items"][0])
+    alatau.apply_detail(lot, {"propertyDocuments": [
+        {"title": {"ru": "госакт"}, "link": {"ru": "dir=balance-property/property/280&filename=gosakt-ru.pdf"}},
+        {"title": {"ru": "пусто"}, "link": {"ru": None}},
+    ]})
+    assert lot.documents == [{
+        "title": "госакт",
+        "url": "https://alataucitybank.kz/file-server/filename?dir=balance-property/property/280&filename=gosakt-ru.pdf",
+    }]

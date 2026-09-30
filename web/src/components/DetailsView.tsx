@@ -1,7 +1,7 @@
 // Отображение закрытой части карточки лота и заглушка платного режима (без логики загрузки).
 import type { LotDetailsData } from "@/lib/api";
 import { FEATURES } from "@/lib/features";
-import { formatDate, formatPrice, plural } from "@/lib/format";
+import { formatDate, formatFileSize, formatPrice, plural } from "@/lib/format";
 
 const CONTACT_LABELS: Record<string, string> = {
   name: "Контактное лицо",
@@ -10,6 +10,7 @@ const CONTACT_LABELS: Record<string, string> = {
   email: "Email",
   owner: "Продавец",
   position: "Должность",
+  officer: "Судебный исполнитель",
 };
 
 export const DETAILS_TITLE = "Адрес, контакты и источник";
@@ -31,6 +32,7 @@ export function LotDetailsView({ details, isAuction, note }: {
 }) {
   const contacts = Object.entries(details.contacts ?? {}).filter(([, v]) => v);
   const history = (details.price_history ?? []).filter((p) => p.price != null);
+  const documents = details.documents ?? [];
 
   return (
     <section id="lot-details" className="scroll-mt-4 rounded-xl border border-border bg-surface p-5">
@@ -60,6 +62,26 @@ export function LotDetailsView({ details, isAuction, note }: {
         ) : null}
       </div>
       {note && <p className="mt-3 text-xs text-muted">{note}</p>}
+
+      {documents.length > 0 && (
+        <div className="mt-5">
+          <h3 className="mb-2 text-sm font-semibold">Документы от источника</h3>
+          <ul className="space-y-1.5 text-sm">
+            {documents.map((doc) => (
+              <li key={doc.url}>
+                <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                   className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2 hover:border-brand/50">
+                  <svg aria-hidden viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 flex-none text-brand" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" />
+                  </svg>
+                  <span className="flex-1 group-hover:text-brand-ink">{doc.title}</span>
+                  {formatFileSize(doc.size) && <span className="text-xs text-muted">{formatFileSize(doc.size)}</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {history.length > 1 && (
         <div className="mt-5">

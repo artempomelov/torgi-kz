@@ -41,6 +41,7 @@ class ParsedLot:
     applications_deadline: datetime | None = None
     published_at: datetime | None = None
     images: list[str] = field(default_factory=list)
+    documents: list[dict[str, Any]] = field(default_factory=list)  # {"title", "url", "size"?}
     contacts: dict[str, Any] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
     # partial=True: деталь не загружалась (лот уже известен, цена та же) —

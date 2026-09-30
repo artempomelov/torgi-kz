@@ -93,3 +93,32 @@ export function plural(n: number, forms: [string, string, string]): string {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1];
   return forms[2];
 }
+
+/** Цена за единицу площади: за м² — квартиры и коммерция, за сотку — земельные участки. */
+export function unitPrice(lot: {
+  category: string;
+  price: number | null;
+  price_per_m2: number | null;
+  land_area_ha: number | null;
+  flags?: string[];
+}): { value: number; unit: "м²" | "сотку"; label: string } | null {
+  if (lot.category === "land") {
+    if (!lot.price || !lot.land_area_ha || lot.flags?.includes("suspicious_price")) return null;
+    const value = lot.price / (lot.land_area_ha * 100); // 1 га = 100 соток
+    return { value, unit: "сотку", label: `${formatMoney(value)} ₸/сотка` };
+  }
+  if ((lot.category === "apartment" || lot.category === "commercial") && lot.price_per_m2) {
+    return { value: lot.price_per_m2, unit: "м²", label: `${formatMoney(lot.price_per_m2)} ₸/м²` };
+  }
+  return null;
+}
+
+function formatMoney(value: number): string {
+  return Math.round(value).toLocaleString("ru-RU");
+}
+
+export function formatFileSize(bytes: number | null | undefined): string | null {
+  if (!bytes) return null;
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} МБ`;
+  return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+}

@@ -69,6 +69,7 @@ class PricePoint(BaseModel):
 
 
 class LotFull(LotShort):
+    documents: list[dict] | None = None
     description: str | None
     year_built: int | None
     cadastral: str | None
@@ -295,6 +296,7 @@ class LotDetailsOut(BaseModel):
     description: str | None
     extra: dict
     price_history: list[PricePoint]
+    documents: list[dict] | None = None
     remaining_today: int | None = None
 
 

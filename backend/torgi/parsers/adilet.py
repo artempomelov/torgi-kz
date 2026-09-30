@@ -10,6 +10,8 @@ from collections.abc import Iterator, Mapping
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from torgi import normalize as nz
 from torgi.parsers.base import HttpClient, ParsedLot, Parser
 
@@ -141,6 +143,35 @@ def parse_trade(item: dict[str, Any]) -> ParsedLot | None:
     )
 
 
+def parse_trade_info(info: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """Карточка торгов (/trades/{id}/info, JSON-форма): файлы и контакты судебного исполнителя."""
+    documents: list[dict[str, Any]] = []
+    officer: dict[str, str] = {}
+    seen: set[str] = set()
+
+    def walk(fields: list[dict], section: str = "") -> None:
+        for f in fields:
+            kind, name = f.get("type"), f.get("name") or ""
+            if kind == "document":
+                walk((f.get("document") or {}).get("fields") or [], name)
+            elif kind == "file":
+                for v in f.get("value") or []:
+                    href = v.get("href")
+                    if not href or href in seen or str(v.get("type", "")).startswith("image"):
+                        continue  # картинки — это фото, они уже в галерее
+                    seen.add(href)
+                    title = re.sub(r"\.(pdf|docx?|xlsx?|rar|zip)$", "", v.get("name") or "Документ", flags=re.I)
+                    documents.append({"title": title, "url": BASE + href, "size": v.get("size")})
+            elif section == "courtOfficer" and f.get("value"):
+                if name.endswith(".title"):
+                    officer["officer"] = str(f["value"]).title()
+                elif name.endswith(".phone"):
+                    officer["phone"] = str(f["value"])
+
+    walk((info.get("document") or {}).get("fields") or [])
+    return documents, officer
+
+
 class AdiletParser(Parser):
     name = "adilet"
     title = "ЕЭТП Минюста (арестованное имущество)"
@@ -158,6 +189,14 @@ class AdiletParser(Parser):
             items = trades.get("items") or []
             for item in items:
                 if parsed := parse_trade(item):
+                    # документы и контакты ЧСИ — из карточки торгов, только для новых/изменившихся
+                    if parsed.source_id not in known or known[parsed.source_id] != parsed.price:
+                        try:
+                            info = http.get(f"{BASE}/trades/{parsed.source_id}/info",
+                                            headers={"X-Requested-With": "XMLHttpRequest"}).json()
+                            parsed.documents, parsed.contacts = parse_trade_info(info)
+                        except (ValueError, httpx.HTTPError):
+                            pass  # карточка недоступна или не JSON — карточку пропускаем, лот всё равно сохраняем
                     yield parsed
             skip += len(items)
             if not items or skip >= int(trades.get("total") or 0):
