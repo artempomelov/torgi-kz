@@ -92,6 +92,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Сборка сайта
         working-directory: web
+        env:
+          # Переменные репозитория (Settings → Secrets and variables → Actions → Variables):
+          # номер счётчика Яндекс.Метрики и ссылка на Telegram-канал — пустые значения просто отключают блоки
+          NEXT_PUBLIC_YM_ID: ${{ vars.NEXT_PUBLIC_YM_ID }}
+          NEXT_PUBLIC_TELEGRAM_URL: ${{ vars.NEXT_PUBLIC_TELEGRAM_URL }}
         run: npm ci --no-audit --no-fund && npm run build
 
       - uses: actions/configure-pages@v5
