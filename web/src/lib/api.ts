@@ -1,18 +1,20 @@
 // Типы данных лотов (совпадают с JSON, который выгружает backend: `torgi.cli export`).
+// Поля с `?` — «закрытые» (GATED_FIELDS в backend/torgi/export.py): в платном режиме их нет в статике.
 
 export type Lot = {
   id: number;
+  headline: string; // публичный заголовок без точного адреса
   source: string;
-  url: string;
+  url?: string;
   origin: string;
   sale_type: string | null;
   category: string;
-  title: string;
+  title?: string;
   region: string | null;
   city: string | null;
-  address: string | null;
-  lat: number | null;
-  lon: number | null;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
   area_m2: number | null;
   land_area_ha: number | null;
   rooms: number | null;
@@ -30,22 +32,32 @@ export type Lot = {
   price_drop_pct: number | null;
 };
 
-export type LotFull = Lot & {
-  description: string | null;
-  year_built: number | null;
-  cadastral: string | null;
-  deposit: number | null;
-  images: string[];
-  contacts: Record<string, string>;
-  extra: Record<string, unknown>;
-  published_at: string | null;
-  last_seen_at: string;
-  price_history: { price: number | null; seen_at: string }[];
+export type LotDetailsData = {
+  title?: string;
+  address?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  cadastral?: string | null;
+  url?: string;
+  contacts?: Record<string, string>;
+  description?: string | null;
+  extra?: Record<string, unknown>;
+  price_history?: { price: number | null; seen_at: string }[];
 };
+
+export type LotFull = Lot &
+  LotDetailsData & {
+    year_built: number | null;
+    deposit: number | null;
+    images: string[];
+    published_at: string | null;
+    last_seen_at: string;
+  };
 
 export type Meta = {
   total: number;
   updated_at: string;
+  gated?: boolean;
   categories: { id: string; title: string; count: number }[];
   origins: { id: string; title: string }[];
   sale_types: { id: string; title: string }[];

@@ -69,3 +69,22 @@ def test_ingest_and_api(monkeypatch):
     assert client.get("/api/lots/999999").status_code == 404
     meta = client.get("/api/meta").json()
     assert meta["total"] == 2
+
+    # Выгрузка для сайта: открытый режим — всё есть; платный — закрытых полей нет нигде
+    import json
+    from pathlib import Path
+
+    from torgi.export import GATED_FIELDS, export
+
+    out = Path(tempfile.mkdtemp())
+    with SessionLocal() as session:
+        export(session, out)
+        opened = json.loads((out / "lots-full.json").read_text(encoding="utf-8"))
+        assert opened[0]["url"] and opened[0]["headline"].startswith("Квартира, 50 м² — Алматы")
+
+        export(session, out, gated=True)
+    for name in ("lots.json", "lots-full.json"):
+        items = json.loads((out / name).read_text(encoding="utf-8"))
+        assert items and all(not (GATED_FIELDS & item.keys()) for item in items)
+        assert all(item["headline"] and item["price"] for item in items)
+    assert json.loads((out / "meta.json").read_text(encoding="utf-8"))["gated"] is True

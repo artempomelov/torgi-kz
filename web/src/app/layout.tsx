@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
+
+import { YandexMetrika } from "@/components/YandexMetrika";
+import { FEATURES } from "@/lib/features";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic"] });
@@ -41,10 +44,24 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 </Link>
               ))}
             </nav>
+            {/* Место под вход и подписку — появится в платном режиме */}
+            <div className="ml-auto flex items-center gap-3 text-sm">
+              {FEATURES.telegramUrl && (
+                <a href={FEATURES.telegramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-brand">
+                  Telegram
+                </a>
+              )}
+              {FEATURES.auth && (
+                <button type="button" className="rounded-lg bg-brand px-3 py-1.5 font-semibold text-white hover:bg-brand-hover">
+                  Войти
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
         <main className="flex-1">{children}</main>
+        <YandexMetrika />
 
         <footer className="mt-16 border-t border-border bg-surface">
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-8 text-sm text-muted">

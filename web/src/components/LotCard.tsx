@@ -33,7 +33,7 @@ export function LotCard({ lot }: { lot: Lot }) {
       <div className="relative aspect-[4/3] bg-background">
         {lot.image ? (
           // eslint-disable-next-line @next/next/no-img-element -- фото с десятка внешних доменов
-          <img src={lot.image} alt={lot.title} loading="lazy" className="h-full w-full object-cover" />
+          <img src={lot.image} alt={lot.headline} loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted">Нет фото</div>
         )}
@@ -59,7 +59,10 @@ export function LotCard({ lot }: { lot: Lot }) {
           ) : null}
         </div>
         {subtitle && <div className="text-sm text-foreground">{subtitle}</div>}
-        <div className="line-clamp-2 text-sm text-muted group-hover:text-foreground">{lot.address ?? lot.title}</div>
+        <div className="line-clamp-2 text-sm text-muted group-hover:text-foreground">
+          {/* в платном режиме точного адреса в каталоге нет — только город/регион */}
+          {lot.address ?? lot.title ?? [lot.city, lot.region !== lot.city ? lot.region : null].filter(Boolean).join(", ")}
+        </div>
 
         <div className="mt-auto flex flex-wrap gap-1 pt-2">
           {isAuction ? (

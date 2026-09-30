@@ -30,6 +30,7 @@ def main() -> None:
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
+    e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
     s = sub.add_parser("serve", help="запустить API")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
@@ -68,7 +69,7 @@ def main() -> None:
 
         init_db()
         with SessionLocal() as session:
-            logging.info("экспорт: %s", export(session, Path(args.out_dir)))
+            logging.info("экспорт: %s", export(session, Path(args.out_dir), gated=args.gated))
     elif args.cmd == "serve":
         import uvicorn
 
