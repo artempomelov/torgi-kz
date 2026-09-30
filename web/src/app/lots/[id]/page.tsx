@@ -54,7 +54,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
       ["Этаж", lot.floor ? (lot.floors_total ? `${lot.floor} из ${lot.floors_total}` : lot.floor) : null],
       ["Этажность", !lot.floor && lot.floors_total ? lot.floors_total : null],
       ["Год постройки", lot.year_built],
-      [unitPrice(lot)?.unit === "сотку" ? "Цена за сотку" : "Цена за м²", unitPrice(lot) ? `${Math.round(unitPrice(lot)!.value).toLocaleString("ru-RU")} ₸` : null],
+      [`Цена за ${unitPrice(lot)?.unit ?? "м²"}`, unitPrice(lot) ? `${Math.round(unitPrice(lot)!.value).toLocaleString("ru-RU")} ₸` : null],
       ["Задаток", lot.deposit ? formatPrice(lot.deposit) : null],
       ["Приём заявок до", lot.applications_deadline ? formatDate(lot.applications_deadline, true) : null],
       ["Начало торгов", lot.auction_start ? formatDate(lot.auction_start, true) : null],

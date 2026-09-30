@@ -94,16 +94,23 @@ export function plural(n: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
-/** Цена за единицу площади: за м² — квартиры и коммерция, за сотку — земельные участки. */
+/** Крупные участки (сельхозземли, пастбища) нагляднее считать в гектарах, остальные — в сотках. */
+export const LAND_HECTARE_THRESHOLD = 10;
+
+/** Цена за единицу площади: за м² — квартиры и коммерция; земля — за сотку, а от 10 га — за гектар. */
 export function unitPrice(lot: {
   category: string;
   price: number | null;
   price_per_m2: number | null;
   land_area_ha: number | null;
   flags?: string[];
-}): { value: number; unit: "м²" | "сотку"; label: string } | null {
+}): { value: number; unit: "м²" | "сотку" | "гектар"; label: string } | null {
   if (lot.category === "land") {
     if (!lot.price || !lot.land_area_ha || lot.flags?.includes("suspicious_price")) return null;
+    if (lot.land_area_ha >= LAND_HECTARE_THRESHOLD) {
+      const value = lot.price / lot.land_area_ha;
+      return { value, unit: "гектар", label: `${formatMoney(value)} ₸/га` };
+    }
     const value = lot.price / (lot.land_area_ha * 100); // 1 га = 100 соток
     return { value, unit: "сотку", label: `${formatMoney(value)} ₸/сотка` };
   }
