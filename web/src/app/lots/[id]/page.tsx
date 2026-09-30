@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { Badge } from "@/components/LotCard";
 import { LotDetails } from "@/components/LotDetails";
+import { LotImage } from "@/components/LotImage";
 import { TelegramCta } from "@/components/TelegramCta";
 import { getAllLotsFull, getLot } from "@/lib/data";
 import {
@@ -88,13 +89,14 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
               {lot.images.slice(0, 9).map((src, i) => (
                 <a key={src} href={src} target="_blank" rel="noopener noreferrer"
                    className={i === 0 ? "col-span-2 row-span-2 md:col-span-2" : ""}>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- фото с внешних доменов источников */}
-                  <img src={src} alt={`${lot.headline}, фото ${i + 1}`} className="aspect-[4/3] h-full w-full rounded-lg object-cover" />
+                  <LotImage src={src} category={lot.category} alt={`${lot.headline}, фото ${i + 1}`} eager={i === 0}
+                            className="aspect-[4/3] h-full w-full rounded-lg object-cover" />
                 </a>
               ))}
             </div>
           ) : (
-            <div className="flex aspect-[16/7] items-center justify-center rounded-xl bg-surface text-muted">Нет фото</div>
+            <LotImage src={null} category={lot.category} alt={lot.headline}
+                      className="aspect-[4/3] w-full max-w-2xl rounded-xl border border-border object-cover" />
           )}
 
           <section className="rounded-xl border border-border bg-surface p-5">

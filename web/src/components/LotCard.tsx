@@ -12,6 +12,8 @@ import {
   lotSubtitle,
 } from "@/lib/format";
 
+import { LotImage } from "./LotImage";
+
 export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "brand" | "accent" | "success" }) {
   const tones = {
     neutral: "bg-background text-muted",
@@ -31,12 +33,7 @@ export function LotCard({ lot }: { lot: Lot }) {
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand/50 hover:shadow-card"
     >
       <div className="relative aspect-[4/3] bg-background">
-        {lot.image ? (
-          // eslint-disable-next-line @next/next/no-img-element -- фото с десятка внешних доменов
-          <img src={lot.image} alt={lot.headline} loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted">Нет фото</div>
-        )}
+        <LotImage src={lot.image} category={lot.category} alt={lot.headline} className="h-full w-full object-cover" />
         <div className="absolute left-2 top-2 flex flex-wrap gap-1">
           <span className="rounded-md bg-surface/95 px-2 py-0.5 text-xs font-medium text-foreground">
             {CATEGORY_LABELS[lot.category] ?? lot.category}
