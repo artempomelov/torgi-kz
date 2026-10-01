@@ -19,7 +19,8 @@ export default function Home() {
           </h1>
           <p className="mt-4 max-w-2xl text-base text-muted md:text-lg">
             {meta.total.toLocaleString("ru-RU")} {plural(meta.total, ["объект", "объекта", "объектов"])}: арестованное
-            имущество с площадки Минюста, залоги и имущество банков. Обновлено {formatDate(meta.updated_at, true)}.
+            имущество с площадки Минюста, госимущество и приватизация, имущество банкротов и конфискат с
+            E-Qazyna, залоги и имущество банков. Обновлено {formatDate(meta.updated_at, true)}.
           </p>
           <form action="/lots/" className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row">
             <input
