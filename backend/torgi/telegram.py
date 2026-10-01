@@ -12,7 +12,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from torgi.config import settings
@@ -95,10 +95,18 @@ def pending_lots(session: Session, channel: str, limit: int, since_days: int) ->
         select(Lot)
         .where(Lot.status == "active", Lot.price.is_not(None), Lot.id.not_in(posted),
                Lot.first_seen_at >= utcnow() - timedelta(days=since_days))
-        .order_by(Lot.first_seen_at, Lot.id)
+        .order_by(Lot.first_seen_at.desc(), Lot.id.desc())
     )
-    # без флагов качества — ошибки ввода источника в канал не несём
-    return [lot for lot in session.scalars(stmt) if not lot.flags][:limit]
+    # без флагов качества — ошибки ввода источника в канал не несём; с фото — в первую очередь
+    lots = [lot for lot in session.scalars(stmt) if not lot.flags]
+    lots.sort(key=lambda lot: not lot.images)
+    return lots[:limit]
+
+
+def posted_today(session: Session, channel: str, now: datetime | None = None) -> int:
+    start = (now or utcnow()).astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    return session.scalar(select(func.count()).select_from(ChannelPost).where(
+        ChannelPost.channel == channel, ChannelPost.message_id.is_not(None), ChannelPost.posted_at >= start)) or 0
 
 
 class TelegramBot:
@@ -141,6 +149,17 @@ def run(session: Session, limit: int = 10, since_days: int = 3, dry_run: bool = 
         # Первый запуск для канала: текущую базу не выгружаем, публикуем только новое
         log.info("канал %s: первый запуск — текущие лоты помечены опубликованными", channel)
         return run(session, mark_all=True)
+
+    if not dry_run:
+        hour = utcnow().astimezone(KZ_TZ).hour
+        start, end = settings.telegram_hours
+        if not start <= hour < end:
+            log.info("вне часов публикации (%s–%s по Алматы)", start, end)
+            return 0
+        limit = min(limit, settings.telegram_daily_limit - posted_today(session, channel))
+        if limit <= 0:
+            log.info("дневной лимит постов (%s) исчерпан", settings.telegram_daily_limit)
+            return 0
 
     lots = pending_lots(session, channel, limit, since_days)
     if dry_run:

@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_channel: str | None = None  # "@имя_канала" или числовой id
     telegram_post_delay: float = 4.0  # секунд между постами (лимит Telegram ~20 сообщений/мин в канал)
+    telegram_daily_limit: int = 10  # постов в канал в день — канал не должен превращаться в ленту
+    telegram_hours: tuple[int, int] = (9, 21)  # публикуем с 9:00 до 21:00 по Алматы
 
     # Вход и платный доступ (готово заранее, включается на сайте флагами NEXT_PUBLIC_PAYWALL/AUTH).
     # Вход — Telegram Login Widget того же бота (в @BotFather: /setdomain torgi.kz).
