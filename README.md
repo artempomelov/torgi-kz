@@ -23,6 +23,11 @@ docs/               Исследование источников
 | `forte` | sale.forte.kz | имущество ForteBank | GraphQL (Strapi) |
 | `bcc` | bcc.kz/personal/collateral-base | залоговая база BCC | HTML, одна страница |
 | `freedom` | bankffin.kz/ru/mortgage | имущество Freedom Bank | REST JSON |
+| `sauda` | sauda.e-qazyna.kz | госимущество, приватизация, банкроты, налоговые должники, конфискат, ФПК | HTML (листинг + детали) |
+| `eurasian` | eubank.kz/ru/property-for-sale | имущество Евразийского банка | REST JSON (Payload) |
+| `nurbank` | nurbank.kz/ru/bank/collateral | залоги Нурбанка | HTML (листинг + детали) |
+| `bereke` | berekebank.kz/ru/about/collaterals | залоги Bereke Bank | HTML (листинг + детали) |
+| `rbk` | bankrbk.kz | залоги Bank RBK | REST JSON |
 
 Подробности — [docs/01-sources-research.md](docs/01-sources-research.md), [docs/02-banks.md](docs/02-banks.md).
 

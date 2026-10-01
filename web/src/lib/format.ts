@@ -23,6 +23,10 @@ export const ORIGIN_LABELS: Record<string, string> = {
   bank_balance: "Имущество банка",
   bank_pledge: "Залог банка",
   court: "Судебная реализация",
+  state: "Госимущество и приватизация",
+  bankrupt: "Имущество банкротов",
+  tax_debtor: "Имущество налоговых должников",
+  confiscated: "Конфискат",
 };
 
 export const SALE_TYPE_LABELS: Record<string, string> = {
@@ -34,11 +38,16 @@ export const SALE_TYPE_LABELS: Record<string, string> = {
 
 export const SOURCE_LABELS: Record<string, string> = {
   adilet: "ЕЭТП Минюста",
+  sauda: "E-Qazyna",
   halyk: "Halyk Bank",
   alatau: "Alatau City Bank",
   forte: "ForteBank",
   bcc: "Bank CenterCredit",
   freedom: "Freedom Bank",
+  eurasian: "Евразийский банк",
+  nurbank: "Нурбанк",
+  bereke: "Bereke Bank",
+  rbk: "Bank RBK",
 };
 
 const TZ = "Asia/Almaty";

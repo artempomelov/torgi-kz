@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       sources:
-        description: "Источники через пробел (adilet halyk alatau forte bcc freedom); пусто — только пересобрать сайт"
+        description: "Источники через пробел (adilet sauda halyk alatau forte bcc freedom eurasian nurbank bereke rbk); пусто — только пересобрать сайт"
         required: false
         default: ""
       full:
@@ -66,11 +66,11 @@ jobs:
         run: |
           case "${{ github.event_name }}|${{ github.event.schedule }}" in
             "schedule|5 * * * *")  SOURCES="adilet" ;;
-            "schedule|0 22 * * *") SOURCES="halyk alatau forte bcc freedom" ;;
+            "schedule|0 22 * * *") SOURCES="sauda halyk alatau forte bcc freedom eurasian nurbank bereke rbk" ;;
             workflow_dispatch*)    SOURCES="${{ inputs.sources }}" ;;
             *)                     SOURCES="" ;;
           esac
-          [ -f ../torgi.db ] || SOURCES="adilet halyk alatau forte bcc freedom"
+          [ -f ../torgi.db ] || SOURCES="adilet sauda halyk alatau forte bcc freedom eurasian nurbank bereke rbk"
           echo "sources=$SOURCES" >> "$GITHUB_OUTPUT"
           if [ -n "$SOURCES" ]; then
             FULL=""; [ "${{ inputs.full }}" = "true" ] && FULL="--full"
