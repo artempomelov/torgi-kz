@@ -78,6 +78,8 @@ class RbkParser(Parser):
         page = 1
         while page <= 100:
             data = http.get(API, params={"page": page}).json()
+            if isinstance(data, list):  # страница приходит обёрнутой в список
+                data = data[0] if data else {}
             for item in data.get("data") or []:
                 if lot := parse_item(item):
                     yield lot
