@@ -114,6 +114,9 @@ def posted_today(session: Session, channel: str, now: datetime | None = None) ->
 
 class TelegramBot:
     def __init__(self, token: str):
+        # при вставке в секрет легко захватить пробел, перенос строки или кавычки
+        token = token.strip().strip("'\"").strip()
+        token = token.removeprefix("bot") if re.match(r"bot\d+:", token) else token
         self.base = f"https://api.telegram.org/bot{token}"
         self.client = httpx.Client(timeout=30)
 

@@ -32,6 +32,7 @@ def main() -> None:
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
     b = sub.add_parser("bot", help="бот подписок: обработать входящие и разослать уведомления")
     b.add_argument("--dry-run", action="store_true", help="только показать уведомления")
+    b.add_argument("--check", action="store_true", help="проверить токен (getMe), не раскрывая его")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
@@ -70,6 +71,18 @@ def main() -> None:
         from torgi import bot
 
         init_db()
+        if args.check:
+            import re
+
+            from torgi.config import settings
+            from torgi.telegram import TelegramBot
+
+            raw = settings.telegram_bot_token or ""
+            logging.info("токен: длина %d, формат %s", len(raw.strip()),
+                         "ок" if re.fullmatch(r"\d{6,12}:[A-Za-z0-9_-]{30,40}", raw.strip()) else "НЕ похож на токен BotFather")
+            me = TelegramBot(raw).call("getMe")
+            logging.info("бот: @%s", me["username"])
+            return
         with SessionLocal() as session:
             bot.run(session, dry_run=args.dry_run)
     elif args.cmd == "export":

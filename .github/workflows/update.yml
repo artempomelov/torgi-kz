@@ -120,6 +120,7 @@ jobs:
           if [ -n "$TORGI_TELEGRAM_CHANNEL" ]; then
             uv run python -m torgi.cli post --limit 5 || echo "::warning::Публикация в канал не удалась"
           fi
+          uv run python -m torgi.cli bot --check || echo "::warning::Токен бота не принят Telegram — проверьте секрет TORGI_TELEGRAM_BOT_TOKEN"
           uv run python -m torgi.cli bot || echo "::warning::Бот подписок завершился с ошибкой"
           gzip -kf ../torgi.db && gh release upload data ../torgi.db.gz --clobber
 
