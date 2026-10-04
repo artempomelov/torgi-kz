@@ -65,9 +65,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-8 text-sm text-muted">
             <p className="font-semibold text-foreground">torgi.kz — агрегатор торгов недвижимостью в Казахстане</p>
             <p>
-              Сведения собираются из открытых источников: электронной торговой площадки Минюста РК и сайтов банков.
+              Сведения собираются из открытых источников: электронной торговой площадки Минюста РК, реестра
+              госимущества E-Qazyna и сайтов банков.
               torgi.kz не является организатором торгов и продавцом. Условия, цена и статус лота определяются
               первоисточником — перед участием проверяйте информацию на площадке продавца и документы объекта.
+            </p>
+            <p className="flex flex-wrap gap-x-5 gap-y-1">
+              <Link href="/podborki/" className="hover:text-brand-ink">Подборки</Link>
+              <Link href="/podborki/kvartiry-almaty/" className="hover:text-brand-ink">Квартиры с торгов в Алматы</Link>
+              <Link href="/podborki/kvartiry-astana/" className="hover:text-brand-ink">Квартиры с торгов в Астане</Link>
+              <Link href="/podborki/zalogovoe-imushchestvo-bankov/" className="hover:text-brand-ink">Залоговое имущество банков</Link>
+              <Link href="/podborki/gosimushchestvo-i-privatizaciya/" className="hover:text-brand-ink">Госимущество</Link>
             </p>
             <p>© {new Date().getFullYear()} torgi.kz</p>
           </div>
