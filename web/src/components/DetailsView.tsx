@@ -56,7 +56,7 @@ export function LotDetailsView({ details, isAuction, note }: {
         )}
         {details.lat && details.lon ? (
           <a href={`https://2gis.kz/geo/${details.lon},${details.lat}`} target="_blank" rel="noopener noreferrer"
-             className="flex-1 rounded-lg border border-border px-4 py-3 text-center text-sm font-medium hover:border-brand/40">
+             className="flex-1 rounded-lg border border-border px-4 py-3 text-center text-sm font-medium hover:border-brand-ink/40">
             Показать на карте 2ГИС
           </a>
         ) : null}
@@ -70,8 +70,8 @@ export function LotDetailsView({ details, isAuction, note }: {
             {documents.map((doc) => (
               <li key={doc.url}>
                 <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                   className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2 hover:border-brand/50">
-                  <svg aria-hidden viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 flex-none text-brand" fill="none" stroke="currentColor" strokeWidth="2">
+                   className="group flex items-start gap-2 rounded-lg border border-border px-3 py-2 hover:border-brand-ink/50">
+                  <svg aria-hidden viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 flex-none text-brand-ink" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" />
                   </svg>
                   <span className="flex-1 group-hover:text-brand-ink">{doc.title}</span>
@@ -117,7 +117,7 @@ export function LockedDetails({ message, children }: { message?: React.ReactNode
         <div className="h-4 w-3/4 rounded bg-border" />
         <div className="h-4 w-1/2 rounded bg-border" />
         <div className="h-4 w-2/3 rounded bg-border" />
-        <div className="h-10 w-full rounded-lg bg-brand/30" />
+        <div className="h-10 w-full rounded-lg bg-brand-ink/30" />
         <div className="h-4 w-5/6 rounded bg-border" />
         <div className="h-4 w-3/5 rounded bg-border" />
       </div>

@@ -9,7 +9,7 @@ export function TelegramCta({ compact = false }: { compact?: boolean }) {
       href={FEATURES.telegramUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className={`block rounded-xl border border-brand/20 bg-brand/5 hover:border-brand/40 ${compact ? "p-4" : "p-5"}`}
+      className={`block rounded-xl border border-brand-ink/20 bg-brand-ink/5 hover:border-brand-ink/40 ${compact ? "p-4" : "p-5"}`}
     >
       <div className="font-semibold text-brand-ink">Новые лоты — в Telegram</div>
       <p className="mt-1 text-sm text-muted">

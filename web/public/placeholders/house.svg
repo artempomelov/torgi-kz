@@ -1,20 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Дом — нет фото">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f6f9"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef0f3"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
   </defs>
   <rect width="400" height="300" fill="url(#bg)"/>
-  <circle cx="300" cy="62" r="46" fill="#fec50c" opacity=".14"/>
-  <line x1="96" y1="206" x2="304" y2="206" stroke="#d2e6ec" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="300" cy="62" r="46" fill="#2450d6" opacity=".14"/>
+  <line x1="96" y1="206" x2="304" y2="206" stroke="#e4e6ea" stroke-width="4" stroke-linecap="round"/>
   <!-- частный дом -->
-  <rect x="228" y="74" width="16" height="34" rx="2" fill="#fff" stroke="#00afca" stroke-width="4"/>
-  <rect x="150" y="122" width="100" height="84" rx="4" fill="#fff" stroke="#00afca" stroke-width="4"/>
-  <path d="M134 128 L200 70 L266 128" fill="none" stroke="#00afca" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="164" y="138" width="26" height="24" rx="2" fill="#e9f6f9" stroke="#00afca" stroke-width="2.5"/>
-  <line x1="177" y1="138" x2="177" y2="162" stroke="#00afca" stroke-width="2"/>
-  <rect x="208" y="150" width="28" height="56" rx="3" fill="#fec50c"/>
-  <circle cx="230" cy="180" r="2.5" fill="#10242c"/>
+  <rect x="228" y="74" width="16" height="34" rx="2" fill="#fff" stroke="#5b6270" stroke-width="4"/>
+  <rect x="150" y="122" width="100" height="84" rx="4" fill="#fff" stroke="#5b6270" stroke-width="4"/>
+  <path d="M134 128 L200 70 L266 128" fill="none" stroke="#5b6270" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="164" y="138" width="26" height="24" rx="2" fill="#eef0f3" stroke="#5b6270" stroke-width="2.5"/>
+  <line x1="177" y1="138" x2="177" y2="162" stroke="#5b6270" stroke-width="2"/>
+  <rect x="208" y="150" width="28" height="56" rx="3" fill="#2450d6"/>
+  <circle cx="230" cy="180" r="2.5" fill="#0f1115"/>
   <!-- куст -->
-  <circle cx="120" cy="196" r="12" fill="#00afca" opacity=".25"/>
-  <circle cx="280" cy="194" r="14" fill="#00afca" opacity=".25"/>
-  <text x="200" y="252" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="600" fill="#5a6b72">Нет фото</text>
+  <circle cx="120" cy="196" r="12" fill="#5b6270" opacity=".25"/>
+  <circle cx="280" cy="194" r="14" fill="#5b6270" opacity=".25"/>
+  <text x="200" y="252" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="600" fill="#6b6f78">Нет фото</text>
 </svg>

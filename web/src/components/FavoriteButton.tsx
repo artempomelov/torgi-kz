@@ -20,7 +20,7 @@ export function FavoriteButton({ id, variant = "icon" }: { id: number; variant?:
     return (
       <button type="button" onClick={onClick} aria-pressed={active}
               className={`flex w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium ${
-                active ? "border-accent bg-accent/15 text-accent-ink" : "border-border hover:border-brand/40"}`}>
+                active ? "border-accent bg-accent/15 text-accent-ink" : "border-border hover:border-brand-ink/40"}`}>
         {heart}
         {active ? "В избранном" : "Добавить в избранное"}
       </button>

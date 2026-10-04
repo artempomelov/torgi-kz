@@ -59,7 +59,7 @@ export function HowToBuy({ origin, saleType, source }: { origin: string; saleTyp
       <ol className="space-y-2 text-sm">
         {g.steps.map((s, i) => (
           <li key={i} className="flex gap-3">
-            <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand-ink">
+            <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-brand-ink/10 text-xs font-semibold text-brand-ink">
               {i + 1}
             </span>
             <span className="pt-0.5">{s}</span>

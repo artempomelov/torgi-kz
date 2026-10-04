@@ -37,7 +37,7 @@ function ParkingGroupCard({ group }: { group: ParkingGroup }) {
   return (
     <Link
       href={`/lots/?category=parking&q=${encodeURIComponent(group.base)}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand/50 hover:shadow-card"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand-ink/50 hover:shadow-card"
     >
       <div className="relative aspect-[4/3] bg-background">
         <LotImage src={first.image} category="parking" alt={group.base} className="h-full w-full object-cover" />
@@ -111,7 +111,7 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
         <div className="flex flex-wrap gap-2">
           {code && (
             <a href={botLink(code)} target="_blank" rel="noopener noreferrer"
-               className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand/10"
+               className="rounded-lg border border-brand-ink/40 bg-brand-ink/5 px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand-ink/10"
                title="Бот пришлёт новые объекты по этим фильтрам">
               🔔 Сообщать о новых в Telegram
             </a>

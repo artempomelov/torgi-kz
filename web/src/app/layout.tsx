@@ -41,7 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <header className="border-b border-border bg-surface">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3">
             <Link href="/" className="text-xl font-bold tracking-tight text-foreground">
-              torgi<span className="text-brand">.kz</span>
+              torgi<span className="text-brand-ink">.kz</span>
             </Link>
             <nav className="flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium text-muted">
               {NAV.map((item) => (

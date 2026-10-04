@@ -89,7 +89,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
       )}
 
       {lot.duplicate_of && (
-        <div className="mt-4 rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm">
+        <div className="mt-4 rounded-lg border border-brand-ink/30 bg-brand-ink/5 p-3 text-sm">
           Этот же объект (совпадает кадастровый номер) продаётся и у другого источника —{" "}
           <Link href={`/lots/${lot.duplicate_of}/`} className="font-medium text-brand-ink">смотреть основное объявление</Link>.
         </div>
@@ -158,7 +158,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
               </div>
             )}
             {stale && (
-              <div className="mt-3 rounded-lg bg-accent/15 p-3 text-sm text-accent-ink">
+              <div className="mt-3 rounded-lg bg-surface-2 p-3 text-sm text-foreground">
                 В продаже с {formatDate(lot.listed_at)} — объект давно не продаётся, уместно торговаться.
               </div>
             )}
@@ -177,7 +177,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
               <FavoriteButton id={lot.id} variant="button" />
               {lot.status === "active" && (
                 <a href={watchLotLink(lot.id)} target="_blank" rel="noopener noreferrer"
-                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:border-brand/40">
+                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:border-brand-ink/40">
                   🔔 Следить за ценой в Telegram
                 </a>
               )}

@@ -1,19 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Квартира — нет фото">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f6f9"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef0f3"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
   </defs>
   <rect width="400" height="300" fill="url(#bg)"/>
-  <circle cx="300" cy="62" r="46" fill="#fec50c" opacity=".14"/>
-  <line x1="96" y1="206" x2="304" y2="206" stroke="#d2e6ec" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="300" cy="62" r="46" fill="#2450d6" opacity=".14"/>
+  <line x1="96" y1="206" x2="304" y2="206" stroke="#e4e6ea" stroke-width="4" stroke-linecap="round"/>
   <!-- многоэтажный дом -->
-  <rect x="146" y="56" width="108" height="150" rx="6" fill="#fff" stroke="#00afca" stroke-width="4"/>
-  <rect x="140" y="50" width="120" height="12" rx="4" fill="#00afca"/>
-  <g fill="#e9f6f9" stroke="#00afca" stroke-width="2.5">
+  <rect x="146" y="56" width="108" height="150" rx="6" fill="#fff" stroke="#5b6270" stroke-width="4"/>
+  <rect x="140" y="50" width="120" height="12" rx="4" fill="#5b6270"/>
+  <g fill="#eef0f3" stroke="#5b6270" stroke-width="2.5">
     <rect x="162" y="76" width="20" height="18" rx="2"/><rect x="190" y="76" width="20" height="18" rx="2"/><rect x="218" y="76" width="20" height="18" rx="2"/>
-    <rect x="162" y="104" width="20" height="18" rx="2"/><rect x="190" y="104" width="20" height="18" rx="2" fill="#fec50c"/><rect x="218" y="104" width="20" height="18" rx="2"/>
-    <rect x="162" y="132" width="20" height="18" rx="2"/><rect x="190" y="132" width="20" height="18" rx="2"/><rect x="218" y="132" width="20" height="18" rx="2" fill="#fec50c"/>
+    <rect x="162" y="104" width="20" height="18" rx="2"/><rect x="190" y="104" width="20" height="18" rx="2" fill="#2450d6"/><rect x="218" y="104" width="20" height="18" rx="2"/>
+    <rect x="162" y="132" width="20" height="18" rx="2"/><rect x="190" y="132" width="20" height="18" rx="2"/><rect x="218" y="132" width="20" height="18" rx="2" fill="#2450d6"/>
   </g>
-  <rect x="186" y="166" width="28" height="40" rx="3" fill="#00afca"/>
+  <rect x="186" y="166" width="28" height="40" rx="3" fill="#5b6270"/>
   <circle cx="208" cy="187" r="2.5" fill="#fff"/>
-  <text x="200" y="252" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="600" fill="#5a6b72">Нет фото</text>
+  <text x="200" y="252" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="600" fill="#6b6f78">Нет фото</text>
 </svg>

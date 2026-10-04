@@ -12,7 +12,7 @@ OUT = Path(__file__).resolve().parent.parent / "public" / "og"
 FONTS = Path("C:/Windows/Fonts")
 BOLD, REGULAR = FONTS / "segoeuib.ttf", FONTS / "segoeui.ttf"
 
-INK, BRAND, BRAND_INK, ACCENT, MUTED = "#10242c", "#00afca", "#007c90", "#fec50c", "#4b6470"
+INK, BRAND, BRAND_INK, ACCENT, MUTED = "#0f1115", "#2450d6", "#2450d6", "#0f1115", "#5b6270"
 
 CARDS = {
     "default": ("Все торги недвижимостью\nКазахстана в одном месте", "Арест · залоги банков · госимущество · банкроты"),
@@ -27,7 +27,7 @@ CARDS = {
 
 
 def card(title: str, subtitle: str) -> Image.Image:
-    img = Image.new("RGB", (1200, 630), "#f1f9fb")
+    img = Image.new("RGB", (1200, 630), "#ffffff")
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 1200, 14], fill=BRAND)
     d.rectangle([0, 616, 1200, 630], fill=ACCENT)

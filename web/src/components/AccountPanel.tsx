@@ -54,7 +54,7 @@ export function AccountPanel() {
               Сегодня осталось бесплатных просмотров: <b>{me.remaining_today}</b> из {me.free_per_day}.
               Лимит обновляется каждый день в 00:00 по Алматы.
             </p>
-            <div className="mt-4 rounded-lg bg-brand/5 p-4">
+            <div className="mt-4 rounded-lg bg-brand-ink/5 p-4">
               <div className="font-semibold text-brand-ink">Подписка torgi.kz</div>
               <ul className="mt-2 list-inside list-disc text-sm text-muted">
                 <li>полные данные всех объектов без дневного лимита</li>

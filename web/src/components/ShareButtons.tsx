@@ -14,7 +14,7 @@ export function ShareButtons({ url, text }: { url: string; text: string }) {
       window.prompt("Скопируйте ссылку", url);
     }
   };
-  const btn = "flex-1 rounded-lg border border-border px-3 py-2 text-center text-sm font-medium hover:border-brand/40";
+  const btn = "flex-1 rounded-lg border border-border px-3 py-2 text-center text-sm font-medium hover:border-brand-ink/40";
   return (
     <div>
       <div className="mb-2 text-sm text-muted">Поделиться</div>

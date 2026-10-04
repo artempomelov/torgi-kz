@@ -19,7 +19,7 @@ import { LotImage } from "./LotImage";
 export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "brand" | "accent" | "success" }) {
   const tones = {
     neutral: "bg-background text-muted",
-    brand: "bg-brand/10 text-brand-ink",
+    brand: "bg-brand-ink/10 text-brand-ink",
     accent: "bg-accent/15 text-accent-ink",
     success: "bg-success/10 text-success",
   };
@@ -32,7 +32,7 @@ export function LotCard({ lot }: { lot: Lot }) {
   return (
     <Link
       href={`/lots/${lot.id}/`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand/50 hover:shadow-card"
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand-ink/50 hover:shadow-card"
     >
       <div className="relative aspect-[4/3] bg-background">
         <LotImage src={lot.image} category={lot.category} alt={lot.headline} className="h-full w-full object-cover" />
@@ -41,7 +41,7 @@ export function LotCard({ lot }: { lot: Lot }) {
             {CATEGORY_LABELS[lot.category] ?? lot.category}
           </span>
           {lot.price_drop_pct ? (
-            <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-foreground">
+            <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-white">
               −{lot.price_drop_pct}%
             </span>
           ) : null}

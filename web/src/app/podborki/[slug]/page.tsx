@@ -102,7 +102,7 @@ export default async function CollectionPage({ params }: PageProps<"/podborki/[s
               <Link
                 key={x.slug}
                 href={`/podborki/${x.slug}/`}
-                className="rounded-full border border-border bg-surface px-3 py-1 text-sm hover:border-brand hover:text-brand-ink"
+                className="rounded-full border border-border bg-surface px-3 py-1 text-sm hover:border-brand-ink hover:text-brand-ink"
               >
                 {x.title} <span className="text-muted">{x.count}</span>
               </Link>

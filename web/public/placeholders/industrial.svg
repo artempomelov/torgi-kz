@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Промбаза или производство — нет фото">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f6f9"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef0f3"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
   </defs>
   <rect width="400" height="300" fill="url(#bg)"/>
-  <line x1="96" y1="206" x2="304" y2="206" stroke="#d2e6ec" stroke-width="4" stroke-linecap="round"/>
+  <line x1="96" y1="206" x2="304" y2="206" stroke="#e4e6ea" stroke-width="4" stroke-linecap="round"/>
   <!-- дым -->
-  <circle cx="262" cy="64" r="10" fill="#00afca" opacity=".15"/>
-  <circle cx="276" cy="50" r="13" fill="#00afca" opacity=".12"/>
-  <circle cx="294" cy="40" r="16" fill="#00afca" opacity=".09"/>
+  <circle cx="262" cy="64" r="10" fill="#5b6270" opacity=".15"/>
+  <circle cx="276" cy="50" r="13" fill="#5b6270" opacity=".12"/>
+  <circle cx="294" cy="40" r="16" fill="#5b6270" opacity=".09"/>
   <!-- труба -->
-  <rect x="248" y="72" width="20" height="134" rx="3" fill="#fff" stroke="#00afca" stroke-width="4"/>
-  <rect x="248" y="92" width="20" height="8" fill="#fec50c"/>
+  <rect x="248" y="72" width="20" height="134" rx="3" fill="#fff" stroke="#5b6270" stroke-width="4"/>
+  <rect x="248" y="92" width="20" height="8" fill="#2450d6"/>
   <!-- цех с «пилообразной» крышей -->
-  <path d="M116 206 V134 L156 112 V134 L196 112 V134 L236 112 V206 Z" fill="#fff" stroke="#00afca" stroke-width="4" stroke-linejoin="round"/>
-  <g fill="#e9f6f9" stroke="#00afca" stroke-width="2.5">
-    <rect x="130" y="148" width="22" height="18" rx="2"/><rect x="164" y="148" width="22" height="18" rx="2" fill="#fec50c"/><rect x="198" y="148" width="22" height="18" rx="2"/>
+  <path d="M116 206 V134 L156 112 V134 L196 112 V134 L236 112 V206 Z" fill="#fff" stroke="#5b6270" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="#eef0f3" stroke="#5b6270" stroke-width="2.5">
+    <rect x="130" y="148" width="22" height="18" rx="2"/><rect x="164" y="148" width="22" height="18" rx="2" fill="#2450d6"/><rect x="198" y="148" width="22" height="18" rx="2"/>
   </g>
-  <rect x="150" y="176" width="52" height="30" rx="3" fill="#00afca"/>
+  <rect x="150" y="176" width="52" height="30" rx="3" fill="#5b6270"/>
   <g stroke="#fff" stroke-width="2"><line x1="150" y1="186" x2="202" y2="186"/><line x1="150" y1="196" x2="202" y2="196"/></g>
-  <text x="200" y="252" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="600" fill="#5a6b72">Нет фото</text>
+  <text x="200" y="252" text-anchor="middle" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="600" fill="#6b6f78">Нет фото</text>
 </svg>

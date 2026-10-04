@@ -50,7 +50,7 @@ export default function Home() {
             <input
               name="q"
               placeholder="Город или улица"
-              className="flex-1 rounded-[10px] border border-border bg-white px-4 py-3 text-foreground shadow-card outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className="flex-1 rounded-[10px] border border-border bg-white px-4 py-3 text-foreground shadow-card outline-none placeholder:text-muted focus:border-brand-ink focus:ring-2 focus:ring-brand-ink/20"
             />
             <button className="rounded-[10px] bg-brand px-6 py-3 font-semibold text-white hover:bg-brand-hover">
               Найти
@@ -61,7 +61,7 @@ export default function Home() {
               <Link
                 key={c.id}
                 href={`/lots/?category=${c.id}`}
-                className="rounded-full border border-border bg-white px-4 py-1.5 text-sm text-foreground hover:border-brand hover:text-brand-ink"
+                className="rounded-full border border-border bg-white px-4 py-1.5 text-sm text-foreground hover:border-brand-ink hover:text-brand-ink"
               >
                 {CATEGORY_PLURAL[c.id] ?? c.title} <span className="text-muted">{c.count}</span>
               </Link>
@@ -79,9 +79,9 @@ export default function Home() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {quick.map((q) => (
               <Link key={q.query} href={`/lots/?${q.query}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 hover:border-brand/40">
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 hover:border-brand-ink/40">
                 <span className="font-medium">{q.title}</span>
-                <span className="rounded-full bg-brand/10 px-2.5 py-0.5 text-sm font-semibold text-brand-ink">{q.count}</span>
+                <span className="rounded-full bg-brand-ink/10 px-2.5 py-0.5 text-sm font-semibold text-brand-ink">{q.count}</span>
               </Link>
             ))}
           </div>
@@ -125,7 +125,7 @@ export default function Home() {
             <Link
               key={s.id}
               href={`/lots/?source=${s.id}`}
-              className="rounded-xl border border-border bg-surface p-4 hover:border-brand/40"
+              className="rounded-xl border border-border bg-surface p-4 hover:border-brand-ink/40"
             >
               <div className="text-sm font-semibold">{s.title}</div>
               <div className="mt-1 text-2xl font-bold text-brand-ink">{s.count}</div>

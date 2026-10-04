@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
-/* Палитра общая с ipoteka24.kz: бирюза и золото флага Казахстана, тёмный сине-зелёный текст. */
+/* Палитра «монохром и кобальт»: почти чёрный текст и кнопки, кобальт — ссылки, «.kz» и бейджи,
+   красный — только «цена снижена» и предупреждения. Светло-серая подложка, белые карточки. */
 :root {
-  --background: #f1f9fb;
+  --background: #f6f7f9;
   --surface: #ffffff;
-  --surface-2: #e9f6f9;
-  --foreground: #10242c;
-  --muted: #5a6b72;
-  --border: #d2e6ec;
-  --brand: #00afca; /* бирюза: кнопки, «.kz» в логотипе, акценты */
-  --brand-hover: #0092aa;
-  --brand-ink: #007c90; /* бирюза для текста и ссылок — читается на белом */
-  --accent: #fec50c; /* золото: плашки «цена снижена», выделения */
-  --accent-ink: #957200; /* золото для текста на светлом фоне */
-  --success: #0a8f3c;
-  --shadow: 0 10px 30px rgba(16, 60, 80, 0.1);
+  --surface-2: #eef0f3;
+  --foreground: #0f1115;
+  --muted: #6b6f78;
+  --border: #e4e6ea;
+  --brand: #0f1115; /* основные кнопки */
+  --brand-hover: #2b2f37;
+  --brand-ink: #2450d6; /* кобальт: ссылки, «.kz», бейджи, фокус */
+  --accent: #d93036; /* красный: плашка «−N%», счётчик избранного */
+  --accent-ink: #b4282d;
+  --success: #1f7a4d;
+  --shadow: 0 8px 24px rgba(15, 17, 21, 0.08);
 }
 
 @theme inline {
@@ -39,17 +40,14 @@ body {
   color: var(--foreground);
 }
 
-/* Фон главного блока — как на ipoteka24.kz: мягкие пятна бирюзы и золота на белом */
+/* Фон главного блока — ровный белый, без пятен */
 .hero-bg {
-  background:
-    radial-gradient(900px 420px at 82% -10%, rgba(0, 175, 202, 0.18), transparent),
-    radial-gradient(760px 420px at 0% 25%, rgba(254, 197, 12, 0.16), transparent),
-    linear-gradient(160deg, #f1f9fb, #ffffff);
+  background: #ffffff;
 }
 
 .field {
   @apply w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none
-    focus:border-brand focus:ring-2 focus:ring-brand/20;
+    focus:border-brand-ink focus:ring-2 focus:ring-brand-ink/20;
 }
 
 .label {
