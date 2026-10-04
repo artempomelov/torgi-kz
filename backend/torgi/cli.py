@@ -5,6 +5,7 @@
     uv run torgi parse halyk forte     # выбранные
     uv run torgi serve                 # API на http://127.0.0.1:8000
     uv run torgi post --dry-run        # посты для Telegram-канала
+    uv run torgi bot --dry-run         # уведомления подписчиков бота
 """
 
 import argparse
@@ -29,6 +30,8 @@ def main() -> None:
     t.add_argument("--since-days", type=int, default=3, help="брать лоты, появившиеся за N дней")
     t.add_argument("--dry-run", action="store_true", help="только показать посты")
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
+    b = sub.add_parser("bot", help="бот подписок: обработать входящие и разослать уведомления")
+    b.add_argument("--dry-run", action="store_true", help="только показать уведомления")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
@@ -63,6 +66,12 @@ def main() -> None:
         with SessionLocal() as session:
             telegram.run(session, limit=args.limit, since_days=args.since_days, dry_run=args.dry_run,
                          mark_all=args.mark_all)
+    elif args.cmd == "bot":
+        from torgi import bot
+
+        init_db()
+        with SessionLocal() as session:
+            bot.run(session, dry_run=args.dry_run)
     elif args.cmd == "export":
         from pathlib import Path
 

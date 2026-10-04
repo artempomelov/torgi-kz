@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { Catalog } from "@/components/Catalog";
-import { getMeta } from "@/lib/data";
+import { getLots, getMeta } from "@/lib/data";
+import { PAGE_SIZE, applyFilters, parseFilters } from "@/lib/filter";
 
 export const metadata: Metadata = {
   title: "Каталог объектов на торгах",
@@ -14,7 +15,8 @@ export default function LotsPage() {
   // Фильтры читаются из адреса в браузере — страница собирается статически
   return (
     <Suspense>
-      <Catalog meta={getMeta()} />
+      {/* первая страница «новых» — в HTML, чтобы каталог показывался до загрузки lots.json */}
+      <Catalog meta={getMeta()} initial={applyFilters(getLots(), parseFilters(new URLSearchParams())).slice(0, PAGE_SIZE)} />
     </Suspense>
   );
 }

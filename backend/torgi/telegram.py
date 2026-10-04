@@ -26,9 +26,12 @@ CAPTION_LIMIT = 1024
 
 EMOJI = {"apartment": "🏢", "house": "🏡", "commercial": "🏬", "land": "🌾", "parking": "🚗", "industrial": "🏭",
          "other": "📦"}
-SOURCE_TITLES = {"adilet": "ЕЭТП Минюста", "halyk": "Halyk Bank", "alatau": "Alatau City Bank", "forte": "ForteBank",
-                 "bcc": "Bank CenterCredit", "freedom": "Freedom Bank"}
-ORIGIN_TAGS = {"arrested": "арест", "bank_balance": "банк", "bank_pledge": "залог", "court": "суд"}
+SOURCE_TITLES = {"adilet": "ЕЭТП Минюста", "sauda": "E-Qazyna", "halyk": "Halyk Bank", "alatau": "Alatau City Bank",
+                 "forte": "ForteBank", "bcc": "Bank CenterCredit", "freedom": "Freedom Bank",
+                 "eurasian": "Евразийский банк", "nurbank": "Нурбанк", "bereke": "Bereke Bank", "rbk": "Bank RBK"}
+ORIGIN_TAGS = {"arrested": "арест", "bank_balance": "банк", "bank_pledge": "залог", "court": "суд",
+               "state": "госимущество", "bankrupt": "банкрот", "tax_debtor": "налоговый_должник",
+               "confiscated": "конфискат"}
 MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
           "ноября", "декабря"]
 

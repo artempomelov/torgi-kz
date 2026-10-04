@@ -2,11 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Badge } from "@/components/LotCard";
+import { FavoriteButton } from "@/components/FavoriteButton";
+import { HowToBuy } from "@/components/HowToBuy";
+import { Badge, LotCard } from "@/components/LotCard";
 import { LotDetails } from "@/components/LotDetails";
 import { LotImage } from "@/components/LotImage";
+import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
-import { getAllLotsFull, getLot } from "@/lib/data";
+import { getAllLotsFull, getLot, getLots } from "@/lib/data";
+import { compareToMarket, isStale, similarLots } from "@/lib/insights";
+import { watchLotLink } from "@/lib/subscribe";
 import {
   CATEGORY_LABELS,
   ORIGIN_LABELS,
@@ -35,7 +40,9 @@ export async function generateMetadata({ params }: PageProps<"/lots/[id]">): Pro
     description: [lotSubtitle(lot), lot.city ?? lot.region, ORIGIN_LABELS[lot.origin], SOURCE_LABELS[lot.source]]
       .filter(Boolean)
       .join(". "),
-    openGraph: lot.images[0] ? { images: [lot.images[0]] } : undefined,
+    // своя картинка превью, если у источника нет фото (для WhatsApp, Telegram и соцсетей)
+    openGraph: { images: [lot.images[0] ?? `/og/${lot.category}.png`] },
+    alternates: { canonical: `/lots/${lot.duplicate_of ?? lot.id}/` },
   };
 }
 
@@ -65,6 +72,11 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
   ).filter(([, v]) => v !== null && v !== undefined && v !== "");
 
   const isAuction = lot.sale_type === "auction" || lot.sale_type === "auction_down";
+  const lots = getLots();
+  const similar = similarLots(lot, lots);
+  const market = compareToMarket(lot, lots);
+  const stale = lot.status === "active" && !isAuction && isStale(lot.listed_at);
+  const pageUrl = `https://torgi.kz/lots/${lot.id}/`;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -73,6 +85,13 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
       {lot.status !== "active" && (
         <div className="mt-4 rounded-lg border border-accent/40 bg-accent/15 p-3 text-sm text-accent-ink">
           Объект снят с продажи у источника {formatDate(lot.last_seen_at)}.
+        </div>
+      )}
+
+      {lot.duplicate_of && (
+        <div className="mt-4 rounded-lg border border-brand/30 bg-brand/5 p-3 text-sm">
+          Этот же объект (совпадает кадастровый номер) продаётся и у другого источника —{" "}
+          <Link href={`/lots/${lot.duplicate_of}/`} className="font-medium text-brand-ink">смотреть основное объявление</Link>.
         </div>
       )}
 
@@ -91,6 +110,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
                 <a key={src} href={src} target="_blank" rel="noopener noreferrer"
                    className={i === 0 ? "col-span-2 row-span-2 md:col-span-2" : ""}>
                   <LotImage src={src} category={lot.category} alt={`${lot.headline}, фото ${i + 1}`} eager={i === 0}
+                            width={i === 0 ? 1200 : 480}
                             className="aspect-[4/3] h-full w-full rounded-lg object-cover" />
                 </a>
               ))}
@@ -113,6 +133,8 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
           </section>
 
           <LotDetails lotId={lot.id} details={lot} isAuction={isAuction} />
+
+          <HowToBuy origin={lot.origin} saleType={lot.sale_type} source={lot.source} />
         </div>
 
         <aside className="space-y-4">
@@ -124,6 +146,22 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
                 Снижена на {lot.price_drop_pct}% с момента появления
               </div>
             ) : null}
+            {market && (
+              <div className={`mt-3 rounded-lg p-3 text-sm ${market.diffPct <= -10 ? "bg-success/10 text-success" : "bg-background text-muted"}`}>
+                {market.diffPct <= -3
+                  ? <>Цена за м² на <b>{-market.diffPct}%</b> ниже</>
+                  : market.diffPct >= 3
+                    ? <>Цена за м² на <b>{market.diffPct}%</b> выше</>
+                    : <>Цена за м² на уровне</>}{" "}
+                медианы по {market.sample} похожим объектам на торгах и в залогах ({market.where}):{" "}
+                {Math.round(market.median).toLocaleString("ru-RU")} ₸/м².
+              </div>
+            )}
+            {stale && (
+              <div className="mt-3 rounded-lg bg-accent/15 p-3 text-sm text-accent-ink">
+                В продаже с {formatDate(lot.listed_at)} — объект давно не продаётся, уместно торговаться.
+              </div>
+            )}
             {lot.flags.length > 0 && (
               <div className="mt-2 text-xs text-accent-ink">
                 В данных источника похоже на ошибку ввода — уточняйте цену и площадь у продавца.
@@ -135,6 +173,19 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             >
               Адрес и контакты продавца
             </a>
+            <div className="mt-2 space-y-2">
+              <FavoriteButton id={lot.id} variant="button" />
+              {lot.status === "active" && (
+                <a href={watchLotLink(lot.id)} target="_blank" rel="noopener noreferrer"
+                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:border-brand/40">
+                  🔔 Следить за ценой в Telegram
+                </a>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface p-4">
+            <ShareButtons url={pageUrl} text={`${lot.headline} — ${formatPrice(lot.price)}`} />
           </div>
 
           <TelegramCta />
@@ -145,6 +196,15 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
           </p>
         </aside>
       </div>
+
+      {similar.length > 0 && (
+        <section className="mt-12">
+          <h2 className="mb-4 text-2xl font-bold">Похожие объекты</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {similar.map((x) => <LotCard key={x.id} lot={x} />)}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

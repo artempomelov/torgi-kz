@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Link from "next/link";
 
 import { AccountButton } from "@/components/AccountButton";
+import { FavoritesLink } from "@/components/FavoritesLink";
 import { YandexMetrika } from "@/components/YandexMetrika";
 import { FEATURES } from "@/lib/features";
 import "./globals.css";
@@ -19,7 +20,8 @@ export const metadata: Metadata = {
     "Агрегатор торгов недвижимостью в Казахстане: арестованное имущество, госимущество и приватизация, " +
     "имущество банкротов, конфискат, залоги и имущество банков Halyk, Forte, BCC, Freedom, Alatau, Bereke, " +
     "Евразийского, Нурбанка, RBK. Квартиры, дома, коммерция и земля ниже рынка.",
-  openGraph: { siteName: "torgi.kz", locale: "ru_KZ", type: "website" },
+  openGraph: { siteName: "torgi.kz", locale: "ru_KZ", type: "website", images: ["/og/default.png"] },
+  twitter: { card: "summary_large_image" },
 };
 
 const NAV = [
@@ -28,6 +30,8 @@ const NAV = [
   { href: "/lots/?category=commercial", label: "Коммерция" },
   { href: "/lots/?category=land", label: "Земля" },
   { href: "/lots/?with_auction_date=true&sort=deadline", label: "Ближайшие торги" },
+  { href: "/lots/?view=map", label: "Карта" },
+  { href: "/podborki/", label: "Подборки" },
 ];
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -47,7 +51,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               ))}
             </nav>
             {/* Место под вход и подписку — появится в платном режиме */}
-            <div className="ml-auto flex items-center gap-3 text-sm">
+            <div className="ml-auto flex items-center gap-4 text-sm">
+              <FavoritesLink />
               {FEATURES.telegramUrl && (
                 <a href={FEATURES.telegramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-ink">
                   Telegram

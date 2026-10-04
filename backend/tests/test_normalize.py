@@ -104,3 +104,20 @@ def test_quality_flags():
     assert nz.quality_flags("land", 300_000_000, None) == []
     assert nz.quality_flags("commercial", 137_300_000, 0.1581) == ["suspicious_area"]  # гектары в поле «кв.м»
     assert nz.quality_flags("parking", 3_000_000, 5) == []
+
+
+def test_clean_address():
+    from torgi.normalize import clean_address, valid_cadastral
+
+    assert clean_address("Область Жетісу, УСТАРЕВШЕЕ - г.Текели, г.Текели п.Рудничный ул. Ескелди Би д.24 кв.7") == (
+        "Область Жетісу, г.Текели, г.Текели п.Рудничный ул. Ескелди Би д.24 кв.7")
+    assert clean_address("г.Шымкент, УСТАРЕВШЕЕ - г.Шымкент - Каратауский район, квартал 222, участок 58") == (
+        "г.Шымкент, Каратауский район, квартал 222, участок 58")
+    assert clean_address("Область Абай, УСТАРЕВШЕЕ - Кокпектинский район, Кокпектинский район, село Бигаш") == (
+        "Область Абай, Кокпектинский район, село Бигаш")
+    assert clean_address(
+        "Туркестанская область, Шардаринский район, Шардара ауданы, Шардара қаласы,№55 көшесі бойынан"
+    ) == "Туркестанская область, Шардаринский район"
+    assert clean_address("г. Алматы, ул. Абая 10") == "г. Алматы, ул. Абая 10"
+    assert valid_cadastral("111") is None and valid_cadastral("ааа") is None
+    assert valid_cadastral("21-319-016-445") == "21-319-016-445"

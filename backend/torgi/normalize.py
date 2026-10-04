@@ -304,6 +304,42 @@ def parse_cadastral(text: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+def valid_cadastral(value: str | None) -> str | None:
+    """Заглушки вроде «111», «ааа», «-» вместо кадастрового номера — не номер."""
+    if not value or sum(ch.isdigit() for ch in value) < 8:
+        return None
+    return value.strip()
+
+
+# Служебные пометки справочника адресов e-qazyna: «УСТАРЕВШЕЕ - г.Текели»
+_OBSOLETE_RE = re.compile(r"УСТАРЕВШЕЕ\s*-\s*", re.I)
+# Части адреса на казахском, дублирующие русскую: «Шардара ауданы», «Шардара қаласы», «...көшесі бойынан»
+_KAZ_PART_RE = re.compile(r"облысы|ауданы|қаласы|ауылы|ауылдық|округі|көшесі|бойынан|жанында|даңғылы|шағын аудан", re.I)
+
+
+def clean_address(text: str | None) -> str | None:
+    """Убирает служебные пометки, казахские дубли и повторы частей адреса."""
+    if not text:
+        return text
+    s = _OBSOLETE_RE.sub("", text)
+    # «г.Шымкент - Енбекшинский район» → «г.Шымкент, Енбекшинский район»
+    s = re.sub(r"\s+-\s+", ", ", s)
+    parts, seen = [], set()
+    for part in (p.strip() for p in s.split(",")):
+        if not part:
+            continue
+        # «г.Шымкент» и «г. Шымкент» — одна часть
+        key = re.sub(r"[\s.]", "", re.sub(r"^(?:г\.|город\s)\s*", "", part.lower()))
+        if key in seen:
+            continue
+        # казахскую часть выбрасываем, только если адрес и без неё не пустой
+        if _KAZ_PART_RE.search(part) and parts:
+            continue
+        seen.add(key)
+        parts.append(part)
+    return clean_text(", ".join(parts))
+
+
 _YEAR_RE = re.compile(r"(?:год\w*\s+постройки|постройки|построен\w*)[^\d]{0,20}((?:19|20)\d{2})", re.I)
 
 

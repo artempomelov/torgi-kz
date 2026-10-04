@@ -10,6 +10,7 @@
 """
 
 import json
+import re
 from datetime import timedelta
 from pathlib import Path
 
@@ -54,7 +55,35 @@ def headline(lot: dict) -> str:
     return ", ".join(parts) + (f" — {place}" if place else "")
 
 
+# Если один объект продают на двух площадках, в каталоге оставляем один — источник с лучшими данными
+SOURCE_PRIORITY = ["adilet", "sauda", "halyk", "forte", "bcc", "alatau", "freedom", "eurasian", "nurbank", "bereke", "rbk"]
+
+
+def find_duplicates(lots: list[Lot]) -> dict[int, int]:
+    """id дубля → id основного лота. Совпадение — по кадастровому номеру между разными источниками."""
+    groups: dict[str, list[Lot]] = {}
+    for lot in lots:
+        key = nz.valid_cadastral(lot.cadastral)
+        if key and lot.status == "active":
+            groups.setdefault(re.sub(r"\W", "", key).lower(), []).append(lot)
+    rank = {s: i for i, s in enumerate(SOURCE_PRIORITY)}
+    dups: dict[int, int] = {}
+    for group in groups.values():
+        if len({lot.source for lot in group}) < 2:
+            continue  # внутри одного источника один номер у разных помещений — не дубли
+        main = min(group, key=lambda lot: (-len(lot.images or []), rank.get(lot.source, 99)))
+        for lot in group:
+            if lot.source != main.source:
+                dups[lot.id] = main.id
+    return dups
+
+
 def _prepare(item: dict, gated: bool) -> dict:
+    for field in ("address", "title"):
+        if item.get(field):
+            item[field] = nz.clean_address(item[field])
+    if "cadastral" in item:
+        item["cadastral"] = nz.valid_cadastral(item["cadastral"])
     item["headline"] = headline(item)
     if gated:
         for field in GATED_FIELDS:
@@ -76,13 +105,21 @@ def export(session: Session, out_dir: Path, gated: bool = False) -> dict[str, in
         .order_by(Lot.first_seen_at.desc(), Lot.id.desc())
     ).all()
 
-    short = [_prepare(_short(lot).model_dump(mode="json"), gated) for lot in lots if lot.status == "active"]
+    dups = find_duplicates(lots)
+    short = [
+        _prepare(_short(lot).model_dump(mode="json"), gated)
+        for lot in lots
+        if lot.status == "active" and lot.id not in dups
+    ]
     full = []
     for lot in lots:
         item = LotFull.model_validate(lot)
         item.image = lot.images[0] if lot.images else None
         item.price_drop_pct = _drop_pct(lot)
-        full.append(_prepare(item.model_dump(mode="json"), gated))
+        item.listed_at = lot.published_at or lot.first_seen_at
+        data = _prepare(item.model_dump(mode="json"), gated)
+        data["duplicate_of"] = dups.get(lot.id)
+        full.append(data)
 
     _dump(out_dir / "lots.json", short)
     _dump(out_dir / "lots-full.json", full)

@@ -13,6 +13,7 @@ import {
   unitPrice,
 } from "@/lib/format";
 
+import { FavoriteButton } from "./FavoriteButton";
 import { LotImage } from "./LotImage";
 
 export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "brand" | "accent" | "success" }) {
@@ -44,6 +45,9 @@ export function LotCard({ lot }: { lot: Lot }) {
               −{lot.price_drop_pct}%
             </span>
           ) : null}
+        </div>
+        <div className="absolute right-2 top-2">
+          <FavoriteButton id={lot.id} />
         </div>
       </div>
 

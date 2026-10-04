@@ -60,6 +60,7 @@ class LotShort(BaseModel):
     status: str
     first_seen_at: datetime
     price_drop_pct: float | None = None
+    listed_at: datetime | None = None  # когда объявление появилось у источника (или у нас)
 
 
 class PricePoint(BaseModel):
@@ -100,6 +101,7 @@ def _short(lot: Lot) -> LotShort:
     item = LotShort.model_validate(lot)
     item.image = lot.images[0] if lot.images else None
     item.price_drop_pct = _drop_pct(lot)
+    item.listed_at = lot.published_at or lot.first_seen_at
     return item
 
 

@@ -30,6 +30,7 @@ export type Lot = {
   status: string;
   first_seen_at: string;
   price_drop_pct: number | null;
+  listed_at?: string | null; // когда объявление появилось у источника
 };
 
 export type LotDetailsData = {
@@ -53,6 +54,7 @@ export type LotFull = Lot &
     images: string[];
     published_at: string | null;
     last_seen_at: string;
+    duplicate_of?: number | null; // тот же объект у другого источника — основной лот
   };
 
 export type Meta = {

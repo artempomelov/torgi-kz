@@ -170,3 +170,28 @@ class ParseRun(Base):
     price_changed: Mapped[int] = mapped_column(Integer, default=0)
     removed: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class Subscription(Base):
+    """Подписка в Telegram-боте: на поиск (новые лоты по фильтру) или на конкретный лот (цена, снятие)."""
+
+    __tablename__ = "subscriptions"
+    __table_args__ = (UniqueConstraint("chat_id", "code", name="uq_subscription"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    code: Mapped[str] = mapped_column(String(64))  # параметр ссылки t.me/<бот>?start=<code>
+    lot_id: Mapped[int | None] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"))
+    last_price: Mapped[float | None] = mapped_column(Float)  # для слежения за лотом
+    active: Mapped[bool] = mapped_column(default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)  # лоты новее — новые
+
+
+class BotState(Base):
+    """Служебные значения бота, например offset getUpdates."""
+
+    __tablename__ = "bot_state"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(256))

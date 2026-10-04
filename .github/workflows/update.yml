@@ -102,6 +102,7 @@ jobs:
           # номер счётчика Яндекс.Метрики и ссылка на Telegram-канал — пустые значения просто отключают блоки
           NEXT_PUBLIC_YM_ID: ${{ vars.NEXT_PUBLIC_YM_ID }}
           NEXT_PUBLIC_TELEGRAM_URL: ${{ vars.NEXT_PUBLIC_TELEGRAM_URL }}
+          NEXT_PUBLIC_TELEGRAM_BOT: ${{ vars.NEXT_PUBLIC_TELEGRAM_BOT }}
         run: npm ci --no-audit --no-fund && npm run build
 
       - uses: actions/configure-pages@v5
@@ -112,11 +113,14 @@ jobs:
         id: deploy
         uses: actions/deploy-pages@v4
 
-      - name: Telegram-канал
-        if: env.TORGI_TELEGRAM_BOT_TOKEN != '' && env.TORGI_TELEGRAM_CHANNEL != '' && steps.parse.outputs.sources != ''
+      - name: Telegram — канал и бот подписок
+        if: env.TORGI_TELEGRAM_BOT_TOKEN != '' && steps.parse.outputs.sources != ''
         working-directory: backend
         run: |
-          uv run python -m torgi.cli post --limit 5
+          if [ -n "$TORGI_TELEGRAM_CHANNEL" ]; then
+            uv run python -m torgi.cli post --limit 5 || echo "::warning::Публикация в канал не удалась"
+          fi
+          uv run python -m torgi.cli bot || echo "::warning::Бот подписок завершился с ошибкой"
           gzip -kf ../torgi.db && gh release upload data ../torgi.db.gz --clobber
 
       # GitHub отключает расписание в репозитории без коммитов 60 дней — раз в 50 дней отмечаемся

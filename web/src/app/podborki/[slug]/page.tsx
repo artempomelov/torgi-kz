@@ -72,7 +72,7 @@ export default async function CollectionPage({ params }: PageProps<"/podborki/[s
         {medianPpm ? <>, типичная цена — {formatPrice(medianPpm)} за м²</> : null}
         {upcoming ? <>; торги назначены по {upcoming} {plural(upcoming, ["лоту", "лотам", "лотам"])}</> : null}.
         Данные собираются с площадок и сайтов банков каждый день, последнее обновление —{" "}
-        {formatDate(getMeta().updated_at)}.
+        {formatDate(getMeta().updated_at)}
       </p>
       <Link
         href={c.catalogHref}

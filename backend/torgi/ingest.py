@@ -59,6 +59,8 @@ def apply(session: Session, source: str, parsed: ParsedLot, existing: Lot | None
         lot.updated_at = now
         stats.updated += 1
 
+    lot.address = nz.clean_address(lot.address)
+    lot.cadastral = nz.valid_cadastral(lot.cadastral)
     lot.flags = nz.quality_flags(lot.category, lot.price, lot.area_m2)
     lot.price_per_m2 = (
         round(lot.price / lot.area_m2)
