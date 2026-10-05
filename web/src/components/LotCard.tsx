@@ -10,11 +10,14 @@ import {
   formatPrice,
   formatPriceShort,
   lotSubtitle,
+  priceDrop,
   unitPrice,
 } from "@/lib/format";
 
+import { ConsultButton } from "./ConsultButton";
 import { FavoriteButton } from "./FavoriteButton";
 import { LotImage } from "./LotImage";
+import { LotStatsBadge } from "./LotStatsBadge";
 
 export function Badge({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "neutral" | "brand" | "accent" | "success" }) {
   const tones = {
@@ -56,6 +59,15 @@ export function LotCard({ lot }: { lot: Lot }) {
           {formatPriceShort(lot.price)}
           {unitPrice(lot) && <span className="ml-2 text-xs font-normal text-muted">{unitPrice(lot)!.label}</span>}
         </div>
+        {priceDrop(lot.price, lot.price_drop_pct) ? (
+          <div className="-mt-1 text-xs font-medium text-accent-ink">
+            Выгода {formatPriceShort(priceDrop(lot.price, lot.price_drop_pct))} — цена снижена на {lot.price_drop_pct}%
+          </div>
+        ) : lot.min_price && lot.price && lot.min_price < lot.price ? (
+          <div className="-mt-1 text-xs font-medium text-success">
+            Может опуститься до {formatPriceShort(lot.min_price)} (−{Math.round((1 - lot.min_price / lot.price) * 100)}%)
+          </div>
+        ) : null}
         {subtitle && <div className="text-sm text-foreground">{subtitle}</div>}
         <div className="line-clamp-2 text-sm text-muted group-hover:text-foreground">
           {/* в платном режиме точного адреса в каталоге нет — только город/регион */}
@@ -78,6 +90,10 @@ export function LotCard({ lot }: { lot: Lot }) {
               : `Торги: ${formatDate(lot.auction_start, true)}`}
           </div>
         )}
+        <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+          <LotStatsBadge id={lot.id} />
+          <span className="ml-auto"><ConsultButton id={lot.id} /></span>
+        </div>
       </div>
     </Link>
   );

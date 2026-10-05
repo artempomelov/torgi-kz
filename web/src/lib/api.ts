@@ -22,6 +22,7 @@ export type Lot = {
   floors_total: number | null;
   price: number | null;
   price_per_m2: number | null;
+  min_price?: number | null; // аукцион на понижение: ниже этой цены не опустится
   auction_start: string | null;
   auction_end: string | null;
   applications_deadline: string | null;

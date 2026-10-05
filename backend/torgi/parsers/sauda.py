@@ -166,6 +166,7 @@ def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
     city = nz.detect_city(location, title)
     page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
     deposit = re.search(r"Гарантийный взнос\s*₸?\s*([\d\s]+,\d{2})", page_text)
+    min_price = re.search(r"Минимальная цена\s*₸?\s*([\d\s]+,\d{2})", page_text)
     deadline = re.search(r"Дата завершения приема заявок\s*(\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2})", page_text)
     floor, floors_total = nz.parse_floor(obj)
 
@@ -189,6 +190,7 @@ def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
         cadastral=pair("кадастровый номер") or nz.parse_cadastral(f"{title} {obj}"),
         price=card.get("price"),
         deposit=nz.parse_number(deposit.group(1)) if deposit else None,
+        min_price=nz.parse_number(min_price.group(1)) if min_price else None,
         auction_start=_dt(card.get("start")),
         applications_deadline=_dt(deadline.group(1) if deadline else None),
         images=photos,

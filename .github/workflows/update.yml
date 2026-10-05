@@ -45,6 +45,9 @@ jobs:
       # Telegram: секрет TORGI_TELEGRAM_BOT_TOKEN и переменная TORGI_TELEGRAM_CHANNEL в настройках репозитория
       TORGI_TELEGRAM_BOT_TOKEN: ${{ secrets.TORGI_TELEGRAM_BOT_TOKEN }}
       TORGI_TELEGRAM_CHANNEL: ${{ vars.TORGI_TELEGRAM_CHANNEL }}
+      # Дополнительные каналы (JSON {"@канал": {"region": "Алматы"}}) и администраторы бота (username через запятую)
+      TORGI_TELEGRAM_CHANNELS: ${{ vars.TORGI_TELEGRAM_CHANNELS }}
+      TORGI_TELEGRAM_ADMINS: ${{ vars.TORGI_TELEGRAM_ADMINS }}
       # Cloudflare (вход на сайте и закрытые контакты): секрет CLOUDFLARE_API_TOKEN и переменная
       # CLOUDFLARE_ACCOUNT_ID. Пока токена нет — сайт открытый, как раньше.
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

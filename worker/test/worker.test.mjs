@@ -70,6 +70,21 @@ test("вход, лимит и закрытые данные", async () => {
   assert.equal(sub.remaining_today, null);
 });
 
+test("просмотры и избранное", async () => {
+  const e = env();
+  const post = (path, body, ip = "1.1.1.1") =>
+    call(e, path, { method: "POST", body: body && JSON.stringify(body), headers: { "CF-Connecting-IP": ip } });
+  await post("/api/hit/5");
+  await post("/api/hit/5"); // тот же посетитель — один просмотр за день
+  await post("/api/hit/5", null, "2.2.2.2");
+  await post("/api/fav/5", { client: "browser-aaaa1111", on: true });
+  await post("/api/fav/5", { client: "browser-bbbb2222", on: true });
+  await post("/api/fav/5", { client: "browser-bbbb2222", on: false });
+  assert.equal((await post("/api/fav/5", { client: "x", on: true })).status, 400);
+  const s = await (await call(e, "/api/stats?ids=5,6")).json();
+  assert.deepEqual(s, { 5: { views: 2, favs: 1 } });
+});
+
 test("CORS preflight", async () => {
   const res = await call(env(), "/api/me", { method: "OPTIONS" });
   assert.equal(res.status, 204);

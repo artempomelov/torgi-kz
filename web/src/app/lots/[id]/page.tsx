@@ -7,11 +7,14 @@ import { HowToBuy } from "@/components/HowToBuy";
 import { Badge, LotCard } from "@/components/LotCard";
 import { LotDetails } from "@/components/LotDetails";
 import { LotImage } from "@/components/LotImage";
+import { DescendingAuction, PriceAlerts } from "@/components/LotPricing";
+import { LotStatsBadge } from "@/components/LotStatsBadge";
 import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
 import { getAllLotsFull, getLot, getLots } from "@/lib/data";
+import { describeLot } from "@/lib/describe";
 import { compareToMarket, isStale, similarLots } from "@/lib/insights";
-import { watchLotLink } from "@/lib/subscribe";
+import { checkLink, consultLink } from "@/lib/subscribe";
 import {
   CATEGORY_LABELS,
   ORIGIN_LABELS,
@@ -21,6 +24,7 @@ import {
   formatNumber,
   formatPrice,
   lotSubtitle,
+  priceDrop,
   unitPrice,
 } from "@/lib/format";
 
@@ -121,6 +125,16 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
           )}
 
           <section className="rounded-xl border border-border bg-surface p-5">
+            <h2 className="mb-2 text-lg font-semibold">Об объекте</h2>
+            <div className="space-y-1.5 text-sm leading-6">
+              {describeLot(lot, market).map((p) => <p key={p}>{p}</p>)}
+            </div>
+            <LotStatsBadge id={lot.id} record compact={false} className="mt-3" />
+          </section>
+
+          <DescendingAuction lot={lot} />
+
+          <section className="rounded-xl border border-border bg-surface p-5">
             <h2 className="mb-3 text-lg font-semibold">Характеристики</h2>
             <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               {specs.map(([k, v]) => (
@@ -142,8 +156,9 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             <div className="text-sm text-muted">{isAuction ? "Стартовая цена" : "Цена"}</div>
             <div className="mt-1 text-3xl font-bold">{formatPrice(lot.price)}</div>
             {lot.price_drop_pct ? (
-              <div className="mt-1 text-sm font-medium text-accent-ink">
-                Снижена на {lot.price_drop_pct}% с момента появления
+              <div className="mt-2 rounded-lg bg-accent/10 p-3 text-sm text-accent-ink">
+                Выгода <b>{formatPrice(priceDrop(lot.price, lot.price_drop_pct))}</b> — цена снижена на {lot.price_drop_pct}%
+                с момента публикации
               </div>
             ) : null}
             {market && (
@@ -175,14 +190,27 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             </a>
             <div className="mt-2 space-y-2">
               <FavoriteButton id={lot.id} variant="button" />
-              {lot.status === "active" && (
-                <a href={watchLotLink(lot.id)} target="_blank" rel="noopener noreferrer"
-                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium hover:border-brand-ink/40">
-                  🔔 Следить за ценой в Telegram
-                </a>
-              )}
             </div>
           </div>
+
+          <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
+            <div className="text-sm font-semibold">Нужна помощь с покупкой?</div>
+            <a href={checkLink(lot.id)} target="_blank" rel="noopener noreferrer"
+               className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
+              Бесплатная проверка лота
+            </a>
+            <p className="text-xs text-muted">Проверим документы, обременения и риски — ответим в Telegram.</p>
+            <a href={consultLink(lot.id)} target="_blank" rel="noopener noreferrer"
+               className="block rounded-lg border border-border px-4 py-2.5 text-center text-sm font-medium hover:border-brand-ink/40">
+              Консультация в Telegram
+            </a>
+          </div>
+
+          {lot.status === "active" && (
+            <div className="rounded-xl border border-border bg-surface p-4">
+              <PriceAlerts lot={lot} />
+            </div>
+          )}
 
           <div className="rounded-xl border border-border bg-surface p-4">
             <ShareButtons url={pageUrl} text={`${lot.headline} — ${formatPrice(lot.price)}`} />

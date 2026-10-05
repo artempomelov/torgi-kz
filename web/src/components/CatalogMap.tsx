@@ -2,6 +2,8 @@
 
 // Карта лотов с координатами (Leaflet + OpenStreetMap). Грузится только при переключении на «Карту».
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { useEffect, useMemo, useRef } from "react";
 
 import type { Lot } from "@/lib/api";
@@ -26,7 +28,11 @@ export function CatalogMap({ lots }: { lots: Lot[] }) {
   useEffect(() => {
     let map: import("leaflet").Map | null = null;
     let cancelled = false;
-    import("leaflet").then((L) => {
+    (async () => {
+      const L = (await import("leaflet")).default;
+      // плагин кластеров ждёт глобальный L
+      (window as unknown as { L: typeof L }).L = L;
+      await import("leaflet.markercluster");
       if (cancelled || !ref.current) return;
       map = L.map(ref.current, { scrollWheelZoom: true }).setView([48.0, 67.0], 5);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -42,9 +48,11 @@ export function CatalogMap({ lots }: { lots: Lot[] }) {
             `<span style="color:#5b6b73">${esc(lot.address ?? lot.city ?? "")}</span>`,
         ),
       );
-      const group = L.featureGroup(markers).addTo(map);
+      const group = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 45, chunkedLoading: true });
+      group.addLayers(markers);
+      map.addLayer(group);
       if (markers.length) map.fitBounds(group.getBounds(), { padding: [30, 30], maxZoom: 14 });
-    });
+    })();
     return () => {
       cancelled = true;
       map?.remove();

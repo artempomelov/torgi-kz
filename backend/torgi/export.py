@@ -51,6 +51,9 @@ def headline(lot: dict) -> str:
     elif lot.get("land_area_ha"):
         parts.append(f"{lot['land_area_ha']:g} га".replace(".", ","))
     place = lot.get("city") or lot.get("region")
+    area = district(lot.get("address"))  # «— Алматы, Бостандыкский район»: человечнее и полезнее для поиска
+    if place and area:
+        place = f"{place}, {area}"
     return ", ".join(parts) + (f" — {place}" if place else "")
 
 

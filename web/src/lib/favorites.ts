@@ -3,6 +3,8 @@
 // Избранное без регистрации: id лотов в localStorage этого браузера.
 import { useSyncExternalStore } from "react";
 
+import { syncFavorite } from "./stats";
+
 const KEY = "torgi:favorites";
 const EVENT = "torgi:favorites";
 const EMPTY: number[] = [];
@@ -49,4 +51,5 @@ export function toggleFavorite(id: number) {
     return; // приватный режим — избранное не сохранится
   }
   window.dispatchEvent(new Event(EVENT));
+  syncFavorite(id, !ids.includes(id)); // счётчик «в избранном» на сайте
 }

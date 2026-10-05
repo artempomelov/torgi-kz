@@ -11,7 +11,8 @@ import type { Lot, Meta } from "@/lib/api";
 import { loadLots } from "@/lib/catalog-data";
 import { PAGE_SIZE, SORTS, applyFilters, groupParkings, parseFilters, type ParkingGroup } from "@/lib/filter";
 import { CATEGORY_PLURAL, ORIGIN_LABELS, SOURCE_LABELS, formatPriceShort, plural } from "@/lib/format";
-import { botLink, searchCode } from "@/lib/subscribe";
+import { FEATURES } from "@/lib/features";
+import { BOT_USERNAME, botLink, searchCode } from "@/lib/subscribe";
 
 const CatalogMap = dynamic(() => import("@/components/CatalogMap").then((m) => m.CatalogMap), {
   ssr: false,
@@ -118,8 +119,8 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
           {code && (
             <a href={botLink(code)} target="_blank" rel="noopener noreferrer"
                className="rounded-lg border border-brand-ink/40 bg-brand-ink/5 px-3 py-2 text-sm font-medium text-brand-ink hover:bg-brand-ink/10"
-               title="Бот пришлёт новые объекты по этим фильтрам">
-              🔔 Сообщать о новых в Telegram
+               title="Бот пришлёт новые объекты по этим фильтрам и сообщит о снижении цены">
+              🔖 Сохранить поиск
             </a>
           )}
           <div className="flex overflow-hidden rounded-lg border border-border text-sm">
@@ -130,6 +131,34 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
               Карта
             </Link>
           </div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-brand-ink/20 bg-brand-ink/5 p-4 sm:flex-row sm:items-center">
+        <div className="flex-1">
+          <div className="font-semibold">Личный помощник по торгам в Telegram</div>
+          <p className="text-sm text-muted">
+            Задайте город, тип объекта и цену в фильтрах — бот @{BOT_USERNAME} пришлёт новые лоты и сообщит, когда цена снизится.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {code ? (
+            <a href={botLink(code)} target="_blank" rel="noopener noreferrer"
+               className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
+              Настроить помощника
+            </a>
+          ) : (
+            <button type="button" onClick={() => setFiltersOpen(true)}
+                    className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover lg:hidden">
+              Выбрать фильтры
+            </button>
+          )}
+          {FEATURES.telegramUrl && (
+            <a href={FEATURES.telegramUrl} target="_blank" rel="noopener noreferrer"
+               className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium hover:border-brand-ink/40">
+              Канал с лотами
+            </a>
+          )}
         </div>
       </div>
 
@@ -252,6 +281,12 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
               Сбросить
             </Link>
           </div>
+          {code && (
+            <a href={botLink(code)} target="_blank" rel="noopener noreferrer"
+               className="block text-center text-sm font-medium text-brand-ink hover:underline">
+              🔖 Сохранить поиск — новые лоты в Telegram
+            </a>
+          )}
         </form>
 
         <div>

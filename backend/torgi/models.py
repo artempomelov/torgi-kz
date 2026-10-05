@@ -74,6 +74,7 @@ class Lot(Base):
     price: Mapped[float | None] = mapped_column(Float, index=True)  # тенге
     price_per_m2: Mapped[float | None] = mapped_column(Float)
     deposit: Mapped[float | None] = mapped_column(Float)
+    min_price: Mapped[float | None] = mapped_column(Float)  # аукцион на понижение — минимальная цена
     auction_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     auction_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     applications_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -194,4 +195,4 @@ class BotState(Base):
     __tablename__ = "bot_state"
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
-    value: Mapped[str] = mapped_column(String(256))
+    value: Mapped[str] = mapped_column(Text)

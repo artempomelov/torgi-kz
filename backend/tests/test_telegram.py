@@ -21,3 +21,19 @@ def test_format_post():
     assert 'href="https://torgi.kz/lots/42"' in text
     assert "#Алматы #квартира #арест" in text
     assert len(text) <= 1024
+
+
+def test_benefits_and_channel_rules():
+    from torgi.models import PriceChange
+    from torgi.telegram import matches_channel
+
+    lot = Lot(id=7, source="sauda", category="apartment", origin="state", sale_type="auction_down", city="Астана",
+              region="Астана", price=8_000_000, price_per_m2=200_000, min_price=4_000_000, area_m2=40)
+    lot.price_history = [PriceChange(price=10_000_000), PriceChange(price=8_000_000)]
+    text = format_post(lot, {("apartment", "Астана"): 400_000}, footer="FOOTER").replace("\xa0", " ")
+    assert "📉 <b>Цена снижена на 20%</b> — выгода 2 000 000 ₸" in text
+    assert "цена может опуститься до 4 000 000 ₸ (−50%)" in text
+    assert "🔥 За м² на 50% дешевле медианы по городу" in text
+    assert text.endswith("FOOTER")
+    assert matches_channel(lot, {"region": "Астана"}) and not matches_channel(lot, {"region": ["Алматы"]})
+    assert matches_channel(lot, {"category": ["apartment", "house"]}) and not matches_channel(lot, {"category": "land"})

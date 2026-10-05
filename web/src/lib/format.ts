@@ -52,6 +52,12 @@ export const SOURCE_LABELS: Record<string, string> = {
 
 const TZ = "Asia/Almaty";
 
+/** Выгода от снижения цены, ₸: price_drop_pct считается от первой цены. */
+export function priceDrop(price: number | null, dropPct: number | null | undefined): number | null {
+  if (!price || !dropPct) return null;
+  return Math.round((price * dropPct) / (100 - dropPct));
+}
+
 export function formatPrice(value: number | null | undefined): string {
   if (value == null) return "Цена не указана";
   return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value)} ₸`;

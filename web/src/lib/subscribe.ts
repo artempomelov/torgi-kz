@@ -42,4 +42,7 @@ export function searchCode(f: Filters): string | null {
 }
 
 export const botLink = (code: string) => `https://t.me/${BOT_USERNAME}?start=${code}`;
-export const watchLotLink = (id: number) => botLink(`lot-${id}`);
+export const watchLotLink = (id: number, target?: number) =>
+  botLink(target ? `lot-${id}-t${Math.floor(target / 1000)}` : `lot-${id}`);
+export const consultLink = (id?: number) => botLink(id ? `c-${id}` : "c");
+export const checkLink = (id: number) => botLink(`check-${id}`);

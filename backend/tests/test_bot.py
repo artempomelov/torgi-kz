@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from torgi import bot
-from torgi.bot import SearchFilter, parse_code
+from torgi.bot import Lead, LotWatch, SearchFilter, parse_code
 from torgi.db import SessionLocal, init_db
 from torgi.models import Lot, PriceChange, Subscription, utcnow
 
@@ -15,7 +15,10 @@ def test_parse_code():
     assert (f.price_max, f.ppm_max, f.origins) == (30_000_000, 400_000, ["bank_pledge"])
     assert f.describe() == "Квартиры, Дома · Алматы · до 30 млн ₸ · до 400 тыс. ₸/м² · залоговое имущество"
     assert "category=apartment&category=house&region=" in f.catalog_url()
-    assert parse_code("lot-123") == 123
+    assert parse_code("lot-123") == LotWatch(123)
+    assert parse_code("lot-123-t5000") == LotWatch(123, 5_000_000)
+    assert parse_code("c-7") == Lead("consult", 7) and parse_code("check-7") == Lead("check", 7)
+    assert parse_code("c") == Lead("consult")
     assert parse_code("q-r99") is None and parse_code("hello world") is None and parse_code("abc") is None
 
 
@@ -55,4 +58,37 @@ def test_subscribe_and_notify(capsys):
 
         bot.handle_message(session, b, 1001, "/stop", utcnow())
         assert not any(s.active for s in session.query(Subscription).filter_by(chat_id=1001))
+        session.rollback()
+
+
+def test_leads_and_target_price(capsys, monkeypatch):
+    from torgi.config import settings
+
+    monkeypatch.setattr(settings, "telegram_admins", "boss")
+    init_db()
+    with SessionLocal() as session:
+        b = bot.Bot(dry_run=True)
+        lot = _lot(session, "lead1", price=10_000_000)
+        user = {"id": 2002, "first_name": "Покупатель", "username": "buyer"}
+        # заявка до того, как админ написал боту, — ждёт в очереди
+        bot.handle_message(session, b, 2002, f"/start check-{lot.id}", utcnow(), user)
+        out = capsys.readouterr().out
+        assert "--> 2002" in out and "бесплатную проверку" in out
+        bot.handle_message(session, b, 3003, "/start", utcnow(), {"id": 3003, "username": "Boss"})
+        out = capsys.readouterr().out
+        assert "--> 3003" in out and "📩 Заявка: <b>бесплатная проверка лота</b>" in out and "@buyer" in out
+        # вопрос пользователя — сразу админу
+        bot.handle_message(session, b, 2002, "Есть ли обременения?", utcnow(), user)
+        out = capsys.readouterr().out
+        assert "--> 3003" in out and "Есть ли обременения?" in out
+
+        # порог цены: о снижении до 9 млн не сообщаем, о 7 млн — сообщаем и отключаем
+        bot.handle_message(session, b, 2002, f"/start lot-{lot.id}-t8000", utcnow(), user)
+        lot.price = 9_000_000
+        capsys.readouterr()
+        bot.notify(session, b, utcnow())
+        assert "🎯" not in capsys.readouterr().out
+        lot.price = 7_000_000
+        bot.notify(session, b, utcnow())
+        assert "🎯 Цена опустилась до" in capsys.readouterr().out.replace(" ", " ")
         session.rollback()

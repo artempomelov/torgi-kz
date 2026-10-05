@@ -36,6 +36,7 @@ class ParsedLot:
     cadastral: str | None = None
     price: float | None = None
     deposit: float | None = None
+    min_price: float | None = None  # аукцион на понижение: ниже этой цены не опустится
     auction_start: datetime | None = None
     auction_end: datetime | None = None
     applications_deadline: datetime | None = None

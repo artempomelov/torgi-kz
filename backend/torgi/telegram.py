@@ -6,6 +6,7 @@
 """
 
 import html
+import json
 import logging
 import re
 import time
@@ -55,7 +56,37 @@ def _hashtag(text: str) -> str:
     return "#" + re.sub(r"[^\wё]", "", text.replace("-", "_").replace(" ", "_"), flags=re.I)
 
 
-def format_post(lot: Lot) -> str:
+# --- выгода: снижение цены и сравнение с медианой по городу ----------------------------------
+
+PPM_CATEGORIES = ("apartment", "commercial")
+
+
+def market_medians(session: Session) -> dict[tuple[str, str], float]:
+    """Медиана цены за м² по (категория, город) среди активных лотов — для «ниже рынка на N%»."""
+    values: dict[tuple[str, str], list[float]] = {}
+    rows = session.execute(select(Lot.category, Lot.city, Lot.region, Lot.price_per_m2).where(
+        Lot.status == "active", Lot.price_per_m2.is_not(None), Lot.category.in_(PPM_CATEGORIES)))
+    for category, city, region, ppm in rows:
+        values.setdefault((category, city or region or ""), []).append(ppm)
+    return {k: sorted(v)[len(v) // 2] for k, v in values.items() if len(v) >= 5}
+
+
+def benefit_lines(lot: Lot, medians: dict | None = None) -> list[str]:
+    lines = []
+    prices = [p.price for p in lot.price_history if p.price]
+    if lot.price and prices and prices[0] > lot.price:
+        drop = prices[0] - lot.price
+        lines.append(f"📉 <b>Цена снижена на {drop / prices[0] * 100:.0f}%</b> — выгода {_money(drop)}")
+    if lot.min_price and lot.price and lot.min_price < lot.price:
+        lines.append(f"⬇️ Аукцион на понижение: цена может опуститься до {_money(lot.min_price)} "
+                     f"(−{(1 - lot.min_price / lot.price) * 100:.0f}%)")
+    median = (medians or {}).get((lot.category, lot.city or lot.region or ""))
+    if median and lot.price_per_m2 and lot.price_per_m2 < median * 0.9:
+        lines.append(f"🔥 За м² на {(1 - lot.price_per_m2 / median) * 100:.0f}% дешевле медианы по городу")
+    return lines
+
+
+def format_post(lot: Lot, medians: dict | None = None, footer: str = "") -> str:
     esc = html.escape
     parts = [CATEGORIES.get(lot.category, "Объект")]
     if lot.rooms and lot.category in ("apartment", "house"):
@@ -71,6 +102,7 @@ def format_post(lot: Lot) -> str:
     if lot.price_per_m2:
         price += f" ({_money(lot.price_per_m2)}/м²)"
     lines.append(price)
+    lines += benefit_lines(lot, medians)
     # точный адрес — только на сайте после входа; в канале — город и район
     place = ", ".join(p for p in (lot.city or lot.region, district(lot.address)) if p)
     if place:
@@ -92,10 +124,30 @@ def format_post(lot: Lot) -> str:
     tags = [_hashtag(lot.city)] if lot.city else []
     tags += [_hashtag(CATEGORIES.get(lot.category, "").split(" ")[0].lower()), _hashtag(ORIGIN_TAGS.get(lot.origin, ""))]
     lines.append(" ".join(t for t in tags if len(t) > 1))
+    if footer:
+        lines += ["", footer]
     return "\n".join(lines)[:CAPTION_LIMIT]
 
 
-def pending_lots(session: Session, channel: str, limit: int, since_days: int) -> list[Lot]:
+# Подпись под постом: основной канал зовёт в бота подписок, дополнительные — в основной канал
+MAIN_FOOTER = '🔔 Новые объекты по вашему поиску присылает <a href="https://t.me/torgi_kz_bot">@torgi_kz_bot</a>'
+HUB_FOOTER = '📢 Все торги Казахстана — <a href="https://t.me/{hub}">@{hub}</a>'
+
+
+def matches_channel(lot: Lot, rule: dict | None) -> bool:
+    """Фильтр дополнительного канала: {"region": "Алматы"}, {"category": ["commercial", "industrial"]}."""
+    if not rule:
+        return True
+    regions = rule.get("region")
+    if regions and lot.region not in ([regions] if isinstance(regions, str) else regions):
+        return False
+    categories = rule.get("category")
+    if categories and lot.category not in ([categories] if isinstance(categories, str) else categories):
+        return False
+    return True
+
+
+def pending_lots(session: Session, channel: str, limit: int, since_days: int, rule: dict | None = None) -> list[Lot]:
     posted = select(ChannelPost.lot_id).where(ChannelPost.channel == channel)
     stmt = (
         select(Lot)
@@ -104,7 +156,7 @@ def pending_lots(session: Session, channel: str, limit: int, since_days: int) ->
         .order_by(Lot.first_seen_at.desc(), Lot.id.desc())
     )
     # без флагов качества — ошибки ввода источника в канал не несём; с фото — в первую очередь
-    lots = [lot for lot in session.scalars(stmt) if not lot.flags]
+    lots = [lot for lot in session.scalars(stmt) if not lot.flags and matches_channel(lot, rule)]
     lots.sort(key=lambda lot: not lot.images)
     return lots[:limit]
 
@@ -135,6 +187,14 @@ class TelegramBot:
         raise RuntimeError(f"Telegram {method}: превышен лимит повторов")
 
     def post_lot(self, channel: str, lot: Lot, text: str) -> int:
+        if len(lot.images) >= 2:
+            # альбом из 3–5 фото, подпись — у первого
+            media = [{"type": "photo", "media": url} for url in lot.images[:5]]
+            media[0].update(caption=text, parse_mode="HTML")
+            try:
+                return self.call("sendMediaGroup", chat_id=channel, media=media)[0]["message_id"]
+            except RuntimeError as exc:
+                log.warning("лот %s: альбом не отправился (%s), пробуем одно фото", lot.id, exc)
         if lot.images:
             try:
                 return self.call("sendPhoto", chat_id=channel, photo=lot.images[0], caption=text,
@@ -150,14 +210,18 @@ def refresh(session: Session) -> int:
     if not settings.telegram_bot_token or not settings.telegram_channel:
         raise SystemExit("Задайте TORGI_TELEGRAM_BOT_TOKEN и TORGI_TELEGRAM_CHANNEL")
     bot = TelegramBot(settings.telegram_bot_token)
+    rules = {name: rule for name, rule, _ in channels()}
+    hub = (settings.telegram_channel or "").lstrip("@")
+    medians = market_medians(session)
     posts = session.scalars(select(ChannelPost).where(
-        ChannelPost.channel == settings.telegram_channel, ChannelPost.message_id.is_not(None))).all()
+        ChannelPost.channel.in_(list(rules)), ChannelPost.message_id.is_not(None))).all()
     edited = 0
     for post in posts:
         lot = session.get(Lot, post.lot_id)
         if lot is None:
             continue
-        text = format_post(lot)
+        footer = MAIN_FOOTER if rules.get(post.channel) is None else HUB_FOOTER.format(hub=hub)
+        text = format_post(lot, medians, footer)
         common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
         for method, extra in (("editMessageCaption", {"caption": text}),
                               ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
@@ -174,45 +238,71 @@ def refresh(session: Session) -> int:
     return edited
 
 
-def run(session: Session, limit: int = 10, since_days: int = 3, dry_run: bool = False, mark_all: bool = False) -> int:
-    channel = settings.telegram_channel or "dry-run"
-    if mark_all:
-        lots = pending_lots(session, channel, limit=10**9, since_days=10**4)
-        session.add_all(ChannelPost(lot_id=lot.id, channel=channel, message_id=None) for lot in lots)
-        session.commit()
-        log.info("помечено как опубликованное: %d", len(lots))
-        return len(lots)
+def channels() -> list[tuple[str, dict | None, int]]:
+    """Основной канал (все лоты) и дополнительные — региональные и тематические."""
+    out: list[tuple[str, dict | None, int]] = []
+    if settings.telegram_channel:
+        out.append((settings.telegram_channel, None, settings.telegram_daily_limit))
+    if settings.telegram_channels.strip():
+        for name, rule in json.loads(settings.telegram_channels).items():
+            out.append((name, rule or None, settings.telegram_channel_daily_limit))
+    return out
 
+
+def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
+                limit: int, since_days: int, medians: dict, dry_run: bool) -> int:
     if not dry_run and session.scalar(select(ChannelPost.id).where(ChannelPost.channel == channel).limit(1)) is None:
         # Первый запуск для канала: текущую базу не выгружаем, публикуем только новое
-        log.info("канал %s: первый запуск — текущие лоты помечены опубликованными", channel)
-        return run(session, mark_all=True)
-
+        lots = pending_lots(session, channel, 10**9, 10**4, rule)
+        session.add_all(ChannelPost(lot_id=lot.id, channel=channel, message_id=None) for lot in lots)
+        session.commit()
+        log.info("канал %s: первый запуск — %d текущих лотов помечены опубликованными", channel, len(lots))
+        return 0
     if not dry_run:
+        limit = min(limit, daily - posted_today(session, channel))
+        if limit <= 0:
+            log.info("канал %s: дневной лимит (%s) исчерпан", channel, daily)
+            return 0
+    lots = pending_lots(session, channel, limit, since_days, rule)
+    hub = (settings.telegram_channel or "").lstrip("@")
+    footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
+    for i, lot in enumerate(lots):
+        text = format_post(lot, medians, footer)
+        if dry_run:
+            print(f"--- {channel}: лот {lot.id} ({lot.source})\n{text}\n")
+            continue
+        if i:
+            time.sleep(settings.telegram_post_delay)
+        message_id = bot.post_lot(channel, lot, text)
+        session.add(ChannelPost(lot_id=lot.id, channel=channel, message_id=message_id))
+        session.commit()
+        log.info("канал %s: опубликован лот %s → сообщение %s", channel, lot.id, message_id)
+    return len(lots)
+
+
+def run(session: Session, limit: int = 5, since_days: int = 3, dry_run: bool = False, mark_all: bool = False) -> int:
+    targets = channels() or [("dry-run", None, settings.telegram_daily_limit)]
+    if mark_all:
+        for channel, rule, _ in targets:
+            lots = pending_lots(session, channel, 10**9, 10**4, rule)
+            session.add_all(ChannelPost(lot_id=lot.id, channel=channel, message_id=None) for lot in lots)
+            session.commit()
+            log.info("канал %s: помечено как опубликованное: %d", channel, len(lots))
+        return 0
+    if not dry_run:
+        if not settings.telegram_bot_token or not settings.telegram_channel:
+            raise SystemExit("Задайте TORGI_TELEGRAM_BOT_TOKEN и TORGI_TELEGRAM_CHANNEL в backend/.env")
         hour = utcnow().astimezone(KZ_TZ).hour
         start, end = settings.telegram_hours
         if not start <= hour < end:
             log.info("вне часов публикации (%s–%s по Алматы)", start, end)
             return 0
-        limit = min(limit, settings.telegram_daily_limit - posted_today(session, channel))
-        if limit <= 0:
-            log.info("дневной лимит постов (%s) исчерпан", settings.telegram_daily_limit)
-            return 0
-
-    lots = pending_lots(session, channel, limit, since_days)
-    if dry_run:
-        for lot in lots:
-            print(f"--- лот {lot.id} ({lot.source})\n{format_post(lot)}\n")
-        return len(lots)
-    if not settings.telegram_bot_token or not settings.telegram_channel:
-        raise SystemExit("Задайте TORGI_TELEGRAM_BOT_TOKEN и TORGI_TELEGRAM_CHANNEL в backend/.env")
-
-    bot = TelegramBot(settings.telegram_bot_token)
-    for i, lot in enumerate(lots):
-        if i:
-            time.sleep(settings.telegram_post_delay)
-        message_id = bot.post_lot(channel, lot, format_post(lot))
-        session.add(ChannelPost(lot_id=lot.id, channel=channel, message_id=message_id))
-        session.commit()
-        log.info("опубликован лот %s → сообщение %s", lot.id, message_id)
-    return len(lots)
+    bot = None if dry_run else TelegramBot(settings.telegram_bot_token)
+    medians = market_medians(session)
+    total = 0
+    for channel, rule, daily in targets:
+        try:
+            total += run_channel(session, bot, channel, rule, daily, limit, since_days, medians, dry_run)
+        except RuntimeError:
+            log.exception("канал %s: ошибка публикации", channel)
+    return total

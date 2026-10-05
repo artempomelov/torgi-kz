@@ -8,6 +8,9 @@
 //   POST /api/auth/telegram     данные Telegram Login Widget → {token, me}
 //   GET  /api/me                кто я и сколько бесплатных просмотров осталось
 //   GET  /api/lots/:id/details  закрытые поля лота; 401 — не вошёл, 402 — лимит исчерпан
+//   POST /api/hit/:id           просмотр карточки (один посетитель — один раз в день)
+//   POST /api/fav/:id           {client, on} — добавил / убрал из избранного (анонимный id браузера)
+//   GET  /api/stats?ids=1,2,3   {id: {views, favs}} — просмотры за 7 дней и число добавивших в избранное
 //
 // Сессия — подписанный токен в заголовке Authorization (сайт и API на разных доменах — cookie не подходят).
 // Ключ подписи выводится из токена бота, отдельный секрет не нужен.
@@ -146,6 +149,55 @@ async function details(env, userId, lotId) {
   return json({ ...JSON.parse(row.data), remaining_today: remaining });
 }
 
+const STATS_DAYS = 7;
+const daysAgoKz = (n) => new Date(Date.now() + KZ_OFFSET_MS - n * 86400_000).toISOString().slice(0, 10);
+
+async function hit(env, request, lotId) {
+  // посетитель — хэш IP и браузера за сутки: сами IP не храним
+  const day = todayKz();
+  const raw = `${request.headers.get("CF-Connecting-IP") ?? ""}|${request.headers.get("User-Agent") ?? ""}|${day}`;
+  const visitor = hex(await crypto.subtle.digest("SHA-256", enc.encode(raw))).slice(0, 16);
+  await env.DB.prepare("INSERT OR IGNORE INTO hits (lot_id, day, visitor) VALUES (?, ?, ?)")
+    .bind(lotId, day, visitor).run();
+  return json({ ok: true });
+}
+
+async function fav(env, request, lotId) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ detail: "Некорректный запрос" }, 400);
+  }
+  const client = String(body.client ?? "").slice(0, 64);
+  if (!/^[\w-]{8,64}$/.test(client)) return json({ detail: "Некорректный запрос" }, 400);
+  if (body.on) {
+    await env.DB.prepare("INSERT OR IGNORE INTO favs (lot_id, client) VALUES (?, ?)").bind(lotId, client).run();
+  } else {
+    await env.DB.prepare("DELETE FROM favs WHERE lot_id = ? AND client = ?").bind(lotId, client).run();
+  }
+  return json({ ok: true });
+}
+
+async function stats(env, url) {
+  const ids = (url.searchParams.get("ids") ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0)
+    .slice(0, 100);
+  if (!ids.length) return json({});
+  const marks = ids.map(() => "?").join(",");
+  const views = await env.DB.prepare(
+    `SELECT lot_id, COUNT(*) AS n FROM hits WHERE day >= ? AND lot_id IN (${marks}) GROUP BY lot_id`,
+  ).bind(daysAgoKz(STATS_DAYS - 1), ...ids).all();
+  const favs = await env.DB.prepare(
+    `SELECT lot_id, COUNT(*) AS n FROM favs WHERE lot_id IN (${marks}) GROUP BY lot_id`,
+  ).bind(...ids).all();
+  const out = {};
+  for (const r of views.results) out[r.lot_id] = { views: r.n, favs: 0 };
+  for (const r of favs.results) out[r.lot_id] = { views: out[r.lot_id]?.views ?? 0, favs: r.n };
+  return new Response(JSON.stringify(out), {
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300" },
+  });
+}
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -154,8 +206,14 @@ function json(body, status = 200) {
 }
 
 async function route(request, env) {
-  const { pathname } = new URL(request.url);
+  const url = new URL(request.url);
+  const { pathname } = url;
   if (pathname === "/api/health") return json({ ok: true });
+  if (pathname === "/api/stats") return stats(env, url);
+  const counter = pathname.match(/^\/api\/(hit|fav)\/(\d+)\/?$/);
+  if (counter && request.method === "POST") {
+    return counter[1] === "hit" ? hit(env, request, Number(counter[2])) : fav(env, request, Number(counter[2]));
+  }
   if (pathname === "/api/auth/telegram" && request.method === "POST") return login(env, request);
   const userId = await readToken(env, request);
   if (pathname === "/api/me") return json(await meFor(env, userId ? await getUser(env, userId) : null));

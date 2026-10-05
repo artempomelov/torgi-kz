@@ -52,6 +52,7 @@ class LotShort(BaseModel):
     floors_total: int | None
     price: float | None
     price_per_m2: float | None
+    min_price: float | None = None
     auction_start: datetime | None
     auction_end: datetime | None
     applications_deadline: datetime | None

@@ -256,3 +256,12 @@ def test_bereke():
     assert (lot.category, lot.city, lot.region, lot.area_m2) == ("commercial", "Актау", "Мангистауская область", 1049.6)
     assert lot.contacts == {"phone": "+77017706071"}
     assert len(lot.images) == 7 and all("/Collaterals/242%20490%20708/" in u for u in lot.images)
+
+
+def test_sauda_min_price():
+    """Аукцион на понижение: минимальная цена, ниже которой торги не опустятся."""
+    from torgi.parsers import sauda
+
+    card = {"id": "339335707459000000", "title": "Паркинг", "price": 6_648_063, "region": "Астана", "start": None}
+    lot = sauda.parse_detail(text("sauda_detail_down.html"), card, "RealEstate")
+    assert (lot.price, lot.min_price, lot.deposit) == (6_648_063, 1_994_419, 332_404)

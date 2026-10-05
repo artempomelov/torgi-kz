@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { Faq } from "@/components/Faq";
 import { LotCard } from "@/components/LotCard";
 import { getCollections } from "@/lib/collections";
 import { getLots, getMeta } from "@/lib/data";
@@ -110,6 +111,7 @@ export default async function CollectionPage({ params }: PageProps<"/podborki/[s
           </div>
         </section>
       )}
+      <Faq className="mt-12 !px-0" />
     </div>
   );
 }

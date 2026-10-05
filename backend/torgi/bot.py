@@ -9,10 +9,17 @@
 Формат кода — как web/src/lib/subscribe.ts (меняйте вместе):
     q-ca-r0-x30   квартиры (c=категории), Алматы (r=индекс региона), до 30 млн (x), от (n) млн,
                   m=цена за м² до, тыс., s=площадь от, м², o=виды продажи
-    lot-123       слежение за лотом 123
+    lot-123       слежение за лотом 123 (любое изменение цены)
+    lot-123-t5000 сообщить, когда цена опустится до 5 000 тыс. ₸
+    c-123         заявка на консультацию по лоту 123 («c» — без лота)
+    check-123     бесплатная проверка лота 123
+
+Заявки и вопросы пересылаются администраторам (TORGI_TELEGRAM_ADMINS — их username через запятую);
+администратор должен один раз написать боту /start, чтобы бот узнал его чат.
 """
 
 import html
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -107,12 +114,26 @@ class SearchFilter:
 _CODE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
-def parse_code(code: str) -> SearchFilter | int | None:
-    """SearchFilter для подписки на поиск, id лота для слежения, None — код не распознан."""
+@dataclass
+class LotWatch:
+    lot_id: int
+    target: float | None = None  # None — сообщать о любом изменении цены
+
+
+@dataclass
+class Lead:
+    kind: str  # consult | check
+    lot_id: int | None = None
+
+
+def parse_code(code: str) -> SearchFilter | LotWatch | Lead | None:
+    """Разбор параметра /start; None — код не распознан."""
     if not _CODE_RE.match(code):
         return None
-    if m := re.fullmatch(r"lot-(\d+)", code):
-        return int(m.group(1))
+    if m := re.fullmatch(r"lot-(\d+)(?:-t(\d+))?", code):
+        return LotWatch(int(m.group(1)), int(m.group(2)) * 1000 if m.group(2) else None)
+    if m := re.fullmatch(r"(c|check)(?:-(\d+))?", code):
+        return Lead("check" if m.group(1) == "check" else "consult", int(m.group(2)) if m.group(2) else None)
     if not code.startswith("q-"):
         return None
     f = SearchFilter()
@@ -183,10 +204,63 @@ def _set_state(session: Session, key: str, value: str) -> None:
     session.add(row)
 
 
-def subscribe(session: Session, bot: Bot, chat_id: int, code: str, now: datetime) -> None:
+LEAD_TITLES = {"consult": "консультация", "check": "бесплатная проверка лота"}
+
+
+def _admin_chats(session: Session) -> list[int]:
+    return json.loads(_state(session, "admin_chats") or "[]")
+
+
+def _who(user: dict) -> str:
+    name = html.escape(" ".join(p for p in (user.get("first_name"), user.get("last_name")) if p) or "Пользователь")
+    link = f'<a href="tg://user?id={user["id"]}">{name}</a>'
+    return link + (f" @{html.escape(user['username'])}" if user.get("username") else "")
+
+
+def notify_admins(session: Session, bot: Bot, text: str) -> None:
+    """Заявки — администраторам; пока ни один не написал боту, копятся в очереди."""
+    chats = _admin_chats(session)
+    if not chats:
+        queue = json.loads(_state(session, "pending_leads") or "[]")
+        _set_state(session, "pending_leads", json.dumps((queue + [text])[-20:], ensure_ascii=False))
+        return
+    for chat in chats:
+        bot.send(chat, text)
+
+
+def register_admin(session: Session, bot: Bot, chat_id: int, user: dict) -> bool:
+    admins = {u.strip().lstrip("@").lower() for u in settings.telegram_admins.split(",") if u.strip()}
+    if (user.get("username") or "").lower() not in admins:
+        return False
+    chats = _admin_chats(session)
+    if chat_id not in chats:
+        _set_state(session, "admin_chats", json.dumps(chats + [chat_id]))
+        bot.send(chat_id, "Вы — администратор torgi.kz: сюда будут приходить заявки и вопросы пользователей.")
+        for text in json.loads(_state(session, "pending_leads") or "[]"):
+            bot.send(chat_id, text)
+        _set_state(session, "pending_leads", "[]")
+    return True
+
+
+def lead(session: Session, bot: Bot, chat_id: int, user: dict, parsed: Lead) -> None:
+    lot = session.get(Lot, parsed.lot_id) if parsed.lot_id else None
+    about = f"\n{_lot_line(lot)}" if lot else ""
+    notify_admins(session, bot, f"📩 Заявка: <b>{LEAD_TITLES[parsed.kind]}</b> от {_who(user)}{about}")
+    if parsed.kind == "check":
+        reply = ("Заявка на бесплатную проверку принята. Проверим документы, обременения и риски по объекту "
+                 "и напишем вам здесь в Telegram.")
+    else:
+        reply = "Заявка на консультацию принята — напишем вам здесь в Telegram."
+    bot.send(chat_id, reply + about + "\n\nМожете сразу написать вопрос следующим сообщением — мы его получим.")
+
+
+def subscribe(session: Session, bot: Bot, chat_id: int, code: str, now: datetime, user: dict | None = None) -> None:
     parsed = parse_code(code)
     if parsed is None:
         bot.send(chat_id, HELP.format(site=settings.site_url))
+        return
+    if isinstance(parsed, Lead):
+        lead(session, bot, chat_id, user or {"id": chat_id}, parsed)
         return
     active = session.scalars(select(Subscription).where(Subscription.chat_id == chat_id, Subscription.active)).all()
     existing = session.scalar(select(Subscription).where(Subscription.chat_id == chat_id, Subscription.code == code))
@@ -196,14 +270,16 @@ def subscribe(session: Session, bot: Bot, chat_id: int, code: str, now: datetime
     sub = existing or Subscription(chat_id=chat_id, code=code)
     sub.active, sub.checked_at = True, now
 
-    if isinstance(parsed, int):
-        lot = session.get(Lot, parsed)
+    if isinstance(parsed, LotWatch):
+        lot = session.get(Lot, parsed.lot_id)
         if lot is None:
             bot.send(chat_id, "Этот объект не найден — возможно, его уже сняли с продажи.")
             return
         sub.lot_id, sub.last_price = lot.id, lot.price
         session.add(sub)
-        bot.send(chat_id, f"🔔 Слежу за ценой:\n{_lot_line(lot)}\n\nСообщу, если цена изменится или объект снимут "
+        when = (f"когда цена опустится до {_money(parsed.target)}" if parsed.target
+                else "если цена изменится")
+        bot.send(chat_id, f"🔔 Слежу за ценой:\n{_lot_line(lot)}\n\nСообщу, {when} или если объект снимут "
                           "с продажи. /list — все подписки.")
         return
 
@@ -222,19 +298,23 @@ def _describe(sub: Subscription, session: Session) -> str:
     if isinstance(parsed, SearchFilter):
         return parsed.describe()
     lot = session.get(Lot, sub.lot_id) if sub.lot_id else None
-    return f"цена лота: {CATEGORIES.get(lot.category, 'объект')}, {lot.city or ''}" if lot else "лот"
+    target = f" — до {_money(parsed.target)}" if isinstance(parsed, LotWatch) and parsed.target else ""
+    return f"цена лота: {CATEGORIES.get(lot.category, 'объект')}, {lot.city or ''}{target}" if lot else "лот"
 
 
-def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: datetime) -> None:
+def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: datetime,
+                   user: dict | None = None) -> None:
     text = text.strip()
+    user = user or {"id": chat_id}
+    is_admin = register_admin(session, bot, chat_id, user)
     subs = session.scalars(
         select(Subscription).where(Subscription.chat_id == chat_id, Subscription.active).order_by(Subscription.id)
     ).all()
     if text.startswith("/start"):
         code = text[len("/start"):].strip()
         if code:
-            subscribe(session, bot, chat_id, code, now)
-        else:
+            subscribe(session, bot, chat_id, code, now, user)
+        elif not is_admin:
             bot.send(chat_id, HELP.format(site=settings.site_url))
     elif text.startswith("/list"):
         if not subs:
@@ -251,8 +331,12 @@ def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: dat
             for s in subs:
                 s.active = False
             bot.send(chat_id, "Все подписки отключены. Вернуться можно в любой момент на сайте.")
-    else:
+    elif text.startswith("/"):
         bot.send(chat_id, HELP.format(site=settings.site_url))
+    elif not is_admin:
+        # вопрос пользователя — администраторам
+        notify_admins(session, bot, f"💬 Вопрос от {_who(user)}:\n{html.escape(text[:1500])}")
+        bot.send(chat_id, "Спасибо, вопрос передан — ответим здесь в Telegram.")
 
 
 def process_updates(session: Session, bot: Bot, now: datetime) -> int:
@@ -266,7 +350,7 @@ def process_updates(session: Session, bot: Bot, now: datetime) -> int:
         chat, text = msg.get("chat") or {}, msg.get("text")
         if chat.get("type") == "private" and text:
             try:
-                handle_message(session, bot, chat["id"], text, now)
+                handle_message(session, bot, chat["id"], text, now, msg.get("from") or {"id": chat["id"]})
             except Exception:  # одно сообщение не должно ронять всю обработку
                 log.exception("бот: ошибка обработки сообщения от %s", chat.get("id"))
         _set_state(session, "updates_offset", str(offset))
@@ -295,6 +379,11 @@ def notify(session: Session, bot: Bot, now: datetime) -> int:
                 if lot:
                     text += f"\n{_lot_line(lot)}"
                 sub.active = False
+            elif isinstance(target := parse_code(sub.code), LotWatch) and target.target:
+                if lot.price and lot.price <= target.target and lot.price != sub.last_price:
+                    text = f"🎯 Цена опустилась до <b>{_money(lot.price)}</b> (ваш порог — {_money(target.target)})\n{_lot_line(lot)}"
+                    sub.active = False
+                sub.last_price = lot.price
             elif lot.price and sub.last_price and lot.price != sub.last_price:
                 arrow = "📉 Цена снижена" if lot.price < sub.last_price else "📈 Цена повышена"
                 pct = abs(lot.price - sub.last_price) / sub.last_price * 100
