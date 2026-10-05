@@ -75,7 +75,8 @@ def format_post(lot: Lot) -> str:
     place = ", ".join(p for p in (lot.city or lot.region, district(lot.address)) if p)
     if place:
         lines.append(f"📍 {esc(place)}")
-    kind = [SALE_TYPES.get(lot.sale_type or "", ""), ORIGINS.get(lot.origin, ""), SOURCE_TITLES.get(lot.source, "")]
+    # источник (площадку или банк) в канале не называем — он открывается на сайте после входа
+    kind = [SALE_TYPES.get(lot.sale_type or "", ""), ORIGINS.get(lot.origin, "")]
     lines.append("🔨 " + " · ".join(esc(k) for k in kind if k))
     if lot.auction_start:
         when = f"🗓 Торги: {_date(lot.auction_start)}"

@@ -15,7 +15,8 @@ def test_format_post():
     assert text.startswith("🏢 <b>Квартира, 3-комн., 57,5 м² — Алматы</b>")
     assert "42 596 700 ₸" in text
     assert "📍 Алматы, Алмалинский район" in text and "Кашгарская" not in text  # точный адрес — только на сайте
-    assert "Аукцион на понижение · Арестованное имущество · ЕЭТП Минюста" in text
+    assert "🔨 Аукцион на понижение · Арестованное имущество\n" in text
+    assert "Минюст" not in text  # источник — только на сайте
     assert "Торги: 1 октября, 10:00" in text  # UTC+5
     assert 'href="https://torgi.kz/lots/42"' in text
     assert "#Алматы #квартира #арест" in text
