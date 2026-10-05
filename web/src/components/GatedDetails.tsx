@@ -31,9 +31,10 @@ export function GatedDetails({ lotId, isAuction }: { lotId: number; isAuction: b
   }
   if (result.status === "limit") {
     return (
-      <LockedDetails message={<>Бесплатные просмотры на сегодня закончились. Завтра лимит обновится, а с подпиской — без ограничений.</>}>
-        <Link href="/account/" className="rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover">
-          Оформить подписку
+      <LockedDetails message={<>Бесплатные просмотры на сегодня закончились — лимит обновится в 00:00 по Алматы.
+        Объекты, открытые сегодня, остаются доступны. Подписка без ограничений скоро появится.</>}>
+        <Link href="/account/" className="rounded-lg border border-border px-5 py-2.5 text-sm font-semibold hover:border-brand-ink/40">
+          Личный кабинет
         </Link>
       </LockedDetails>
     );
@@ -49,7 +50,7 @@ export function GatedDetails({ lotId, isAuction }: { lotId: number; isAuction: b
       isAuction={isAuction}
       note={left === null ? "Подписка активна — без ограничений." : (
         <>Бесплатно сегодня осталось: {left} {plural(left, ["объект", "объекта", "объектов"])}.{" "}
-          <Link href="/account/" className="text-brand-ink">Без ограничений — по подписке</Link></>
+          <Link href="/account/" className="text-brand-ink">Личный кабинет</Link></>
       )}
     />
   );

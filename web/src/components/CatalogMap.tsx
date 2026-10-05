@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef } from "react";
 
 import type { Lot } from "@/lib/api";
+import { FEATURES } from "@/lib/features";
 import { CATEGORY_LABELS, formatPriceShort } from "@/lib/format";
 
 const COLORS: Record<string, string> = {
@@ -55,6 +56,7 @@ export function CatalogMap({ lots }: { lots: Lot[] }) {
       <div ref={ref} className="h-[70vh] min-h-[420px] w-full overflow-hidden rounded-xl border border-border" />
       <p className="mt-2 text-xs text-muted">
         На карте {withCoords.length} из {lots.length} объектов — у остальных источник не указал координаты.
+        {FEATURES.paywall && " Расположение примерное (до ~1 км), точный адрес — в карточке объекта после входа."}
       </p>
     </div>
   );

@@ -1,0 +1,15 @@
+# Деплой — из GitHub Actions (.github/workflows/update.yml), database_id подставляется там же.
+# Секрет BOT_TOKEN задаётся `wrangler secret put` из секрета репозитория TORGI_TELEGRAM_BOT_TOKEN.
+name = "torgi-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+FREE_PER_DAY = "5"
+ALLOWED_ORIGINS = "https://torgi.kz,http://localhost:3000"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "torgi"
+database_id = "__D1_DATABASE_ID__"

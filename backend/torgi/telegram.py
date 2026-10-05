@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from torgi.config import settings
+from torgi.export import district
 from torgi.models import ChannelPost, Lot, utcnow
 from torgi.normalize import CATEGORIES, ORIGINS, SALE_TYPES
 
@@ -70,9 +71,10 @@ def format_post(lot: Lot) -> str:
     if lot.price_per_m2:
         price += f" ({_money(lot.price_per_m2)}/м²)"
     lines.append(price)
-    if lot.address:
-        address = lot.address if len(lot.address) <= 160 else lot.address[:157] + "…"
-        lines.append(f"📍 {esc(address)}")
+    # точный адрес — только на сайте после входа; в канале — город и район
+    place = ", ".join(p for p in (lot.city or lot.region, district(lot.address)) if p)
+    if place:
+        lines.append(f"📍 {esc(place)}")
     kind = [SALE_TYPES.get(lot.sale_type or "", ""), ORIGINS.get(lot.origin, ""), SOURCE_TITLES.get(lot.source, "")]
     lines.append("🔨 " + " · ".join(esc(k) for k in kind if k))
     if lot.auction_start:

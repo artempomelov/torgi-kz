@@ -25,7 +25,8 @@ function suggestions(lots: Lot[]): string[] {
   const add = (s: string) => count.set(s, (count.get(s) ?? 0) + 1);
   for (const lot of lots) {
     if (lot.city) add(lot.city);
-    for (const m of (lot.address ?? "").matchAll(DISTRICT_RE)) add(`${m[1] ?? m[2]} район`);
+    if (lot.district) add(lot.district);
+    for (const m of (lot.address ?? "").matchAll(DISTRICT_RE)) add(m[1] ? `район ${m[1]}` : `${m[2]} район`);
   }
   return [...count.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 300).map(([s]) => s);
 }
@@ -36,7 +37,9 @@ function ParkingGroupCard({ group }: { group: ParkingGroup }) {
   const n = group.lots.length;
   return (
     <Link
-      href={`/lots/?category=parking&q=${encodeURIComponent(group.base)}`}
+      href={group.groupKey
+        ? `/lots/?category=parking&group=${group.groupKey}`
+        : `/lots/?category=parking&q=${encodeURIComponent(group.base)}`}
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand-ink/50 hover:shadow-card"
     >
       <div className="relative aspect-[4/3] bg-background">
@@ -72,7 +75,10 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
 
   const filtered = useMemo(() => (lots ? applyFilters(lots, f) : []), [lots, f]);
   // поиск по адресу открывает конкретный паркинг — там места показываем по одному
-  const items = useMemo(() => (f.q ? filtered.map((lot) => ({ kind: "lot" as const, lot })) : groupParkings(filtered)), [filtered, f.q]);
+  const items = useMemo(
+    () => (f.q || f.group ? filtered.map((lot) => ({ kind: "lot" as const, lot })) : groupParkings(filtered)),
+    [filtered, f.q, f.group],
+  );
   const hints = useMemo(() => (lots ? suggestions(lots) : []), [lots]);
   const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const page = Math.min(f.page, pages);
@@ -136,6 +142,7 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
       <div className="mt-4 grid gap-6 lg:mt-6 lg:grid-cols-[280px_1fr]" key={params.toString()}>
         <form action="/lots/" className={`h-fit space-y-5 rounded-xl border border-border bg-surface p-4 ${filtersOpen ? "" : "hidden lg:block"}`}>
           {view === "map" && <input type="hidden" name="view" value="map" />}
+          {f.group && <input type="hidden" name="group" value={f.group} />}
           <div>
             <label className="label" htmlFor="q">Поиск</label>
             <input id="q" name="q" defaultValue={f.q} placeholder="Город, район, улица" className="field" list="q-hints" autoComplete="off" />

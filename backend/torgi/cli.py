@@ -36,6 +36,8 @@ def main() -> None:
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
+    c = sub.add_parser("sync-private", help="загрузить закрытые поля лотов в Cloudflare D1")
+    c.add_argument("file", help="private.json из `export --gated`")
     s = sub.add_parser("serve", help="запустить API")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
@@ -93,6 +95,12 @@ def main() -> None:
         init_db()
         with SessionLocal() as session:
             logging.info("экспорт: %s", export(session, Path(args.out_dir), gated=args.gated))
+    elif args.cmd == "sync-private":
+        from pathlib import Path
+
+        from torgi.cloudflare import sync_from_env
+
+        sync_from_env(Path(args.file))
     elif args.cmd == "serve":
         import uvicorn
 

@@ -89,3 +89,36 @@ def test_ingest_and_api(monkeypatch):
         assert items and all(not (GATED_FIELDS & item.keys()) for item in items)
         assert all(item["headline"] and item["price"] for item in items)
     assert json.loads((out / "meta.json").read_text(encoding="utf-8"))["gated"] is True
+
+
+def test_export_gated_private(tmp_path):
+    """Закрытый режим: адрес, контакты, ссылка — только в private.json; координаты в статике огрублены."""
+    import json
+
+    from torgi.db import SessionLocal, init_db
+    from torgi.export import export
+    from torgi.models import Lot, utcnow
+
+    init_db()
+    with SessionLocal() as session:
+        now = utcnow()
+        lot = Lot(source="fake", source_id="gp1", url="https://bank.kz/1", origin="bank_pledge", category="parking",
+                  title="Паркинг", address="г.Астана, Есильский район, ул. Ақмешіт, д. 19/4, п.м. 186",
+                  lat=51.123456, lon=71.456789, contacts={"phone": "+77001234567"}, description="тел. 8700",
+                  price=5e6, status="active", first_seen_at=now, last_seen_at=now, updated_at=now,
+                  images=[], flags=[], extra={})
+        session.add(lot)
+        session.commit()
+        export(session, tmp_path, gated=True)
+        lots = {x["id"]: x for x in json.loads((tmp_path / "lots.json").read_text(encoding="utf-8"))}
+        private = json.loads((tmp_path / "private.json").read_text(encoding="utf-8"))
+        public = lots[lot.id]
+        assert "address" not in public and "contacts" not in public and "url" not in public
+        assert (public["lat"], public["lon"]) == (51.12, 71.46)
+        assert public["district"] == "Есильский район" and public["group_key"]
+        assert private[str(lot.id)]["contacts"] == {"phone": "+77001234567"}
+        assert private[str(lot.id)]["lat"] == 51.123456
+        full = (tmp_path / "lots-full.json").read_text(encoding="utf-8")
+        assert "+77001234567" not in full and "bank.kz/1" not in full
+        session.delete(lot)
+        session.commit()

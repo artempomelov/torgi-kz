@@ -16,7 +16,7 @@ on:
         default: false
   push:
     branches: [main]
-    paths: ["backend/**", "web/**", ".github/workflows/**"]
+    paths: ["backend/**", "web/**", "worker/**", ".github/workflows/**"]
 
 permissions:
   contents: write   # релиз «data» хранит базу SQLite между запусками
@@ -41,6 +41,10 @@ jobs:
       # Telegram: секрет TORGI_TELEGRAM_BOT_TOKEN и переменная TORGI_TELEGRAM_CHANNEL в настройках репозитория
       TORGI_TELEGRAM_BOT_TOKEN: ${{ secrets.TORGI_TELEGRAM_BOT_TOKEN }}
       TORGI_TELEGRAM_CHANNEL: ${{ vars.TORGI_TELEGRAM_CHANNEL }}
+      # Cloudflare (вход на сайте и закрытые контакты): секрет CLOUDFLARE_API_TOKEN и переменная
+      # CLOUDFLARE_ACCOUNT_ID. Пока токена нет — сайт открытый, как раньше.
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -86,15 +90,53 @@ jobs:
             --notes "SQLite-база лотов, обновляется автоматически workflow «Парсинг и публикация сайта»." --latest=false
           gh release upload data torgi.db.gz --clobber
 
-      - name: Выгрузка JSON для сайта
-        working-directory: backend
-        run: uv run python -m torgi.cli export ../web/data
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      # Закрытый режим: адрес, контакты, ссылка на источник, документы и описание — только после входа.
+      # Их отдаёт worker на Cloudflare (worker/), данные лежат в D1.
+      - name: Cloudflare — база D1 и API
+        id: cf
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' && env.TORGI_TELEGRAM_BOT_TOKEN != ''
+        working-directory: worker
+        run: |
+          set -euo pipefail
+          WR="npx --yes wrangler@4"
+          CF="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          AUTH="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          DB_ID=$(curl -fsS -H "$AUTH" "$CF/d1/database?name=torgi" | jq -r '.result[] | select(.name=="torgi") | .uuid' | head -1)
+          if [ -z "$DB_ID" ]; then
+            DB_ID=$(curl -fsS -X POST -H "$AUTH" -H "Content-Type: application/json" \
+              -d '{"name":"torgi"}' "$CF/d1/database" | jq -r .result.uuid)
+          fi
+          sed -i "s/__D1_DATABASE_ID__/$DB_ID/" wrangler.toml
+          $WR d1 execute torgi --remote --file schema.sql
+          # поддомен workers.dev регистрируется один раз
+          SUB=$(curl -fsS -H "$AUTH" "$CF/workers/subdomain" | jq -r '.result.subdomain // empty' || true)
+          if [ -z "$SUB" ]; then
+            SUB=$(curl -fsS -X PUT -H "$AUTH" -H "Content-Type: application/json" \
+              -d '{"subdomain":"torgi-kz"}' "$CF/workers/subdomain" | jq -r .result.subdomain)
+          fi
+          $WR deploy
+          printf '%s' "$TORGI_TELEGRAM_BOT_TOKEN" | $WR secret put BOT_TOKEN
+          echo "db_id=$DB_ID" >> "$GITHUB_OUTPUT"
+          echo "api_url=https://torgi-api.$SUB.workers.dev" >> "$GITHUB_OUTPUT"
+
+      - name: Выгрузка JSON для сайта
+        working-directory: backend
+        env:
+          CF_D1_DATABASE_ID: ${{ steps.cf.outputs.db_id }}
+        run: |
+          if [ -n "$CF_D1_DATABASE_ID" ]; then
+            uv run python -m torgi.cli export --gated ../web/data
+            uv run python -m torgi.cli sync-private ../web/data/private.json
+            rm ../web/data/private.json
+          else
+            uv run python -m torgi.cli export ../web/data
+          fi
       - name: Сборка сайта
         working-directory: web
         env:
@@ -103,6 +145,10 @@ jobs:
           NEXT_PUBLIC_YM_ID: ${{ vars.NEXT_PUBLIC_YM_ID }}
           NEXT_PUBLIC_TELEGRAM_URL: ${{ vars.NEXT_PUBLIC_TELEGRAM_URL }}
           NEXT_PUBLIC_TELEGRAM_BOT: ${{ vars.NEXT_PUBLIC_TELEGRAM_BOT }}
+          # закрытый режим включается, только когда worker на Cloudflare опубликован
+          NEXT_PUBLIC_API_URL: ${{ steps.cf.outputs.api_url }}
+          NEXT_PUBLIC_PAYWALL: ${{ steps.cf.outputs.api_url != '' && '1' || '' }}
+          NEXT_PUBLIC_AUTH: ${{ steps.cf.outputs.api_url != '' && '1' || '' }}
         run: npm ci --no-audit --no-fund && npm run build
 
       - uses: actions/configure-pages@v5

@@ -28,6 +28,7 @@ export type Filters = {
   ppm_max: string;
   with_auction_date: boolean;
   drop: boolean; // только подешевевшие
+  group: string; // паркинги одного здания (group_key)
   sort: string;
   page: number;
 };
@@ -47,6 +48,7 @@ export function parseFilters(params: URLSearchParams): Filters {
     ppm_max: params.get("ppm_max") ?? "",
     with_auction_date: params.get("with_auction_date") === "true",
     drop: params.get("drop") === "true",
+    group: params.get("group") ?? "",
     sort: params.get("sort") ?? "new",
     page: Math.max(1, Number(params.get("page")) || 1),
   };
@@ -82,7 +84,10 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
     }
     if (onlyAuctions && !isUpcoming(lot, now)) return false;
     if ((f.drop || f.sort === "drop") && !lot.price_drop_pct) return false;
-    if (q && ![lot.title, lot.address, lot.city].some((s) => s?.toLowerCase().includes(q))) return false;
+    if (f.group && lot.group_key !== f.group) return false;
+    if (q && ![lot.title, lot.address, lot.city, lot.district, lot.headline].some((s) => s?.toLowerCase().includes(q))) {
+      return false;
+    }
     return true;
   });
 
@@ -101,29 +106,40 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
 
 // --- одинаковые паркинги одной карточкой -------------------------------------------------
 
-export type ParkingGroup = { kind: "group"; key: string; base: string; lots: Lot[] };
+export type ParkingGroup = { kind: "group"; key: string; base: string; lots: Lot[]; groupKey: string | null };
 export type CatalogItem = { kind: "lot"; lot: Lot } | ParkingGroup;
 
 // «..., ул. Ақмешіт, зд. 19Б, п.м. 78» → «..., ул. Ақмешіт, зд. 19Б»
 const PLACE_RE = /,?\s*(?:п\.\s?м\.?|м\/м|машино[\s-]*мест[\p{L}]*|парковочн\p{L}+\s+мест\p{L}*|паркинг\p{L}*|№)\s*№?\s*[\p{L}\d/-]+.*$/iu;
 
-/** Подряд идущие паркинги одного источника в одном здании (от 3 шт.) сворачиваются в одну карточку. */
+// Ключ здания: из выгрузки (group_key — работает и когда адрес закрыт) или из адреса
+function parkingKey(lot: Lot): { key: string; base: string } | null {
+  if (lot.category !== "parking") return null;
+  const label = [lot.city, lot.district].filter(Boolean).join(", ") || lot.headline;
+  if (lot.group_key) {
+    const base = lot.address ? lot.address.replace(PLACE_RE, "").trim() : label;
+    return { key: lot.group_key, base };
+  }
+  if (!lot.address) return null;
+  const base = lot.address.replace(PLACE_RE, "").trim();
+  return base && base !== lot.address ? { key: `${lot.source}|${base}`, base } : null;
+}
+
+/** Паркинги одного источника в одном здании (от 3 шт.) сворачиваются в одну карточку. */
 export function groupParkings(lots: Lot[]): CatalogItem[] {
   const groups = new Map<string, ParkingGroup>();
   for (const lot of lots) {
-    if (lot.category !== "parking" || !lot.address) continue;
-    const base = lot.address.replace(PLACE_RE, "").trim();
-    if (!base || base === lot.address) continue;
-    const key = `${lot.source}|${base}`;
-    const g = groups.get(key) ?? { kind: "group" as const, key, base, lots: [] };
+    const k = parkingKey(lot);
+    if (!k) continue;
+    const g = groups.get(k.key) ?? { kind: "group" as const, key: k.key, base: k.base, lots: [], groupKey: lot.group_key ?? null };
     g.lots.push(lot);
-    groups.set(key, g);
+    groups.set(k.key, g);
   }
   const out: CatalogItem[] = [];
   const emitted = new Set<string>();
   for (const lot of lots) {
-    const base = lot.category === "parking" && lot.address ? lot.address.replace(PLACE_RE, "").trim() : "";
-    const g = base ? groups.get(`${lot.source}|${base}`) : undefined;
+    const k = parkingKey(lot);
+    const g = k ? groups.get(k.key) : undefined;
     if (g && g.lots.length >= 3) {
       if (!emitted.has(g.key)) {
         emitted.add(g.key);

@@ -31,6 +31,8 @@ export type Lot = {
   first_seen_at: string;
   price_drop_pct: number | null;
   listed_at?: string | null; // когда объявление появилось у источника
+  district?: string | null; // район из адреса — публичный ориентир
+  group_key?: string | null; // здание для одинаковых паркингов
 };
 
 export type LotDetailsData = {
