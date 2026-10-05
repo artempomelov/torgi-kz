@@ -145,6 +145,35 @@ class TelegramBot:
                          link_preview_options={"is_disabled": True})["message_id"]
 
 
+def refresh(session: Session) -> int:
+    """Переписать уже опубликованные посты по текущему шаблону (например, после смены формата)."""
+    if not settings.telegram_bot_token or not settings.telegram_channel:
+        raise SystemExit("Задайте TORGI_TELEGRAM_BOT_TOKEN и TORGI_TELEGRAM_CHANNEL")
+    bot = TelegramBot(settings.telegram_bot_token)
+    posts = session.scalars(select(ChannelPost).where(
+        ChannelPost.channel == settings.telegram_channel, ChannelPost.message_id.is_not(None))).all()
+    edited = 0
+    for post in posts:
+        lot = session.get(Lot, post.lot_id)
+        if lot is None:
+            continue
+        text = format_post(lot)
+        common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
+        for method, extra in (("editMessageCaption", {"caption": text}),
+                              ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
+            try:
+                bot.call(method, **common, **extra)
+                edited += 1
+                break
+            except RuntimeError as exc:
+                if "not modified" in str(exc):
+                    break
+                # пост без фото — у него нет подписи, правим текст; иначе пробуем следующий способ
+        time.sleep(1)
+    log.info("переписано постов: %d из %d", edited, len(posts))
+    return edited
+
+
 def run(session: Session, limit: int = 10, since_days: int = 3, dry_run: bool = False, mark_all: bool = False) -> int:
     channel = settings.telegram_channel or "dry-run"
     if mark_all:

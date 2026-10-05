@@ -10,6 +10,10 @@ on:
         description: "Источники через пробел (adilet sauda halyk alatau forte bcc freedom eurasian nurbank bereke rbk); пусто — только пересобрать сайт"
         required: false
         default: ""
+      refresh_posts:
+        description: "Переписать уже опубликованные посты канала по текущему шаблону"
+        type: boolean
+        default: false
       full:
         description: "Заново загрузить детали всех лотов выбранных источников (документы, координаты, контакты)"
         type: boolean
@@ -164,6 +168,9 @@ jobs:
         working-directory: backend
         run: |
           if [ -n "$TORGI_TELEGRAM_CHANNEL" ]; then
+            if [ "${{ inputs.refresh_posts }}" = "true" ]; then
+              uv run python -m torgi.cli post --refresh || echo "::warning::Не удалось переписать посты"
+            fi
             uv run python -m torgi.cli post --limit 5 || echo "::warning::Публикация в канал не удалась"
           fi
           uv run python -m torgi.cli bot --check || echo "::warning::Токен бота не принят Telegram — проверьте секрет TORGI_TELEGRAM_BOT_TOKEN"

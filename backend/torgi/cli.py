@@ -30,6 +30,7 @@ def main() -> None:
     t.add_argument("--since-days", type=int, default=3, help="брать лоты, появившиеся за N дней")
     t.add_argument("--dry-run", action="store_true", help="только показать посты")
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
+    t.add_argument("--refresh", action="store_true", help="переписать опубликованные посты по текущему шаблону")
     b = sub.add_parser("bot", help="бот подписок: обработать входящие и разослать уведомления")
     b.add_argument("--dry-run", action="store_true", help="только показать уведомления")
     b.add_argument("--check", action="store_true", help="проверить токен (getMe), не раскрывая его")
@@ -67,6 +68,9 @@ def main() -> None:
 
         init_db()
         with SessionLocal() as session:
+            if args.refresh:
+                telegram.refresh(session)
+                return
             telegram.run(session, limit=args.limit, since_days=args.since_days, dry_run=args.dry_run,
                          mark_all=args.mark_all)
     elif args.cmd == "bot":
