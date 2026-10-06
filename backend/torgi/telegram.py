@@ -86,7 +86,14 @@ def benefit_lines(lot: Lot, medians: dict | None = None) -> list[str]:
     return lines
 
 
-def format_post(lot: Lot, medians: dict | None = None, footer: str = "") -> str:
+def utm(channel: str | None) -> str:
+    """Метки для Метрики: переходы из Telegram не передают источник и иначе считаются прямыми заходами."""
+    campaign = (channel or "channel").lstrip("@")
+    # «&» внутри HTML-разметки Telegram — как &amp;
+    return f"?utm_source=telegram&amp;utm_medium=channel&amp;utm_campaign={campaign}"
+
+
+def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel: str | None = None) -> str:
     esc = html.escape
     parts = [CATEGORIES.get(lot.category, "Объект")]
     if lot.rooms and lot.category in ("apartment", "house"):
@@ -120,7 +127,7 @@ def format_post(lot: Lot, medians: dict | None = None, footer: str = "") -> str:
     if lot.deposit:
         lines.append(f"💳 Задаток: {_money(lot.deposit)}")
 
-    lines += ["", f'<a href="{settings.site_url}/lots/{lot.id}">Подробнее на torgi.kz</a>']
+    lines += ["", f'<a href="{settings.site_url}/lots/{lot.id}/{utm(channel or settings.telegram_channel)}">Подробнее на torgi.kz</a>']
     tags = [_hashtag(lot.city)] if lot.city else []
     tags += [_hashtag(CATEGORIES.get(lot.category, "").split(" ")[0].lower()), _hashtag(ORIGIN_TAGS.get(lot.origin, ""))]
     lines.append(" ".join(t for t in tags if len(t) > 1))
@@ -221,7 +228,7 @@ def refresh(session: Session) -> int:
         if lot is None:
             continue
         footer = MAIN_FOOTER if rules.get(post.channel) is None else HUB_FOOTER.format(hub=hub)
-        text = format_post(lot, medians, footer)
+        text = format_post(lot, medians, footer, post.channel)
         common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
         for method, extra in (("editMessageCaption", {"caption": text}),
                               ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
@@ -267,7 +274,7 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
     hub = (settings.telegram_channel or "").lstrip("@")
     footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
     for i, lot in enumerate(lots):
-        text = format_post(lot, medians, footer)
+        text = format_post(lot, medians, footer, channel)
         if dry_run:
             print(f"--- {channel}: лот {lot.id} ({lot.source})\n{text}\n")
             continue

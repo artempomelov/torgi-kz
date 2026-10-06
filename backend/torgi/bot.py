@@ -108,6 +108,7 @@ class SearchFilter:
             if value:
                 q.append((key, f"{value:.0f}"))
         q += [("origin", o) for o in self.origins]
+        q += [("utm_source", "telegram"), ("utm_medium", "bot")]
         return f"{settings.site_url}/lots/?{urlencode(q)}"
 
 
@@ -167,7 +168,7 @@ def _lot_line(lot: Lot) -> str:
         title += f", {lot.area_m2:g} м²".replace(".", ",")
     place = lot.city or lot.region or ""
     price = _money(lot.price) if lot.price else "цена не указана"
-    return (f'• <a href="{settings.site_url}/lots/{lot.id}/">{html.escape(title)}</a> — {html.escape(place)}, '
+    return (f'• <a href="{settings.site_url}/lots/{lot.id}/?utm_source=telegram&amp;utm_medium=bot">{html.escape(title)}</a> — {html.escape(place)}, '
             f"<b>{price}</b>")
 
 

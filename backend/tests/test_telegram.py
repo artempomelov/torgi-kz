@@ -18,7 +18,7 @@ def test_format_post():
     assert "🔨 Аукцион на понижение · Арестованное имущество\n" in text
     assert "Минюст" not in text  # источник — только на сайте
     assert "Торги: 1 октября, 10:00" in text  # UTC+5
-    assert 'href="https://torgi.kz/lots/42"' in text
+    assert 'href="https://torgi.kz/lots/42/?utm_source=telegram&amp;utm_medium=channel' in text
     assert "#Алматы #квартира #арест" in text
     assert len(text) <= 1024
 
