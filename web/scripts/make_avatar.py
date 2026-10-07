@@ -134,6 +134,19 @@ if __name__ == "__main__":
     print("ok", OUT)
 
 
+def channel_avatar(label: str) -> Image.Image:
+    """Аватарка регионального/тематического канала: как вариант 5 + подпись под домиком."""
+    img, d = canvas(INK)
+    _wordmark(d, 140, 88)
+    _house(d, S / 2, 210, 0.58)
+    f = ImageFont.truetype(str(BOLD), 74)
+    centered(d, label, f, 470, WHITE)
+    return img
+
+
+CHANNELS = {"almaty": "Алматы", "astana": "Астана", "biz": "Бизнес"}
+
+
 def site_icons():
     """Значки сайта: домик со стрелкой на тёмном скруглённом квадрате (надпись в 16–32 px не читается)."""
     web = Path(__file__).resolve().parent.parent
@@ -146,6 +159,21 @@ def site_icons():
     big.save(web / "src" / "app" / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
 
 
+if __name__ == "__main__" and "--channels" in __import__("sys").argv:
+    for key, label in CHANNELS.items():
+        channel_avatar(label).save(OUT / f"avatar-channel-{key}.png", optimize=True)
+    print("channels ok")
+
 if __name__ == "__main__" and "--site" in __import__("sys").argv:
     site_icons()
     print("site icons ok")
+
+if __name__ == "__main__" and "--channels" in __import__("sys").argv:
+    # превью: все аватарки каналов в кругах
+    imgs = [Image.open(OUT / f"avatar-channel-{k}.png") for k in CHANNELS]
+    sheet = Image.new("RGB", (len(imgs) * 340 + 20, 340), "#f6f7f9")
+    for i, im in enumerate(imgs):
+        m = Image.new("L", (320, 320), 0)
+        ImageDraw.Draw(m).ellipse([0, 0, 320, 320], fill=255)
+        sheet.paste(im.resize((320, 320), Image.LANCZOS), (10 + i * 340, 10), m)
+    sheet.save(OUT / "avatar-channels-preview.png")

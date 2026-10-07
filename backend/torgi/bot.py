@@ -7,7 +7,7 @@
     uv run python -m torgi.cli bot --dry-run   # только показать уведомления, ничего не отправлять
 
 Формат кода — как web/src/lib/subscribe.ts (меняйте вместе):
-    q-ca-r0-x30   квартиры (c=категории), Алматы (r=индекс региона), до 30 млн (x), от (n) млн,
+    q-ca-r0_1-x30 квартиры (c=категории), Алматы и Астана (r=индексы регионов через _), до 30 млн (x), от (n) млн,
                   m=цена за м² до, тыс., s=площадь от, м², o=виды продажи
     lot-123       слежение за лотом 123 (любое изменение цены)
     lot-123-t5000 сообщить, когда цена опустится до 5 000 тыс. ₸
@@ -60,7 +60,7 @@ HELP = (
 @dataclass
 class SearchFilter:
     categories: list[str] = field(default_factory=list)
-    region: str | None = None
+    regions: list[str] = field(default_factory=list)
     price_min: float | None = None
     price_max: float | None = None
     ppm_max: float | None = None
@@ -70,7 +70,7 @@ class SearchFilter:
     def matches(self, lot: Lot) -> bool:
         if self.categories and lot.category not in self.categories:
             return False
-        if self.region and lot.region != self.region:
+        if self.regions and lot.region not in self.regions:
             return False
         if self.price_min and (lot.price or 0) < self.price_min:
             return False
@@ -86,7 +86,7 @@ class SearchFilter:
 
     def describe(self) -> str:
         parts = [", ".join(CATEGORY_PLURAL[c] for c in self.categories) or "Все объекты"]
-        parts.append(self.region or "весь Казахстан")
+        parts.append(", ".join(self.regions) or "весь Казахстан")
         if self.price_min or self.price_max:
             lo = f"от {self.price_min / 1e6:g}" if self.price_min else ""
             hi = f"до {self.price_max / 1e6:g}" if self.price_max else ""
@@ -101,8 +101,7 @@ class SearchFilter:
 
     def catalog_url(self) -> str:
         q: list[tuple[str, str]] = [("category", c) for c in self.categories]
-        if self.region:
-            q.append(("region", self.region))
+        q += [("region", r) for r in self.regions]
         for key, value in (("price_min", self.price_min), ("price_max", self.price_max),
                            ("ppm_max", self.ppm_max), ("area_min", self.area_min)):
             if value:
@@ -146,7 +145,7 @@ def parse_code(code: str) -> SearchFilter | LotWatch | Lead | None:
             if key == "c":
                 f.categories = [CAT[ch] for ch in value if ch in CAT]
             elif key == "r":
-                f.region = REGIONS[int(value)]
+                f.regions = [REGIONS[int(i)] for i in value.split("_") if i]
             elif key == "n":
                 f.price_min = int(value) * 1_000_000
             elif key == "x":

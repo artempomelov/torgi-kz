@@ -11,7 +11,7 @@ from torgi.models import Lot, PriceChange, Subscription, utcnow
 def test_parse_code():
     f = parse_code("q-cah-r0-x30-m400-oz")
     assert isinstance(f, SearchFilter)
-    assert f.categories == ["apartment", "house"] and f.region == "Алматы"
+    assert f.categories == ["apartment", "house"] and f.regions == ["Алматы"]
     assert (f.price_max, f.ppm_max, f.origins) == (30_000_000, 400_000, ["bank_pledge"])
     assert f.describe() == "Квартиры, Дома · Алматы · до 30 млн ₸ · до 400 тыс. ₸/м² · залоговое имущество"
     assert "category=apartment&category=house&region=" in f.catalog_url()
@@ -19,6 +19,7 @@ def test_parse_code():
     assert parse_code("lot-123-t5000") == LotWatch(123, 5_000_000)
     assert parse_code("c-7") == Lead("consult", 7) and parse_code("check-7") == Lead("check", 7)
     assert parse_code("c") == Lead("consult")
+    assert parse_code("q-r0_1").regions == ["Алматы", "Астана"]
     assert parse_code("q-r99") is None and parse_code("hello world") is None and parse_code("abc") is None
 
 

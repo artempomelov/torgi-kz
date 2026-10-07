@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { LotCard } from "@/components/LotCard";
+import { LocationFilter } from "@/components/LocationFilter";
 import { LotImage } from "@/components/LotImage";
 import type { Lot, Meta } from "@/lib/api";
 import { loadLots } from "@/lib/catalog-data";
@@ -196,15 +197,7 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
             </div>
           </fieldset>
 
-          <div>
-            <label className="label" htmlFor="region">Регион</label>
-            <select id="region" name="region" defaultValue={f.region} className="field">
-              <option value="">Весь Казахстан</option>
-              {meta.regions.filter((r) => r.count > 0).map((r) => (
-                <option key={r.id} value={r.id}>{r.id} ({r.count})</option>
-              ))}
-            </select>
-          </div>
+          <LocationFilter meta={meta} lots={lots} f={f} />
 
           <div>
             <span className="label">Цена, ₸</span>

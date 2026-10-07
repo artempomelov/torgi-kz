@@ -19,7 +19,9 @@ export type Filters = {
   category: string[];
   source: string[];
   origin: string[];
-  region: string;
+  region: string[]; // несколько: «Алматы» и «Астана»
+  city: string[]; // города внутри областей: «Караганда»
+  district: string[]; // «Алматы|Бостандыкский район» — район привязан к городу
   price_min: string;
   price_max: string;
   area_min: string;
@@ -39,7 +41,9 @@ export function parseFilters(params: URLSearchParams): Filters {
     category: params.getAll("category"),
     source: params.getAll("source"),
     origin: params.getAll("origin"),
-    region: params.get("region") ?? "",
+    region: params.getAll("region").filter(Boolean),
+    city: params.getAll("city").filter(Boolean),
+    district: params.getAll("district").filter(Boolean),
     price_min: params.get("price_min") ?? "",
     price_max: params.get("price_max") ?? "",
     area_min: params.get("area_min") ?? "",
@@ -52,6 +56,12 @@ export function parseFilters(params: URLSearchParams): Filters {
     sort: params.get("sort") ?? "new",
     page: Math.max(1, Number(params.get("page")) || 1),
   };
+}
+
+/** Район вместе с городом: одинаковые названия районов есть в разных городах. */
+export function districtKey(lot: Lot): string | null {
+  const place = lot.city ?? lot.region;
+  return lot.district && place ? `${place}|${lot.district}` : null;
 }
 
 export function isUpcoming(lot: Lot, now = Date.now()): boolean {
@@ -90,7 +100,10 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
     if (f.category.length && !f.category.includes(lot.category)) return false;
     if (f.source.length && !f.source.includes(lot.source)) return false;
     if (f.origin.length && !f.origin.includes(lot.origin)) return false;
-    if (f.region && lot.region !== f.region) return false;
+    if ((f.region.length || f.city.length) && !f.region.includes(lot.region ?? "") && !f.city.includes(lot.city ?? "")) {
+      return false;
+    }
+    if (f.district.length && !f.district.includes(districtKey(lot) ?? "")) return false;
     if (pMin !== null && (lot.price ?? -1) < pMin) return false;
     if (pMax !== null && (lot.price == null || lot.price > pMax)) return false;
     if (aMin !== null && (lot.area_m2 ?? -1) < aMin) return false;

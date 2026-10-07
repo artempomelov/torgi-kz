@@ -29,8 +29,9 @@ export function searchCode(f: Filters): string | null {
   const parts: string[] = [];
   const cats = letters(f.category, CAT);
   if (cats) parts.push(`c${cats}`);
-  const region = REGIONS.indexOf(f.region);
-  if (region >= 0) parts.push(`r${region}`);
+  // несколько регионов: r0_1 (Алматы и Астана). Города внутри областей и районы в код подписки не входят
+  const regions = f.region.map((r) => REGIONS.indexOf(r)).filter((i) => i >= 0);
+  if (regions.length) parts.push(`r${regions.join("_")}`);
   if (mln(f.price_min)) parts.push(`n${mln(f.price_min)}`);
   if (mln(f.price_max)) parts.push(`x${mln(f.price_max)}`);
   if (f.ppm_max) parts.push(`m${Math.round(Number(f.ppm_max) / 1000)}`);
