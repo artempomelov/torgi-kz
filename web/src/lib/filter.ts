@@ -61,8 +61,26 @@ export function isUpcoming(lot: Lot, now = Date.now()): boolean {
 
 const num = (v: string) => (v.trim() === "" ? null : Number(v));
 
+// Поиск: части через запятую («Ауэзовский район, Алматы») — все должны совпасть.
+// Если часть — название города («Алматы», «г. Астана»), сравниваем город лота, а не текст адреса:
+// иначе «Алматы» находит «район Алматы» в Астане, а «Ауэзовский район» — во всех городах сразу.
+const CITY_ALIASES: Record<string, string> = { "нур-султан": "астана", "алма-ата": "алматы" };
+
+function searchTerms(q: string, cities: Set<string>): { cities: string[]; texts: string[] } {
+  const out = { cities: [] as string[], texts: [] as string[] };
+  for (const raw of q.toLowerCase().split(",")) {
+    const term = raw.replace(/^\s*(?:г\.|город)\s*/, "").trim();
+    if (!term) continue;
+    const city = CITY_ALIASES[term] ?? term;
+    if (cities.has(city)) out.cities.push(city);
+    else out.texts.push(term);
+  }
+  return out;
+}
+
 export function applyFilters(lots: Lot[], f: Filters): Lot[] {
-  const q = f.q.trim().toLowerCase();
+  const cities = new Set(lots.flatMap((l) => [l.city?.toLowerCase(), l.region?.toLowerCase()]).filter((s): s is string => !!s));
+  const terms = searchTerms(f.q, cities);
   const [pMin, pMax, aMin, aMax] = [num(f.price_min), num(f.price_max), num(f.area_min), num(f.area_max)];
   const [mMin, mMax] = [num(f.ppm_min), num(f.ppm_max)];
   const now = Date.now();
@@ -85,8 +103,12 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
     if (onlyAuctions && !isUpcoming(lot, now)) return false;
     if ((f.drop || f.sort === "drop") && !lot.price_drop_pct) return false;
     if (f.group && lot.group_key !== f.group) return false;
-    if (q && ![lot.title, lot.address, lot.city, lot.district, lot.headline].some((s) => s?.toLowerCase().includes(q))) {
+    if (terms.cities.length && !terms.cities.some((c) => lot.city?.toLowerCase() === c || lot.region?.toLowerCase() === c)) {
       return false;
+    }
+    if (terms.texts.length) {
+      const haystack = [lot.title, lot.address, lot.city, lot.district, lot.headline].filter(Boolean).join(" | ").toLowerCase();
+      if (!terms.texts.every((t) => haystack.includes(t))) return false;
     }
     return true;
   });

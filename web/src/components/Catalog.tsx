@@ -25,9 +25,12 @@ function suggestions(lots: Lot[]): string[] {
   const count = new Map<string, number>();
   const add = (s: string) => count.set(s, (count.get(s) ?? 0) + 1);
   for (const lot of lots) {
-    if (lot.city) add(lot.city);
-    if (lot.district) add(lot.district);
-    for (const m of (lot.address ?? "").matchAll(DISTRICT_RE)) add(m[1] ? `район ${m[1]}` : `${m[2]} район`);
+    // район — вместе с городом: «Ауэзовский район» есть в Алматы, Шымкенте и Караганде
+    const place = lot.city ?? lot.region;
+    if (place) add(place);
+    const districts = new Set<string>(lot.district ? [lot.district] : []);
+    for (const m of (lot.address ?? "").matchAll(DISTRICT_RE)) districts.add(m[1] ? `район ${m[1]}` : `${m[2]} район`);
+    for (const d of districts) add(place ? `${d}, ${place}` : d);
   }
   return [...count.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 300).map(([s]) => s);
 }

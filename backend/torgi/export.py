@@ -112,6 +112,8 @@ def _prepare(item: dict, gated: bool, private: dict | None = None) -> dict:
             item[field] = nz.clean_address(item[field])
     if "cadastral" in item:
         item["cadastral"] = nz.valid_cadastral(item["cadastral"])
+    item["city"], item["region"] = nz.reconcile_place(item.get("city"), item.get("region"),
+                                                      item.get("address"), item.get("title"))
     item["headline"] = headline(item)
     item["district"] = district(item.get("address"))
     item["group_key"] = group_key(item)

@@ -41,29 +41,57 @@ REGIONS = [
     "Улытауская область",
 ]
 
-# (шаблон, регион) — порядок важен: сначала составные названия
+# (шаблон, регион) — порядок важен: сначала составные названия.
+# Только форма области: «Алматинская (обл.)», «Алматинской обл», «Алматинская облысы», «обл. Абай».
+# Прилагательное района («Алматинский район» Астаны, «Жамбылский район») регионом не считается.
+_OBL = r"(?:ая|ой|ую)\b"
+
+
+def _region_re(stem: str, extra: str = "") -> str:
+    return rf"{stem}{_OBL}|{stem}\w*\s+обл" + (f"|{extra}" if extra else "")
+
+
 _REGION_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(p, re.I), r)
     for p, r in [
-        (r"северо[\s-]*казахстан|\bско\b", "Северо-Казахстанская область"),
-        (r"западно[\s-]*казахстан|\bзко\b", "Западно-Казахстанская область"),
-        (r"восточно[\s-]*казахстан|\bвко\b", "Восточно-Казахстанская область"),
-        (r"алматинск|\bалматинская\b", "Алматинская область"),
-        (r"абайск|абай обл", "Абайская область"),
-        (r"акмолинск", "Акмолинская область"),
-        (r"актюбинск|ақтөбе обл", "Актюбинская область"),
-        (r"атырауск", "Атырауская область"),
-        (r"жамбылск", "Жамбылская область"),
-        (r"жетысуск|жетісу", "Жетысуская область"),
-        (r"карагандинск", "Карагандинская область"),
-        (r"костанайск", "Костанайская область"),
-        (r"кызылординск", "Кызылординская область"),
-        (r"мангистауск|мангыстауск", "Мангистауская область"),
-        (r"павлодарск", "Павлодарская область"),
-        (r"туркестанск", "Туркестанская область"),
-        (r"улытауск", "Улытауская область"),
+        (_region_re(r"северо[\s-]*казахстанск", r"\bско\b"), "Северо-Казахстанская область"),
+        (_region_re(r"западно[\s-]*казахстанск", r"\bзко\b"), "Западно-Казахстанская область"),
+        (_region_re(r"восточно[\s-]*казахстанск", r"\bвко\b"), "Восточно-Казахстанская область"),
+        (_region_re(r"алматинск", r"алматы облысы"), "Алматинская область"),
+        (_region_re(r"абайск", r"(?:область|обл\.?)\s+абай\b|абай облысы"), "Абайская область"),
+        (_region_re(r"акмолинск", r"ақмола облысы"), "Акмолинская область"),
+        (_region_re(r"актюбинск", r"ақтөбе облысы|ақтөбе обл"), "Актюбинская область"),
+        (_region_re(r"атырауск", r"атырау облысы"), "Атырауская область"),
+        (_region_re(r"жамбылск", r"жамбыл облысы"), "Жамбылская область"),
+        (_region_re(r"жетысуск", r"(?:область|обл\.?)\s+жет[іи]су|жетісу облысы"), "Жетысуская область"),
+        (_region_re(r"карагандинск", r"қарағанды облысы"), "Карагандинская область"),
+        (_region_re(r"костанайск", r"қостанай облысы"), "Костанайская область"),
+        (_region_re(r"кызылординск", r"қызылорда облысы"), "Кызылординская область"),
+        (_region_re(r"мангистауск|мангыстауск", r"маңғыстау облысы"), "Мангистауская область"),
+        (_region_re(r"павлодарск", r"павлодар облысы"), "Павлодарская область"),
+        (_region_re(r"туркестанск", r"түркістан облысы"), "Туркестанская область"),
+        (_region_re(r"улытауск", r"ұлытау облысы|(?:область|обл\.?)\s+ұлытау"), "Улытауская область"),
     ]
 ]
+
+# Районы, сельские округа и улицы — не город и не регион: «р-н Алматы» и «Алматинский район» есть в Астане,
+# «Балхашский р-н» — в Алматинской области, «Жетысуский район» — в Алматы, «ул. Петропавловская»
+_DISTRICT_RE = re.compile(
+    r"(?:р-?о?н\.?|район|ауданы|мкр\.?|микрорайон|ул\.?|улица|пр\.?|пр-т|проспект|көшесі)\s+[\w.-]+"
+    # «Ауэзовский район», «Медеу ауданы»: перед «район» — только прилагательное (иначе «Нур-Султан район Алматы»)
+    r"|[\w-]+(?:ский|цкий|ный|ий|ой)\s+(?:р-?о?н\b\.?|район\w*|с/о|сельск\w*\s+округ\w*)"
+    r"|[\w-]+\s+(?:ауданы|ауылдық\s+округ\w*|көшесі)",
+    re.I,
+)
+# Сёла и посёлки с «городскими» названиями: «с. Жанаозен» в Абайской области
+_VILLAGE_BEFORE = re.compile(r"(?:\bс\.|\bсело|\bп\.|\bпос\.|посёлок|поселок|\bаул)\s*$", re.I)
+# окончания прилагательных после названия: «Петропавловская», «Балхашский» — не город
+_ADJ_SUFFIX = re.compile(r"(?:ск|цк)\w*|(?:ая|ий|ой|ое|ую|ые|ого|ому|ых|ым)", re.I)
+
+
+def strip_districts(text: str | None) -> str:
+    """Текст без районов, округов и улиц — для определения города и области."""
+    return _DISTRICT_RE.sub(" ", text or "")
 
 # Крупные города → регион. Порядок: города республиканского значения первыми.
 CITY_REGION: dict[str, str] = {
@@ -120,20 +148,76 @@ _CITY_PATTERNS: list[tuple[re.Pattern, str]] = [
 ] + [(re.compile(rf"(?<![\w-]){re.escape(alias)}", re.I), name) for alias, name in _CITY_ALIASES.items()]
 
 
+def _city_matches(low: str):
+    for pattern, name in _CITY_PATTERNS:
+        for m in pattern.finditer(low):
+            suffix = re.match(r"[а-яёәіңғүұқөһ]*", low[m.end():]).group()
+            if suffix and _ADJ_SUFFIX.fullmatch(suffix):
+                continue  # «Петропавловская», «Алматинский»
+            if _VILLAGE_BEFORE.search(low[:m.start()]):
+                continue  # «с. Жанаозен»
+            yield m.start(), name
+
+
 def detect_city(*texts: str | None) -> str | None:
-    """Первый известный город, встреченный в текстах (по порядку аргументов)."""
+    """Первый известный город, встреченный в текстах (по порядку аргументов). Районы и улицы не в счёт."""
     for text in texts:
         if not text:
             continue
-        low = text.lower()
-        best: tuple[int, str] | None = None
-        for pattern, name in _CITY_PATTERNS:
-            m = pattern.search(low)
-            if m and (best is None or m.start() < best[0]):
-                best = (m.start(), name)
+        low = strip_districts(text).lower()
+        best = min(_city_matches(low), default=None)
         if best:
             return best[1]
     return None
+
+
+def detect_region(*texts: str | None) -> str | None:
+    """Область, явно названная в текстах (районы не в счёт)."""
+    for text in texts:
+        if not text:
+            continue
+        clean = strip_districts(text)
+        for pattern, region in _REGION_PATTERNS:
+            if pattern.search(clean):
+                return region
+    return None
+
+
+def _explicit_city(name: str, *texts: str | None) -> bool:
+    """Город назван как город: «г. Алматы», «город Алматы» или первым в адресе."""
+    variants = [name.lower()] + [alias for alias, n in _CITY_ALIASES.items() if n == name]
+    for text in texts:
+        low = strip_districts(text).lower().strip()
+        for v in variants:
+            if re.search(rf"(?:\bг\.\s*|город\s+|^){re.escape(v)}", low):
+                return True
+    return False
+
+
+def reconcile_place(city: str | None, region: str | None, *texts: str | None) -> tuple[str | None, str | None]:
+    """Сверка города и региона с адресом: явный город из адреса важнее, город не может быть из чужой области."""
+    found_city = detect_city(*texts)
+    found_region = detect_region(*texts)
+    if not found_city and not found_region:
+        return city, region  # в адресе нет ни города, ни области — верим источнику
+    if found_city in ("Алматы", "Астана", "Шымкент") and found_region and not _explicit_city(found_city, *texts):
+        # «Туркестанская обл., вдоль трассы Алматы–Ташкент» — область, а не город
+        return None, found_region
+    if found_city:
+        city = found_city
+    if city in ("Алматы", "Астана", "Шымкент"):
+        if found_region and not found_city:
+            # «Алматинская обл., Карасайский район» при городе Алматы из карточки источника — это область
+            return None, found_region
+        return city, city
+    if city and city in CITY_REGION:
+        expected = CITY_REGION[city]
+        if found_region and found_region != expected and not found_city:
+            return None, found_region  # город из карточки источника не сходится с областью в адресе
+        # город назван в адресе — регион по городу: после реформы 2022 года источники пишут старые области
+        # («Алматинская обл, Талдыкорган» → Жетысуская, «ВКО, Семей» → Абайская)
+        return city, expected
+    return city, found_region or region
 
 
 def normalize_region(*texts: str | None, city: str | None = None) -> str | None:
@@ -141,7 +225,7 @@ def normalize_region(*texts: str | None, city: str | None = None) -> str | None:
         if not text:
             continue
         for pattern, region in _REGION_PATTERNS:
-            if pattern.search(text):
+            if pattern.search(strip_districts(text)):
                 return region
     if city and city in CITY_REGION:
         return CITY_REGION[city]
