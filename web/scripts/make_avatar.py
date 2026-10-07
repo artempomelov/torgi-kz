@@ -70,7 +70,43 @@ def v4_tk_badge():
     return img
 
 
-VARIANTS = {"1-roof-t": v1_roof_t, "2-wordmark": v2_wordmark, "3-house-drop": v3_house_drop, "4-tk-badge": v4_tk_badge}
+def _house(d: ImageDraw.ImageDraw, cx: float, top: float, scale: float):
+    """Домик со стрелкой вниз; top — верх крыши, scale — размер относительно v3."""
+    k = scale
+    base = top + 330 * k
+    roof(d, cx, top, 190 * k, 140 * k, WHITE, round(40 * k))
+    d.line([(cx - 135 * k, top + 110 * k), (cx - 135 * k, base), (cx + 135 * k, base), (cx + 135 * k, top + 110 * k)],
+           fill=WHITE, width=round(40 * k), joint="curve")
+    d.rectangle([cx - 22 * k, top + 120 * k, cx + 22 * k, top + 230 * k], fill="#5b82f0")
+    d.polygon([(cx - 70 * k, top + 220 * k), (cx + 70 * k, top + 220 * k), (cx, top + 290 * k)], fill="#5b82f0")
+
+
+def _wordmark(d: ImageDraw.ImageDraw, y: float, size: int):
+    f = ImageFont.truetype(str(BOLD), size)
+    w1, w2 = d.textlength("torgi", font=f), d.textlength(".kz", font=f)
+    x = (S - w1 - w2) / 2
+    d.text((x, y), "torgi", font=f, fill=WHITE, anchor="lm")
+    d.text((x + w1, y), ".kz", font=f, fill="#5b82f0", anchor="lm")
+
+
+def v5_word_over_house():
+    """Гибрид 2+3: «torgi.kz» над домиком со стрелкой."""
+    img, d = canvas(INK)
+    _wordmark(d, 165, 96)
+    _house(d, S / 2, 268, 0.66)
+    return img
+
+
+def v6_house_over_word():
+    """Гибрид 2+3: домик со стрелкой над «torgi.kz»."""
+    img, d = canvas(INK)
+    _house(d, S / 2, 112, 0.68)
+    _wordmark(d, 470, 96)
+    return img
+
+
+VARIANTS = {"1-roof-t": v1_roof_t, "2-wordmark": v2_wordmark, "3-house-drop": v3_house_drop, "4-tk-badge": v4_tk_badge,
+            "5-word-over-house": v5_word_over_house, "6-house-over-word": v6_house_over_word}
 
 
 def preview(images: dict[str, Image.Image]) -> Image.Image:
