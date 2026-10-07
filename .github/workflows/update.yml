@@ -2,8 +2,9 @@ name: Парсинг и публикация сайта
 
 on:
   schedule:
-    - cron: "5 * * * *"    # каждый час — etp.adilet (арестованное имущество)
-    - cron: "0 22 * * *"   # 04:00 по Алматы — банки
+    # Минуты «нечётные»: на начало часа у GitHub пик нагрузки, и расписание часто пропускается
+    - cron: "17,47 * * * *"  # дважды в час — etp.adilet (арестованное имущество), канал, бот
+    - cron: "13 22 * * *"    # 04:13 по Алматы — банки и E-Qazyna
   workflow_dispatch:
     inputs:
       sources:
@@ -76,8 +77,8 @@ jobs:
         working-directory: backend
         run: |
           case "${{ github.event_name }}|${{ github.event.schedule }}" in
-            "schedule|5 * * * *")  SOURCES="adilet" ;;
-            "schedule|0 22 * * *") SOURCES="sauda halyk alatau forte bcc freedom eurasian nurbank bereke rbk" ;;
+            "schedule|17,47 * * * *") SOURCES="adilet" ;;
+            "schedule|13 22 * * *") SOURCES="sauda halyk alatau forte bcc freedom eurasian nurbank bereke rbk" ;;
             workflow_dispatch*)    SOURCES="${{ inputs.sources }}" ;;
             *)                     SOURCES="" ;;
           esac
