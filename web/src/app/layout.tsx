@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { AccountButton } from "@/components/AccountButton";
 import { FavoritesLink } from "@/components/FavoritesLink";
+import { LogoMark } from "@/components/LogoMark";
 import { YandexMetrika } from "@/components/YandexMetrika";
 import { FEATURES } from "@/lib/features";
 import "./globals.css";
@@ -40,8 +41,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col font-sans">
         <header className="border-b border-border bg-surface">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-2 px-4 py-3">
-            <Link href="/" className="text-xl font-bold tracking-tight text-foreground">
-              torgi<span className="text-brand-ink">.kz</span>
+            <Link href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight text-foreground">
+              <LogoMark className="h-8 w-8" />
+              <span>torgi<span className="text-brand-ink">.kz</span></span>
             </Link>
             <nav className="flex flex-wrap gap-x-5 gap-y-1 text-sm font-medium text-muted">
               {NAV.map((item) => (
@@ -68,7 +70,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
         <footer className="mt-16 border-t border-border bg-surface">
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-8 text-sm text-muted">
-            <p className="font-semibold text-foreground">torgi.kz — агрегатор торгов недвижимостью в Казахстане</p>
+            <p className="flex items-center gap-2 font-semibold text-foreground">
+              <LogoMark className="h-6 w-6" />
+              torgi.kz — агрегатор торгов недвижимостью в Казахстане
+            </p>
             <p>
               Сведения собираются из открытых источников: электронной торговой площадки Минюста РК, реестра
               госимущества E-Qazyna и сайтов банков.

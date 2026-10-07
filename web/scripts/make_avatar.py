@@ -132,3 +132,20 @@ if __name__ == "__main__":
         img.save(OUT / f"avatar-{name}.png", optimize=True)
     preview(images).save(OUT / "avatar-preview.png", optimize=True)
     print("ok", OUT)
+
+
+def site_icons():
+    """Значки сайта: домик со стрелкой на тёмном скруглённом квадрате (надпись в 16–32 px не читается)."""
+    web = Path(__file__).resolve().parent.parent
+    big = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    d.rounded_rectangle([0, 0, S - 1, S - 1], radius=140, fill=INK)
+    _house(d, S / 2, 152, 1.0)
+    big.save(web / "src" / "app" / "icon.png")                       # 640 — браузеры и Яндекс
+    big.convert("RGB").resize((180, 180), Image.LANCZOS).save(web / "src" / "app" / "apple-icon.png")
+    big.save(web / "src" / "app" / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
+
+
+if __name__ == "__main__" and "--site" in __import__("sys").argv:
+    site_icons()
+    print("site icons ok")
