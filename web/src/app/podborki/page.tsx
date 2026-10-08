@@ -14,6 +14,8 @@ export const metadata: Metadata = {
 const GROUPS: { id: Collection["group"]; title: string }[] = [
   { id: "category", title: "По типу объекта" },
   { id: "city", title: "По городам" },
+  { id: "district", title: "По районам Алматы, Астаны и Шымкента" },
+  { id: "price", title: "По цене" },
   { id: "origin", title: "По виду продажи" },
   { id: "source", title: "По источнику" },
 ];

@@ -12,6 +12,7 @@ import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { LotStatsBadge } from "@/components/LotStatsBadge";
 import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
+import { collectionsForLot } from "@/lib/collections";
 import { getAllLotsFull, getLot, getLots } from "@/lib/data";
 import { describeLot } from "@/lib/describe";
 import { compareToMarket, isStale, similarLots } from "@/lib/insights";
@@ -80,6 +81,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
   const lots = getLots();
   const similar = similarLots(lot, lots);
   const market = compareToMarket(lot, lots);
+  const collections = collectionsForLot(lot, lots);
   const stale = lot.status === "active" && !isAuction && isStale(lot.listed_at);
   const pageUrl = `https://torgi.kz/lots/${lot.id}/`;
 
@@ -228,6 +230,20 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
           </p>
         </aside>
       </div>
+
+      {collections.length > 0 && (
+        <nav className="mt-10" aria-label="Подборки">
+          <h2 className="mb-3 text-lg font-semibold">Смотрите также</h2>
+          <div className="flex flex-wrap gap-2">
+            {collections.map((c) => (
+              <Link key={c.slug} href={`/podborki/${c.slug}/`}
+                    className="rounded-full border border-border bg-surface px-3 py-1 text-sm hover:border-brand-ink hover:text-brand-ink">
+                {c.title} <span className="text-muted">{c.count}</span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
 
       {similar.length > 0 && (
         <section className="mt-12">
