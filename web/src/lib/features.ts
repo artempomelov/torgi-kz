@@ -14,5 +14,7 @@ export const FEATURES = {
   telegramBot: process.env.NEXT_PUBLIC_TELEGRAM_BOT || null, // имя бота для входа, без @ (в @BotFather: /setdomain)
   apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "", // по умолчанию тот же домен: https://torgi.kz/api/...
   telegramUrl: process.env.NEXT_PUBLIC_TELEGRAM_URL || null, // ссылка на канал, например https://t.me/torgi_kz
+  // письма о новых лотах по сохранённому поиску (Brevo через API) — включается вместе с ключом BREVO_API_KEY
+  email: process.env.NEXT_PUBLIC_EMAIL === "1" && !!process.env.NEXT_PUBLIC_API_URL,
   yandexMetrikaId: process.env.NEXT_PUBLIC_YM_ID || null,
 } as const;

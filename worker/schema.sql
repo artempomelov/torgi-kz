@@ -41,3 +41,18 @@ CREATE TABLE IF NOT EXISTS lots_private (
   data TEXT NOT NULL,
   hash TEXT NOT NULL
 );
+
+-- Подписки на поиск по email (Brevo). code — тот же код фильтра, что у Telegram-бота (q-…).
+-- Письмо с подтверждением шлёт worker; новые лоты — backend/torgi/email_notify.py из GitHub Actions.
+CREATE TABLE IF NOT EXISTS email_subs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  email TEXT NOT NULL,
+  code TEXT NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  confirmed INTEGER NOT NULL DEFAULT 0,
+  ip TEXT,
+  created_at TEXT NOT NULL,
+  checked_at TEXT,
+  UNIQUE (email, code)
+);
+CREATE INDEX IF NOT EXISTS email_subs_ip ON email_subs (ip, created_at);

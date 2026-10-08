@@ -53,6 +53,23 @@ function opts(): RequestInit {
   return { credentials: "include", headers: token ? { Authorization: `Bearer ${token}` } : {} };
 }
 
+/** Подписка на поиск по почте: API отправит письмо с подтверждением. */
+export async function subscribeEmail(email: string, code: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const res = await fetch(api("/api/email/subscribe"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.status === "already") return { ok: true, message: "Вы уже подписаны на этот поиск." };
+    if (res.ok) return { ok: true, message: "Проверьте почту — мы отправили письмо со ссылкой для подтверждения." };
+    return { ok: false, message: data.detail ?? "Не получилось, попробуйте позже." };
+  } catch {
+    return { ok: false, message: "Нет связи с сервером, попробуйте позже." };
+  }
+}
+
 export async function fetchMe(): Promise<Me | null> {
   try {
     const res = await fetch(api("/api/me"), opts());

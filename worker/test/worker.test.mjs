@@ -15,7 +15,7 @@ function fakeD1() {
   const stmt = (sql, params = []) => ({
     bind: (...p) => stmt(sql, p),
     first: async () => db.prepare(sql).get(...params) ?? null,
-    run: async () => db.prepare(sql).run(...params),
+    run: async () => ({ meta: { changes: Number(db.prepare(sql).run(...params).changes) } }),
     all: async () => ({ results: db.prepare(sql).all(...params) }),
   });
   return { prepare: (sql) => stmt(sql), raw: db };
@@ -89,4 +89,38 @@ test("CORS preflight", async () => {
   const res = await call(env(), "/api/me", { method: "OPTIONS" });
   assert.equal(res.status, 204);
   assert.match(res.headers.get("Access-Control-Allow-Headers"), /Authorization/);
+});
+
+test("подписка по email: письмо, подтверждение, отписка", async () => {
+  const e = { ...env(), BREVO_API_KEY: "test-key" };
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    sent.push({ url, body: JSON.parse(init.body) });
+    return new Response("{}", { status: 201 });
+  };
+  try {
+    const post = (body) => worker.fetch(new Request("https://api.test/api/email/subscribe", {
+      method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" },
+    }), e);
+    assert.equal((await post({ email: "не почта", code: "q-ca" })).status, 400);
+    assert.equal((await post({ email: "a@b.kz", code: "lot-1" })).status, 400);
+    const res = await post({ email: "Buyer@Mail.kz", code: "q-ca-r0" });
+    assert.equal((await res.json()).status, "sent");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].body.to[0].email, "buyer@mail.kz");
+    const link = sent[0].body.htmlContent.match(/href="([^"]+confirm[^"]+)"/)[1];
+    assert.match(await (await worker.fetch(new Request(link), e)).text(), /подтверждена/);
+    const row = e.DB.raw.prepare("SELECT * FROM email_subs").get();
+    assert.equal(row.confirmed, 1);
+    assert.equal((await (await post({ email: "buyer@mail.kz", code: "q-ca-r0" })).json()).status, "already");
+    await worker.fetch(new Request(`https://api.test/api/email/unsubscribe?t=${row.token}`), e);
+    assert.equal(e.DB.raw.prepare("SELECT COUNT(*) AS n FROM email_subs").get().n, 0);
+    // без ключа Brevo подписка выключена
+    assert.equal((await worker.fetch(new Request("https://api.test/api/email/subscribe", {
+      method: "POST", body: JSON.stringify({ email: "a@b.kz", code: "q-ca" }),
+    }), env())).status, 503);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 });

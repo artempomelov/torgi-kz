@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LotCard } from "@/components/LotCard";
 import { LocationFilter } from "@/components/LocationFilter";
 import { LotImage } from "@/components/LotImage";
+import { SaveSearch } from "@/components/SaveSearch";
 import type { Lot, Meta } from "@/lib/api";
 import { loadLots } from "@/lib/catalog-data";
 import { PAGE_SIZE, SORTS, applyFilters, groupParkings, parseFilters, type ParkingGroup } from "@/lib/filter";
@@ -173,7 +174,8 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
 
       {/* key: при переходе по ссылкам меню форма заново берёт значения из адреса */}
       <div className="mt-4 grid gap-6 lg:mt-6 lg:grid-cols-[280px_1fr]" key={params.toString()}>
-        <form action="/lots/" className={`h-fit space-y-5 rounded-xl border border-border bg-surface p-4 ${filtersOpen ? "" : "hidden lg:block"}`}>
+        <div className={`h-fit space-y-4 ${filtersOpen ? "" : "hidden lg:block"}`}>
+        <form action="/lots/" className="space-y-5 rounded-xl border border-border bg-surface p-4">
           {view === "map" && <input type="hidden" name="view" value="map" />}
           {f.group && <input type="hidden" name="group" value={f.group} />}
           <div>
@@ -277,13 +279,9 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
               Сбросить
             </Link>
           </div>
-          {code && (
-            <a href={botLink(code)} target="_blank" rel="noopener noreferrer"
-               className="block text-center text-sm font-medium text-brand-ink hover:underline">
-              🔖 Сохранить поиск — новые лоты в Telegram
-            </a>
-          )}
         </form>
+        <SaveSearch code={code} shareUrl={`https://torgi.kz${hrefWith({ page: null, view: null })}`} shareText={`${title} — torgi.kz`} />
+        </div>
 
         <div>
           {error ? (

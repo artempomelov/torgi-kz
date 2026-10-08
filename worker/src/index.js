@@ -11,6 +11,9 @@
 //   POST /api/hit/:id           просмотр карточки (один посетитель — один раз в день)
 //   POST /api/fav/:id           {client, on} — добавил / убрал из избранного (анонимный id браузера)
 //   GET  /api/stats?ids=1,2,3   {id: {views, favs}} — просмотры за 7 дней и число добавивших в избранное
+//   POST /api/email/subscribe   {email, code} — подписка на поиск по почте, письмо с подтверждением (Brevo)
+//   GET  /api/email/confirm?t=  подтверждение подписки (ссылка из письма)
+//   GET  /api/email/unsubscribe?t=  отписка (ссылка в каждом письме)
 //
 // Сессия — подписанный токен в заголовке Authorization (сайт и API на разных доменах — cookie не подходят).
 // Ключ подписи выводится из токена бота, отдельный секрет не нужен.
@@ -152,11 +155,15 @@ async function details(env, userId, lotId) {
 const STATS_DAYS = 7;
 const daysAgoKz = (n) => new Date(Date.now() + KZ_OFFSET_MS - n * 86400_000).toISOString().slice(0, 10);
 
+// посетитель — хэш IP и браузера за сутки: сами IP не храним
+async function visitorHash(request, salt) {
+  const raw = `${request.headers.get("CF-Connecting-IP") ?? ""}|${request.headers.get("User-Agent") ?? ""}|${salt}`;
+  return hex(await crypto.subtle.digest("SHA-256", enc.encode(raw))).slice(0, 16);
+}
+
 async function hit(env, request, lotId) {
-  // посетитель — хэш IP и браузера за сутки: сами IP не храним
   const day = todayKz();
-  const raw = `${request.headers.get("CF-Connecting-IP") ?? ""}|${request.headers.get("User-Agent") ?? ""}|${day}`;
-  const visitor = hex(await crypto.subtle.digest("SHA-256", enc.encode(raw))).slice(0, 16);
+  const visitor = await visitorHash(request, day);
   await env.DB.prepare("INSERT OR IGNORE INTO hits (lot_id, day, visitor) VALUES (?, ?, ?)")
     .bind(lotId, day, visitor).run();
   return json({ ok: true });
@@ -198,6 +205,93 @@ async function stats(env, url) {
   });
 }
 
+// --- Подписка на поиск по email ---------------------------------------------------------------
+
+const EMAIL_RE = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[a-z]{2,24}$/i;
+const CODE_RE = /^q-[A-Za-z0-9_-]{1,62}$/;
+const EMAILS_PER_IP_PER_DAY = 5; // защита от рассылки подтверждений на чужие адреса
+const SITE = "https://torgi.kz";
+
+const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+export async function sendEmail(env, to, subject, html) {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "api-key": env.BREVO_API_KEY, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      sender: { name: "torgi.kz", email: env.EMAIL_FROM ?? "noreply@torgi.kz" },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+  if (!res.ok) console.error("brevo", res.status, await res.text());
+  return res.ok;
+}
+
+async function emailSubscribe(env, request) {
+  if (!env.BREVO_API_KEY) return json({ detail: "Подписка по почте пока недоступна" }, 503);
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ detail: "Некорректный запрос" }, 400);
+  }
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const code = String(body.code ?? "");
+  if (!EMAIL_RE.test(email)) return json({ detail: "Проверьте адрес почты" }, 400);
+  if (!CODE_RE.test(code)) return json({ detail: "Сначала выберите фильтры поиска" }, 400);
+
+  const existing = await env.DB.prepare("SELECT * FROM email_subs WHERE email = ? AND code = ?").bind(email, code).first();
+  if (existing?.confirmed) return json({ status: "already" });
+
+  const ip = await visitorHash(request, "email");
+  const since = new Date(Date.now() - 86400_000).toISOString();
+  const recent = await env.DB.prepare("SELECT COUNT(*) AS n FROM email_subs WHERE ip = ? AND created_at > ?")
+    .bind(ip, since).first();
+  if ((recent?.n ?? 0) >= EMAILS_PER_IP_PER_DAY) return json({ detail: "Слишком много подписок, попробуйте завтра" }, 429);
+
+  const token = existing?.token ?? hex(crypto.getRandomValues(new Uint8Array(16)));
+  if (!existing) {
+    await env.DB.prepare("INSERT INTO email_subs (email, code, token, ip, created_at) VALUES (?, ?, ?, ?, ?)")
+      .bind(email, code, token, ip, new Date().toISOString()).run();
+  }
+  const api = new URL(request.url).origin;
+  const link = `${api}/api/email/confirm?t=${token}`;
+  const ok = await sendEmail(env, email, "Подтвердите подписку на новые лоты — torgi.kz", `
+    <p>Здравствуйте!</p>
+    <p>Вы подписались на новые объекты с торгов на torgi.kz. Чтобы получать письма, подтвердите адрес:</p>
+    <p><a href="${link}" style="display:inline-block;background:#1f3fd1;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Подтвердить подписку</a></p>
+    <p style="color:#5b6b73;font-size:13px">Если вы не подписывались — просто проигнорируйте это письмо.</p>`);
+  return ok ? json({ status: "sent" }) : json({ detail: "Не удалось отправить письмо, попробуйте позже" }, 502);
+}
+
+function page(title, text) {
+  return new Response(
+    `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(title)} — torgi.kz</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:480px;margin:15vh auto;padding:0 16px;color:#111">
+<h1 style="font-size:22px">${escapeHtml(title)}</h1><p>${text}</p>
+<p><a href="${SITE}/lots/" style="color:#1f3fd1">Перейти в каталог torgi.kz →</a></p></body></html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } },
+  );
+}
+
+async function emailConfirm(env, url) {
+  const t = url.searchParams.get("t") ?? "";
+  const res = await env.DB.prepare("UPDATE email_subs SET confirmed = 1, checked_at = COALESCE(checked_at, ?) WHERE token = ?")
+    .bind(new Date().toISOString(), t).run();
+  return res.meta.changes
+    ? page("Подписка подтверждена", "Новые объекты по вашему поиску будут приходить на почту — не чаще раза в несколько часов.")
+    : page("Ссылка устарела", "Подписка не найдена — возможно, вы уже отписались. Оформите её заново в каталоге.");
+}
+
+async function emailUnsubscribe(env, url) {
+  const t = url.searchParams.get("t") ?? "";
+  await env.DB.prepare("DELETE FROM email_subs WHERE token = ?").bind(t).run();
+  return page("Вы отписались", "Больше писем по этому поиску не будет.");
+}
+
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -215,6 +309,9 @@ async function route(request, env) {
     return counter[1] === "hit" ? hit(env, request, Number(counter[2])) : fav(env, request, Number(counter[2]));
   }
   if (pathname === "/api/auth/telegram" && request.method === "POST") return login(env, request);
+  if (pathname === "/api/email/subscribe" && request.method === "POST") return emailSubscribe(env, request);
+  if (pathname === "/api/email/confirm") return emailConfirm(env, url);
+  if (pathname === "/api/email/unsubscribe") return emailUnsubscribe(env, url);
   const userId = await readToken(env, request);
   if (pathname === "/api/me") return json(await meFor(env, userId ? await getUser(env, userId) : null));
   const m = pathname.match(/^\/api\/lots\/(\d+)\/details\/?$/);
