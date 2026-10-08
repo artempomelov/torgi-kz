@@ -1,6 +1,7 @@
 "use client";
 
 import { toggleFavorite, useFavorites } from "@/lib/favorites";
+import { reachGoal } from "@/lib/goals";
 
 export function FavoriteButton({ id, variant = "icon" }: { id: number; variant?: "icon" | "button" }) {
   const active = useFavorites().includes(id);
@@ -13,6 +14,7 @@ export function FavoriteButton({ id, variant = "icon" }: { id: number; variant?:
   const onClick = (e: React.MouseEvent) => {
     e.preventDefault(); // кнопка лежит внутри ссылки-карточки
     e.stopPropagation();
+    if (!active) reachGoal("favorite");
     toggleFavorite(id);
   };
 

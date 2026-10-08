@@ -184,6 +184,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             )}
             <a
               href="#lot-details"
+              data-goal="details_open"
               className="mt-4 block rounded-lg bg-brand px-4 py-3 text-center font-semibold text-white hover:bg-brand-hover"
             >
               Адрес и контакты продавца

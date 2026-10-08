@@ -25,7 +25,7 @@ export function ShareButtons({ url, text }: { url: string; text: string }) {
         <a className={btn} target="_blank" rel="noopener noreferrer" href={`https://t.me/share/url?url=${enc(url)}&text=${enc(text)}`}>
           Telegram
         </a>
-        <button type="button" className={btn} onClick={copy}>
+        <button type="button" className={btn} onClick={copy} data-goal="share">
           {copied ? "Скопировано" : "Ссылка"}
         </button>
       </div>

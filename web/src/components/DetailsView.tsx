@@ -49,7 +49,7 @@ export function LotDetailsView({ details, isAuction, note }: {
 
       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         {details.url && (
-          <a href={details.url} target="_blank" rel="noopener noreferrer"
+          <a href={details.url} target="_blank" rel="noopener noreferrer" data-goal="source_click"
              className="flex-1 rounded-lg bg-brand px-4 py-3 text-center font-semibold text-white hover:bg-brand-hover">
             {isAuction ? "Перейти к торгам у источника" : "Открыть у источника"}
           </a>

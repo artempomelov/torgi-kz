@@ -1,6 +1,7 @@
 "use client";
 
 // «Консультация» на карточке каталога: карточка целиком — ссылка, поэтому кнопка открывает бота сама.
+import { reachGoal } from "@/lib/goals";
 import { consultLink } from "@/lib/subscribe";
 
 export function ConsultButton({ id }: { id: number }) {
@@ -10,6 +11,7 @@ export function ConsultButton({ id }: { id: number }) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        reachGoal("consult");
         window.open(consultLink(id), "_blank", "noopener");
       }}
       className="text-xs font-medium text-brand-ink hover:underline"

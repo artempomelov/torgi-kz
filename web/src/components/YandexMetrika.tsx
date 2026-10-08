@@ -8,6 +8,7 @@ import Script from "next/script";
 import { Suspense, useEffect, useRef } from "react";
 
 import { FEATURES } from "@/lib/features";
+import { type Goal, goalFromHref, reachGoal } from "@/lib/goals";
 
 declare global {
   interface Window {
@@ -32,6 +33,28 @@ function PageViews({ id }: { id: number }) {
   return null;
 }
 
+/** Цели по кликам: ссылки распознаются по адресу, прочие кнопки — по data-goal; отправка формы каталога. */
+function Goals() {
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const el = (e.target as Element | null)?.closest<HTMLElement>("[data-goal], a[href]");
+      if (!el) return;
+      const goal = (el.dataset.goal as Goal | undefined) ?? goalFromHref(el.getAttribute("href") ?? "");
+      if (goal) reachGoal(goal);
+    };
+    const onSubmit = (e: SubmitEvent) => {
+      if ((e.target as HTMLFormElement).getAttribute("action") === "/lots/") reachGoal("filter_apply");
+    };
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("submit", onSubmit, true);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("submit", onSubmit, true);
+    };
+  }, []);
+  return null;
+}
+
 export function YandexMetrika() {
   const raw = FEATURES.yandexMetrikaId;
   if (!raw) return null;
@@ -52,6 +75,7 @@ export function YandexMetrika() {
       <Suspense>
         <PageViews id={id} />
       </Suspense>
+      <Goals />
     </>
   );
 }
