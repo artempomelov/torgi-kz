@@ -115,7 +115,7 @@ def test_export_gated_private(tmp_path):
         public = lots[lot.id]
         assert "address" not in public and "contacts" not in public and "url" not in public
         assert (public["lat"], public["lon"]) == (51.12, 71.46)
-        assert public["district"] == "Есильский район" and public["group_key"]
+        assert public["district"] == "район Есиль" and public["group_key"]
         assert private[str(lot.id)]["contacts"] == {"phone": "+77001234567"}
         assert private[str(lot.id)]["lat"] == 51.123456
         full = (tmp_path / "lots-full.json").read_text(encoding="utf-8")

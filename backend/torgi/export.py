@@ -51,7 +51,8 @@ def headline(lot: dict) -> str:
     elif lot.get("land_area_ha"):
         parts.append(f"{lot['land_area_ha']:g} га".replace(".", ","))
     place = lot.get("city") or lot.get("region")
-    area = district(lot.get("address"))  # «— Алматы, Бостандыкский район»: человечнее и полезнее для поиска
+    # «— Алматы, Бостандыкский район»: человечнее и полезнее для поиска
+    area = nz.canonical_district(district(lot.get("address")), lot.get("city") or lot.get("region"))
     if place and area:
         place = f"{place}, {area}"
     return ", ".join(parts) + (f" — {place}" if place else "")
@@ -115,7 +116,7 @@ def _prepare(item: dict, gated: bool, private: dict | None = None) -> dict:
     item["city"], item["region"] = nz.reconcile_place(item.get("city"), item.get("region"),
                                                       item.get("address"), item.get("title"))
     item["headline"] = headline(item)
-    item["district"] = district(item.get("address"))
+    item["district"] = nz.canonical_district(district(item.get("address")), item.get("city") or item.get("region"))
     item["group_key"] = group_key(item)
     if gated:
         if private is not None:

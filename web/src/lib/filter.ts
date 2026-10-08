@@ -58,6 +58,17 @@ export function parseFilters(params: URLSearchParams): Filters {
   };
 }
 
+/** Лоты, которые в общей выдаче опускаем ниже: паркинги, «прочее», земля дешевле 1 млн ₸, без цены. */
+export function isLowInterest(lot: Lot): boolean {
+  return (
+    !lot.price ||
+    lot.flags.length > 0 ||
+    lot.category === "parking" ||
+    lot.category === "other" ||
+    (lot.category === "land" && lot.price < 1_000_000)
+  );
+}
+
 /** Район вместе с городом: одинаковые названия районов есть в разных городах. */
 export function districtKey(lot: Lot): string | null {
   const place = lot.city ?? lot.region;
@@ -136,7 +147,13 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
     deadline: (a, b) => Date.parse(a.auction_start!) - Date.parse(b.auction_start!),
     drop: (a, b) => (b.price_drop_pct ?? 0) - (a.price_drop_pct ?? 0),
   };
-  return result.sort(sorters[f.sort] ?? sorters.new);
+  const sorter = sorters[f.sort] ?? sorters.new;
+  // В общей выдаче «по умолчанию» сначала то, что интересно большинству; паркинги, дешёвая земля
+  // и лоты без цены — после. Если человек сам выбрал тип объекта — порядок как есть.
+  if ((f.sort === "new" || !sorters[f.sort]) && !f.category.length) {
+    return result.sort((a, b) => Number(isLowInterest(a)) - Number(isLowInterest(b)) || sorter(a, b));
+  }
+  return result.sort(sorter);
 }
 
 // --- одинаковые паркинги одной карточкой -------------------------------------------------

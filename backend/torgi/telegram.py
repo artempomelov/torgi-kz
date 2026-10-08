@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from torgi.config import settings
 from torgi.export import district
 from torgi.models import ChannelPost, Lot, utcnow
-from torgi.normalize import CATEGORIES, ORIGINS, SALE_TYPES
+from torgi.normalize import CATEGORIES, ORIGINS, SALE_TYPES, canonical_district
 
 log = logging.getLogger(__name__)
 
@@ -111,7 +111,8 @@ def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel
     lines.append(price)
     lines += benefit_lines(lot, medians)
     # точный адрес — только на сайте после входа; в канале — город и район
-    place = ", ".join(p for p in (lot.city or lot.region, district(lot.address)) if p)
+    area = canonical_district(district(lot.address), lot.city or lot.region)
+    place = ", ".join(p for p in (lot.city or lot.region, area) if p)
     if place:
         lines.append(f"📍 {esc(place)}")
     # источник (площадку или банк) в канале не называем — он открывается на сайте после входа
