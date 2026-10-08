@@ -388,6 +388,24 @@ def parse_cadastral(text: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+# Цена изменилась в 4+ раза — это исправленная опечатка источника (лишний или потерянный ноль), а не скидка
+PRICE_TYPO_RATIO = 4
+
+
+def real_price_history(points: list) -> list:
+    """История цены без опечаток: всё, что было до последнего «скачка» в 4+ раза, отбрасываем.
+
+    points — объекты с полем price (PriceChange) по возрастанию даты; без цены пропускаются.
+    """
+    points = [p for p in points if p.price]
+    start = 0
+    for i in range(1, len(points)):
+        ratio = points[i].price / points[i - 1].price
+        if ratio >= PRICE_TYPO_RATIO or ratio <= 1 / PRICE_TYPO_RATIO:
+            start = i
+    return points[start:]
+
+
 def valid_cadastral(value: str | None) -> str | None:
     """Заглушки вроде «111», «ааа», «-» вместо кадастрового номера — не номер."""
     if not value or sum(ch.isdigit() for ch in value) < 8:

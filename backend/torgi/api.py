@@ -92,7 +92,7 @@ class LotPage(BaseModel):
 
 
 def _drop_pct(lot: Lot) -> float | None:
-    prices = [p.price for p in lot.price_history if p.price]
+    prices = [p.price for p in nz.real_price_history(lot.price_history)]
     if len(prices) < 2 or not lot.price or prices[0] <= lot.price:
         return None
     return round((prices[0] - lot.price) / prices[0] * 100, 1)

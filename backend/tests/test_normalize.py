@@ -165,3 +165,11 @@ def test_canonical_district():
     assert cd("район Казыбекби", "Караганда") == "район имени Казыбек би"
     assert cd("район Алматы", "Алматы") is None and cd("Нур-Султан район", "Астана") is None
     assert cd("район Хобдинский", "Актобе") == "Хобдинский район"
+
+
+def test_real_price_history_drops_typos():
+    from types import SimpleNamespace as P
+    pts = [P(price=161_222_746), P(price=None), P(price=16_122_746), P(price=15_000_000)]
+    assert [p.price for p in nz.real_price_history(pts)] == [16_122_746, 15_000_000]
+    pts = [P(price=30_000_000), P(price=27_000_000)]
+    assert [p.price for p in nz.real_price_history(pts)] == [30_000_000, 27_000_000]

@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from torgi import normalize as nz
-from torgi.api import LotFull, _drop_pct, _short, meta
+from torgi.api import LotFull, PricePoint, _drop_pct, _short, meta
 from torgi.models import Lot, utcnow
 
 # Снятые лоты держим на сайте ещё 30 дней: ссылки из Telegram и поисковиков не ломаются
@@ -36,7 +36,6 @@ GATED_FIELDS = frozenset({
     "contacts",
     "description",
     "extra",
-    "price_history",
     "documents",      # отчёты об оценке, техпаспорта, госакты
 })
 
@@ -153,6 +152,8 @@ def export(session: Session, out_dir: Path, gated: bool = False) -> dict[str, in
     private: dict[str, dict] = {}  # закрытые поля → D1 (Cloudflare), в статику не попадают
     for lot in lots:
         item = LotFull.model_validate(lot)
+        # график на карточке — без опечаток источника (161 млн → 16 млн — не скидка 90%)
+        item.price_history = [PricePoint.model_validate(p) for p in nz.real_price_history(lot.price_history)]
         item.image = lot.images[0] if lot.images else None
         item.price_drop_pct = _drop_pct(lot)
         item.listed_at = lot.published_at or lot.first_seen_at

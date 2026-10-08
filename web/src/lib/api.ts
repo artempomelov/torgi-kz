@@ -46,7 +46,6 @@ export type LotDetailsData = {
   contacts?: Record<string, string>;
   description?: string | null;
   extra?: Record<string, unknown>;
-  price_history?: { price: number | null; seen_at: string }[];
   documents?: { title: string; url: string; size?: number | null }[] | null;
 };
 
@@ -55,6 +54,7 @@ export type LotFull = Lot &
     year_built: number | null;
     deposit: number | null;
     images: string[];
+    price_history?: { price: number | null; seen_at: string }[]; // публично: график на карточке
     published_at: string | null;
     last_seen_at: string;
     duplicate_of?: number | null; // тот же объект у другого источника — основной лот

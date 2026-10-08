@@ -1,7 +1,7 @@
 // Отображение закрытой части карточки лота и заглушка платного режима (без логики загрузки).
 import type { LotDetailsData } from "@/lib/api";
 import { FEATURES } from "@/lib/features";
-import { formatDate, formatFileSize, formatPrice, plural } from "@/lib/format";
+import { formatFileSize, plural } from "@/lib/format";
 
 const CONTACT_LABELS: Record<string, string> = {
   name: "Контактное лицо",
@@ -31,7 +31,6 @@ export function LotDetailsView({ details, isAuction, note }: {
   note?: React.ReactNode;
 }) {
   const contacts = Object.entries(details.contacts ?? {}).filter(([, v]) => v);
-  const history = (details.price_history ?? []).filter((p) => p.price != null);
   const documents = details.documents ?? [];
 
   return (
@@ -83,20 +82,6 @@ export function LotDetailsView({ details, isAuction, note }: {
         </div>
       )}
 
-      {history.length > 1 && (
-        <div className="mt-5">
-          <h3 className="mb-2 text-sm font-semibold">История цены</h3>
-          <ul className="space-y-1 text-sm">
-            {history.map((p) => (
-              <li key={p.seen_at} className="flex justify-between">
-                <span className="text-muted">{formatDate(p.seen_at)}</span>
-                <span className="font-medium">{formatPrice(p.price)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {details.description && (
         <div className="mt-5">
           <h3 className="mb-2 text-sm font-semibold">Описание от продавца</h3>
@@ -125,7 +110,7 @@ export function LockedDetails({ message, children }: { message?: React.ReactNode
         <p className="max-w-sm text-sm">
           {message ?? (
             <>
-              Точный адрес, контакты продавца, ссылка на торги и история цены —{" "}
+              Точный адрес, контакты продавца, ссылка на торги и документы —{" "}
               <b>бесплатно {n} {plural(n, ["объект", "объекта", "объектов"])} в день</b> после входа,
               без ограничений — по подписке.
             </>

@@ -8,6 +8,7 @@ import { Badge, LotCard } from "@/components/LotCard";
 import { LotDetails } from "@/components/LotDetails";
 import { LotImage } from "@/components/LotImage";
 import { DescendingAuction, PriceAlerts } from "@/components/LotPricing";
+import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { LotStatsBadge } from "@/components/LotStatsBadge";
 import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
@@ -133,6 +134,8 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
           </section>
 
           <DescendingAuction lot={lot} />
+
+          <PriceHistoryChart history={lot.price_history ?? []} until={lot.last_seen_at} isAuction={isAuction} />
 
           <section className="rounded-xl border border-border bg-surface p-5">
             <h2 className="mb-3 text-lg font-semibold">Характеристики</h2>

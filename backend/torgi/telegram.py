@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from torgi.config import settings
 from torgi.export import district
 from torgi.models import ChannelPost, Lot, utcnow
-from torgi.normalize import CATEGORIES, ORIGINS, SALE_TYPES, canonical_district
+from torgi.normalize import CATEGORIES, ORIGINS, SALE_TYPES, canonical_district, real_price_history
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ def market_medians(session: Session) -> dict[tuple[str, str], float]:
 
 def benefit_lines(lot: Lot, medians: dict | None = None) -> list[str]:
     lines = []
-    prices = [p.price for p in lot.price_history if p.price]
+    prices = [p.price for p in real_price_history(lot.price_history)]
     if lot.price and prices and prices[0] > lot.price:
         drop = prices[0] - lot.price
         lines.append(f"📉 <b>Цена снижена на {drop / prices[0] * 100:.0f}%</b> — выгода {_money(drop)}")
