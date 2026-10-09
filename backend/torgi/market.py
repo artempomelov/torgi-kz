@@ -216,6 +216,15 @@ class MarketIndex:
         return None
 
 
+def confidence(est: Estimate, district: str | None) -> str:
+    """Надёжность оценки: высокая — район и узкий разброс цен, низкая — разнородный сегмент."""
+    if est.spread <= 0.45 and est.sample >= 15 and district and district in est.segment:
+        return "высокая"
+    if est.spread <= 0.7:
+        return "средняя"
+    return "низкая"
+
+
 def report(session: Session, db: sqlite3.Connection, out: Path | None = None) -> dict[str, int]:
     """Оценка всех активных лотов → CSV (по убыванию скидки к рынку)."""
     index = MarketIndex(db)
@@ -225,8 +234,9 @@ def report(session: Session, db: sqlite3.Connection, out: Path | None = None) ->
         city, _ = nz.reconcile_place(lot.city, lot.region, lot.address, lot.title)
         district = nz.canonical_district(address_district(nz.clean_address(lot.address or "")), city)
         est = index.estimate(lot.category, city, district, lot.rooms, lot.area_m2)
-        if not est or not lot.price or lot.flags:
+        if not est or not lot.price or lot.flags or nz.deal_flags(lot.title):
             continue
+        discount = (1 - lot.price / est.value) * 100
         rows.append({
             "id": lot.id,
             "url": f"https://torgi.kz/lots/{lot.id}/",
@@ -239,7 +249,9 @@ def report(session: Session, db: sqlite3.Connection, out: Path | None = None) ->
             "price_m2": round(lot.price / lot.area_m2),
             "market_m2": round(est.ppm),
             "estimate": round(est.value),
-            "discount_pct": round((1 - lot.price / est.value) * 100, 1),
+            "discount_pct": round(discount, 1),
+            "confidence": confidence(est, district),
+            "note": "проверить вручную" if abs(discount) >= 60 else "",
             "sample": est.sample,
             "segment": est.segment,
             "spread": round(est.spread, 2),
