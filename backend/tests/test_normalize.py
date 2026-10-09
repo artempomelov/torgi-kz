@@ -173,3 +173,21 @@ def test_real_price_history_drops_typos():
     assert [p.price for p in nz.real_price_history(pts)] == [16_122_746, 15_000_000]
     pts = [P(price=30_000_000), P(price=27_000_000)]
     assert [p.price for p in nz.real_price_history(pts)] == [30_000_000, 27_000_000]
+
+
+def test_deal_flags():
+    assert nz.deal_flags("Предоставление права на имущественный наем (аренду) нежилого помещения") == ["rent"]
+    assert nz.deal_flags("Предоставление в имущественный наем (аренду) территории с СВХ") == ["rent"]
+    assert nz.deal_flags("Офис 2056,4 кв. м с землей 0,1005 га в аренде, г. Астана") == []
+    assert nz.deal_flags("1/5 доля, в трехкомнатной квартире") == ["share"]
+    assert nz.deal_flags("½ доля в жилом доме, Семей") == ["share"]
+    assert nz.deal_flags("Доля двухэтажного здания") == ["share"]
+    assert nz.deal_flags("Жилой дом на участке 0,2581 га (в том числе доля 0,2558 га)") == []
+
+
+def test_street_named_after_person_is_not_city():
+    assert nz.detect_city("Жамбылская область, Таласский район, г. Каратау, ул. Д. Конаева, 48") != "Конаев"
+    assert nz.detect_city("с.Алтын Арық, ул.Конаева №29") is None
+    assert nz.detect_city("Алматинская обл, р-н Жамбыл, земли ПК им.Д.Конаева") is None
+    assert nz.detect_city("Алматинская обл, г. Қонаев, ул. Сакена Сейфуллина") == "Конаев"
+    assert nz.detect_city("Алматинская область, г.Конаев, ул. Индустриальная") == "Конаев"

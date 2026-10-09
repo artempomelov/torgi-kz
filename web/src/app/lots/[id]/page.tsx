@@ -182,11 +182,19 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
                 В продаже с {formatDate(lot.listed_at)} — объект давно не продаётся, уместно торговаться.
               </div>
             )}
-            {lot.flags.length > 0 && (
+            {lot.flags.includes("rent") ? (
+              <div className="mt-3 rounded-lg bg-accent/15 p-3 text-sm text-accent-ink">
+                <b>Это аренда, а не продажа:</b> на торгах разыгрывается право имущественного найма, цена — плата за аренду.
+              </div>
+            ) : lot.flags.includes("share") ? (
+              <div className="mt-3 rounded-lg bg-accent/15 p-3 text-sm text-accent-ink">
+                <b>Продаётся доля, а не объект целиком:</b> цена — за долю, площадь указана для всего объекта.
+              </div>
+            ) : lot.flags.length > 0 ? (
               <div className="mt-2 text-xs text-accent-ink">
                 В данных источника похоже на ошибку ввода — уточняйте цену и площадь у продавца.
               </div>
-            )}
+            ) : null}
             <a
               href="#lot-details"
               data-goal="details_open"

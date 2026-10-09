@@ -62,7 +62,7 @@ def apply(session: Session, source: str, parsed: ParsedLot, existing: Lot | None
     lot.address = nz.clean_address(lot.address)
     lot.city, lot.region = nz.reconcile_place(lot.city, lot.region, lot.address, lot.title)
     lot.cadastral = nz.valid_cadastral(lot.cadastral)
-    lot.flags = nz.quality_flags(lot.category, lot.price, lot.area_m2)
+    lot.flags = nz.quality_flags(lot.category, lot.price, lot.area_m2) + nz.deal_flags(lot.title)
     lot.price_per_m2 = (
         round(lot.price / lot.area_m2)
         if lot.price and lot.area_m2 and lot.category != "land" and not lot.flags else None

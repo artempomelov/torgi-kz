@@ -80,6 +80,8 @@ export function LotCard({ lot }: { lot: Lot }) {
           ) : lot.sale_type ? (
             <Badge>{SALE_TYPE_LABELS[lot.sale_type] ?? lot.sale_type}</Badge>
           ) : null}
+          {lot.flags.includes("rent") && <Badge tone="accent">Аренда</Badge>}
+          {lot.flags.includes("share") && <Badge tone="accent">Доля</Badge>}
           <Badge tone="brand">{ORIGIN_LABELS[lot.origin] ?? lot.origin}</Badge>
           <Badge>{SOURCE_LABELS[lot.source] ?? lot.source}</Badge>
         </div>
