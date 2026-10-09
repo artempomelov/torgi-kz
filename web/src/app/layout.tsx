@@ -26,6 +26,7 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
+  { href: "/top/", label: "🔥 ТОП" },
   { href: "/lots/?category=apartment", label: "Квартиры" },
   { href: "/lots/?category=house", label: "Дома" },
   { href: "/lots/?category=commercial", label: "Коммерция" },

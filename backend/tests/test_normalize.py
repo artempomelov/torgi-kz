@@ -191,3 +191,10 @@ def test_street_named_after_person_is_not_city():
     assert nz.detect_city("Алматинская обл, р-н Жамбыл, земли ПК им.Д.Конаева") is None
     assert nz.detect_city("Алматинская обл, г. Қонаев, ул. Сакена Сейфуллина") == "Конаев"
     assert nz.detect_city("Алматинская область, г.Конаев, ул. Индустриальная") == "Конаев"
+
+
+def test_latin_lookalikes_in_city():
+    # «Acтана» — латинские A и c
+    assert nz.reconcile_place(None, None, "город Acтана, район Алматы, пр. Р. Қошқарбаев, дом 46/1") == ("Астана", "Астана")
+    assert nz.clean_address("город Acтана, ул. Kенесары 1") == "город Астана, ул. Кенесары 1"
+    assert nz.fix_homoglyphs("ЖК Expo City, Acтана") == "ЖК Expo City, Астана"

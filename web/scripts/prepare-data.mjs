@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { CATALOG_FILE, packCatalog } from "./pack-catalog.mjs";
 
 const dataDir = process.env.TORGI_DATA_DIR ?? "data";
-for (const file of ["lots.json", "meta.json", "lots-full.json"]) {
+for (const file of ["lots.json", "meta.json", "lots-full.json"]) { // top.json — необязательный
   if (!existsSync(`${dataDir}/${file}`)) {
     console.error(`Нет ${dataDir}/${file}. Выполните: cd backend && uv run python -m torgi.cli export ../web/data`);
     process.exit(1);

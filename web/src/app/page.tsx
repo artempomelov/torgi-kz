@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 import { LotCard } from "@/components/LotCard";
+import { TopLotCard } from "@/components/TopLotCard";
 import type { Lot } from "@/lib/api";
-import { getLots, getMeta, getUpcomingAuctions } from "@/lib/data";
+import { getLots, getMeta, getTop, getUpcomingAuctions } from "@/lib/data";
 import { applyFilters, parseFilters } from "@/lib/filter";
 import { CATEGORY_PLURAL, formatDate, plural } from "@/lib/format";
 import { pickShowcase } from "@/lib/insights";
@@ -30,6 +31,12 @@ export default function Home() {
   // lots.json уже отсортирован: новые первыми. В витрину — объекты с фото, жильё и коммерция
   const latest = { items: pickShowcase(lots.slice(0, 300), 8) };
   const upcoming = getUpcomingAuctions(Infinity);
+  // на главной — по два лучших из ТОПа квартир Алматы и Астаны (или первых разделов, какие есть)
+  const byId = new Map(getLots().map((l) => [l.id, l]));
+  const topPicks = getTop()
+    .sections.slice(0, 2)
+    .flatMap((s) => s.items.map((x, i) => ({ ...x, rank: i + 1 })).filter((x) => byId.has(x.id)).slice(0, 2))
+    .map((top) => ({ lot: byId.get(top.id)!, top }));
   const auctions = { total: upcoming.total, items: pickShowcase(upcoming.items.slice(0, 200), 4) };
   const quick = QUICK.map((q) => ({ ...q, count: quickCount(lots, q) })).filter((q) => q.count > 0);
   const categories = meta.categories.filter((c) => c.count > 0);
@@ -69,6 +76,20 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {topPicks.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pt-10">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="text-2xl font-bold">🔥 ТОП: ниже рынка</h2>
+            <Link href="/top/" className="text-sm font-medium text-brand-ink">Весь рейтинг →</Link>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {topPicks.map(({ lot, top }) => (
+              <TopLotCard key={lot.id} lot={lot} top={top} rank={top.rank} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {quick.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pt-10">

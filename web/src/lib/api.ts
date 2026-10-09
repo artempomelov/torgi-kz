@@ -60,6 +60,21 @@ export type LotFull = Lot &
     duplicate_of?: number | null; // тот же объект у другого источника — основной лот
   };
 
+/** Раздел «ТОП»: выгодные лоты относительно рынка (backend/torgi/top.py). */
+export type TopItem = {
+  id: number;
+  estimate: number; // оценка torgi.kz по объявлениям похожих объектов
+  market_m2: number;
+  discount_pct: number;
+  segment: string; // «Алматы · Медеуский район · 2»
+  sample: number;
+  confidence: string;
+};
+export type TopData = {
+  market_updated_at?: string | null;
+  sections: { slug: string; title: string; subtitle: string; items: TopItem[] }[];
+};
+
 export type Meta = {
   total: number;
   updated_at: string;

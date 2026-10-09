@@ -37,12 +37,14 @@ def main() -> None:
     m = sub.add_parser("email", help="письма о новых лотах по подпискам с сайта (Brevo)")
     m.add_argument("--dry-run", action="store_true", help="только показать, кому что ушло бы")
     k = sub.add_parser("market", help="оценка лотов по рынку (krisha.kz) — внутренний отчёт, на сайт не попадает")
-    k.add_argument("action", choices=["collect", "report"])
+    k.add_argument("action", choices=["collect", "report", "index"])
+    k.add_argument("--out", default="market-index.json", help="для index: куда сохранить сводные цены м²")
     k.add_argument("--pages", type=int, default=25, help="страниц выдачи на город и раздел")
     k.add_argument("--city", action="append", help="slug города на Крыше (almaty, astana…); по умолчанию все")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
+    e.add_argument("--market", help="market-index.json — оценка по рынку для раздела «ТОП»")
     c = sub.add_parser("sync-private", help="загрузить закрытые поля лотов в Cloudflare D1")
     c.add_argument("file", help="private.json из `export --gated`")
     s = sub.add_parser("serve", help="запустить API")
@@ -109,6 +111,12 @@ def main() -> None:
         db = market.connect()
         if args.action == "collect":
             logging.info("krisha: %s", market.collect(db, pages=args.pages, cities=args.city))
+        elif args.action == "index":
+            from pathlib import Path
+
+            index = market.MarketIndex.from_db(db)
+            index.to_json(Path(args.out))
+            logging.info("сводные цены: %d сегментов → %s", len(index.stats), args.out)
         else:
             init_db()
             with SessionLocal() as session:
@@ -120,7 +128,8 @@ def main() -> None:
 
         init_db()
         with SessionLocal() as session:
-            logging.info("экспорт: %s", export(session, Path(args.out_dir), gated=args.gated))
+            market_index = Path(args.market) if args.market else None
+            logging.info("экспорт: %s", export(session, Path(args.out_dir), gated=args.gated, market_index=market_index))
     elif args.cmd == "sync-private":
         from pathlib import Path
 

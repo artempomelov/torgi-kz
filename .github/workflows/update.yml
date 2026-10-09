@@ -65,6 +65,8 @@ jobs:
           else
             echo "Базы ещё нет — будет первый полный парсинг"
           fi
+          # сводные рыночные цены м² для раздела «ТОП» (обновляет workflow «Рыночные цены»)
+          gh release download data --pattern market-index.json --dir . 2>/dev/null || echo "Рыночных цен ещё нет — ТОП будет пустым"
 
       - uses: actions/setup-python@v5
         with:
@@ -142,11 +144,11 @@ jobs:
           CF_D1_DATABASE_ID: ${{ steps.cf.outputs.db_id }}
         run: |
           if [ -n "$CF_D1_DATABASE_ID" ]; then
-            uv run python -m torgi.cli export --gated ../web/data
+            uv run python -m torgi.cli export --gated ../web/data --market ../market-index.json
             uv run python -m torgi.cli sync-private ../web/data/private.json
             rm ../web/data/private.json
           else
-            uv run python -m torgi.cli export ../web/data
+            uv run python -m torgi.cli export ../web/data --market ../market-index.json
           fi
       - name: Сборка сайта
         working-directory: web

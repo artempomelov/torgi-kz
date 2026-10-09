@@ -13,6 +13,7 @@
 """
 
 import csv
+import json
 import logging
 import re
 import sqlite3
@@ -177,17 +178,47 @@ class Estimate:
 
 
 class MarketIndex:
-    """Медианы цены м² по сегментам из market.db."""
+    """Рыночная цена м² по сегментам: (Q1, медиана, Q3, число объявлений).
 
-    def __init__(self, db: sqlite3.Connection):
-        self.ppm: dict[tuple, list[float]] = {}
+    Собирается из market.db (from_db) и сохраняется в market-index.json — только сводные цифры,
+    без объявлений. Этот файл и нужен сайту: оценка лотов идёт при каждой выгрузке.
+    """
+
+    def __init__(self, stats: dict[tuple, tuple[float, float, float, int]], updated_at: str | None = None):
+        self.stats = stats
+        self.updated_at = updated_at
+
+    @classmethod
+    def from_db(cls, db: sqlite3.Connection) -> "MarketIndex":
+        values: dict[tuple, list[float]] = {}
         for r in db.execute("SELECT category, city, district, rooms, area, price FROM listings"):
             lo, hi = PPM_RANGE[r["category"]]
             ppm = r["price"] / r["area"]
             if not lo <= ppm <= hi:
                 continue
-            for key in self._keys(r["category"], r["city"], r["district"], r["rooms"], r["area"]):
-                self.ppm.setdefault(key, []).append(ppm)
+            for key in cls._keys(r["category"], r["city"], r["district"], r["rooms"], r["area"]):
+                values.setdefault(key, []).append(ppm)
+        stats = {}
+        for key, v in values.items():
+            if len(v) >= MIN_SAMPLE:
+                q1, med, q3 = statistics.quantiles(v, n=4)
+                stats[key] = (round(q1), round(med), round(q3), len(v))
+        updated = db.execute("SELECT MAX(seen_at) FROM listings").fetchone()[0]
+        return cls(stats, updated)
+
+    def to_json(self, path: Path) -> None:
+        data = {
+            "updated_at": self.updated_at,
+            "source": "krisha.kz, цены предложения",
+            "segments": {"|".join(k or "" for k in key): list(v) for key, v in sorted(self.stats.items(), key=lambda kv: [k or "" for k in kv[0]])},
+        }
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=0), encoding="utf-8")
+
+    @classmethod
+    def from_json(cls, path: Path) -> "MarketIndex":
+        data = json.loads(path.read_text(encoding="utf-8"))
+        stats = {tuple(k or None for k in key.split("|")): tuple(v) for key, v in data["segments"].items()}
+        return cls(stats, data.get("updated_at"))
 
     @staticmethod
     def _keys(category: str, city: str, district: str | None, rooms: int | None, area: float) -> list[tuple]:
@@ -208,11 +239,10 @@ class MarketIndex:
         if category not in PPM_RANGE or not city or not area:
             return None
         for key in self._keys(category, city, district, rooms, area):
-            values = self.ppm.get(key, [])
-            if len(values) >= MIN_SAMPLE:
-                q1, med, q3 = statistics.quantiles(values, n=4)
+            if key in self.stats:
+                q1, med, q3, n = self.stats[key]
                 segment = " · ".join(str(k) for k in key[1:] if k)
-                return Estimate(ppm=med, value=med * area, sample=len(values), segment=segment, spread=(q3 - q1) / med)
+                return Estimate(ppm=med, value=med * area, sample=n, segment=segment, spread=(q3 - q1) / med)
         return None
 
 
@@ -227,7 +257,7 @@ def confidence(est: Estimate, district: str | None) -> str:
 
 def report(session: Session, db: sqlite3.Connection, out: Path | None = None) -> dict[str, int]:
     """Оценка всех активных лотов → CSV (по убыванию скидки к рынку)."""
-    index = MarketIndex(db)
+    index = MarketIndex.from_db(db)
     rows = []
     lots = session.scalars(select(Lot).where(Lot.status == "active")).all()
     for lot in lots:

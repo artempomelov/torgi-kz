@@ -91,9 +91,19 @@ _STREET_BEFORE = re.compile(r"(?:\bул\.?|улиц[аы]|\bим\.?|имени|�
 _ADJ_SUFFIX = re.compile(r"(?:ск|цк)\w*|(?:ая|ий|ой|ое|ую|ые|ого|ому|ых|ым)", re.I)
 
 
+# латинские буквы, похожие на кириллические: в адресах встречается «Acтана» с латинскими A и c
+_HOMOGLYPHS = str.maketrans("AaBCcEeHKkMOoPpTXxy", "АаВСсЕеНКкМОоРрТХху")
+_MIXED_WORD_RE = re.compile(r"\w*[а-яёәіңғүұқөһ]\w*", re.I)
+
+
+def fix_homoglyphs(text: str | None) -> str:
+    """В словах с кириллицей латинские «двойники» заменяет кириллицей: «Acтана» → «Астана»."""
+    return _MIXED_WORD_RE.sub(lambda m: m.group().translate(_HOMOGLYPHS), text or "")
+
+
 def strip_districts(text: str | None) -> str:
     """Текст без районов, округов и улиц — для определения города и области."""
-    return _DISTRICT_RE.sub(" ", text or "")
+    return _DISTRICT_RE.sub(" ", fix_homoglyphs(text))
 
 # Крупные города → регион. Порядок: города республиканского значения первыми.
 CITY_REGION: dict[str, str] = {
@@ -427,7 +437,7 @@ def clean_address(text: str | None) -> str | None:
     """Убирает служебные пометки, казахские дубли и повторы частей адреса."""
     if not text:
         return text
-    s = _OBSOLETE_RE.sub("", text)
+    s = _OBSOLETE_RE.sub("", fix_homoglyphs(text))
     # «г.Шымкент - Енбекшинский район» → «г.Шымкент, Енбекшинский район»
     s = re.sub(r"\s+-\s+", ", ", s)
     parts, seen = [], set()

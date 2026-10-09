@@ -142,6 +142,11 @@ def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
         category = nz.classify_category(pair("тип недвижимости"), pair("функциональное назначение"), title, obj)
         if category == "land":  # «здание … с земельным участком» — не земля
             category = nz.classify_category(title.split(",")[0]) if "здани" in title.lower() else category
+        # «Нежилой фонд» — не квартира и не дом, даже если «тип недвижимости» указан неверно
+        if category in ("apartment", "house") and "не жил" in (pair("фонд") or "").lower():
+            category = nz.classify_category(pair("функциональное назначение"), title)
+            if category in ("apartment", "house", "other"):
+                category = "commercial"
     area = nz.parse_number(pair("общая площадь")) or nz.parse_area_m2(f"{title} {obj}")
     land = nz.parse_number(pair("площадь земельного")) or nz.parse_land_ha(f"{title} {obj}")
 

@@ -13,7 +13,7 @@ import { LotStatsBadge } from "@/components/LotStatsBadge";
 import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
 import { collectionsForLot } from "@/lib/collections";
-import { getAllLotsFull, getLot, getLots } from "@/lib/data";
+import { getAllLotsFull, getLot, getLots, getTopItem } from "@/lib/data";
 import { describeLot } from "@/lib/describe";
 import { compareToMarket, isStale, similarLots } from "@/lib/insights";
 import { checkLink, consultLink } from "@/lib/subscribe";
@@ -82,6 +82,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
   const similar = similarLots(lot, lots);
   const market = compareToMarket(lot, lots);
   const collections = collectionsForLot(lot, lots);
+  const top = lot.status === "active" ? getTopItem(lot.id) : null;
   const stale = lot.status === "active" && !isAuction && isStale(lot.listed_at);
   const pageUrl = `https://torgi.kz/lots/${lot.id}/`;
 
@@ -166,7 +167,13 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
                 с момента публикации
               </div>
             ) : null}
-            {market && (
+            {top && (
+              <Link href={`/top/#${top.slug}`} className="mt-3 block rounded-lg bg-success/10 p-3 text-sm text-success hover:bg-success/15">
+                🔥 <b>#{top.rank} в «{top.section}»</b> — ниже рынка на <b>{top.discount_pct}%</b>. Оценка torgi.kz ≈{" "}
+                {formatPrice(top.estimate)} по {top.sample} объявлениям ({top.segment}).
+              </Link>
+            )}
+            {!top && market && (
               <div className={`mt-3 rounded-lg p-3 text-sm ${market.diffPct <= -10 ? "bg-success/10 text-success" : "bg-background text-muted"}`}>
                 {market.diffPct <= -3
                   ? <>Цена за м² на <b>{-market.diffPct}%</b> ниже</>

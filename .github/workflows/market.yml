@@ -1,0 +1,39 @@
+name: Рыночные цены (krisha.kz)
+
+# Раз в неделю: цены предложения с krisha.kz → сводные цены м² по городам и районам (market-index.json)
+# в релизе «data». Объявления не сохраняются — только медианы. По ним сайт строит раздел «ТОП».
+on:
+  schedule:
+    - cron: "41 19 * * 0"  # воскресенье, 01:41 по Алматы
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      - name: Зависимости backend
+        working-directory: backend
+        run: uv sync --frozen
+      - name: Сбор цен и сводка
+        working-directory: backend
+        run: |
+          uv run python -m torgi.cli market collect
+          uv run python -m torgi.cli market index --out ../market-index.json
+          # меньше 200 сегментов — сбор не удался (например, сайт ограничил запросы): старую сводку не трогаем
+          n=$(python3 -c "import json; print(len(json.load(open('../market-index.json'))['segments']))")
+          echo "сегментов: $n"
+          [ "$n" -ge 200 ] || { echo "::error::Слишком мало данных ($n сегментов)"; exit 1; }
+      - name: Сохранить в релиз «data»
+        run: gh release upload data market-index.json --clobber

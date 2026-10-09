@@ -132,7 +132,7 @@ def _dump(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str), encoding="utf-8")
 
 
-def export(session: Session, out_dir: Path, gated: bool = False) -> dict[str, int]:
+def export(session: Session, out_dir: Path, gated: bool = False, market_index: Path | None = None) -> dict[str, int]:
     out_dir.mkdir(parents=True, exist_ok=True)
     cutoff = utcnow() - timedelta(days=REMOVED_KEEP_DAYS)
     lots = session.scalars(
@@ -161,10 +161,20 @@ def export(session: Session, out_dir: Path, gated: bool = False) -> dict[str, in
         data["duplicate_of"] = dups.get(lot.id)
         full.append(data)
 
+    # раздел «ТОП»: оценка по рынку (сводные цены м² — market-index.json из `market index`)
+    top: dict = {"sections": []}
+    if market_index and market_index.exists():
+        from torgi.market import MarketIndex  # market импортирует export — избегаем цикла
+        from torgi.top import build as build_top
+
+        top = build_top(short, {lot.id: lot for lot in lots}, MarketIndex.from_json(market_index))
+    _dump(out_dir / "top.json", top)
+
     _dump(out_dir / "lots.json", short)
     _dump(out_dir / "lots-full.json", full)
     _dump(out_dir / "meta.json", {**meta(session), "updated_at": utcnow().isoformat(), "gated": gated})
     if gated:
         # кладём рядом с выгрузкой, но не в web/public — файл не публикуется
         _dump(out_dir / "private.json", private)
-    return {"active": len(short), "pages": len(full), "private": len(private)}
+    return {"active": len(short), "pages": len(full), "private": len(private),
+            "top": sum(len(s["items"]) for s in top["sections"])}
