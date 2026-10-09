@@ -99,6 +99,8 @@ def test_admin_replies_through_bot(capsys, monkeypatch):
     from torgi.config import settings
 
     monkeypatch.setattr(settings, "telegram_admins", "boss")
+    monkeypatch.setattr(settings, "telegram_channel", "@torgi_kz_news")
+    monkeypatch.setattr(settings, "telegram_channels", '{"@torgi_kz_almaty": {"region": "Алматы"}}')
     init_db()
     with SessionLocal() as session:
         b = bot.Bot(dry_run=True)
@@ -117,6 +119,7 @@ def test_admin_replies_through_bot(capsys, monkeypatch):
         out = capsys.readouterr().out.replace("\xa0", " ")
         assert "--> 2002\nЗдравствуйте! Вы оставляли заявку на сайте torgi.kz" in out
         assert "Бопай ханым" in out and "216 250" in out
+        assert "Подписывайтесь на" in out and "t.me/torgi_kz_news" in out and "t.me/torgi_kz_almaty" in out
         bot.handle_message(session, b, 3003, "текст", utcnow(), admin, reply_to=999)
         assert "Не нашёл, кому ответить" in capsys.readouterr().out
         session.rollback()

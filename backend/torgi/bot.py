@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from torgi.config import settings
 from torgi.models import BotState, Lot, Subscription, utcnow
 from torgi.normalize import CATEGORIES, ORIGINS, REGIONS
-from torgi.telegram import TelegramBot, _money
+from torgi.telegram import TelegramBot, _money, channels, matches_channel
 
 log = logging.getLogger(__name__)
 
@@ -276,7 +276,7 @@ def lead(session: Session, bot: Bot, chat_id: int, user: dict, parsed: Lead) -> 
                  "и напишем вам здесь в Telegram.")
     else:
         reply = "Заявка на консультацию принята — напишем вам здесь в Telegram."
-    bot.send(chat_id, reply + about + "\n\nМожете сразу написать вопрос следующим сообщением — мы его получим.")
+    bot.send(chat_id, reply + about + "\n\nМожете сразу написать вопрос следующим сообщением — мы его получим." + channel_invite(lot))
 
 
 def subscribe(session: Session, bot: Bot, chat_id: int, code: str, now: datetime, user: dict | None = None) -> None:
@@ -355,7 +355,17 @@ def lot_info(lot: Lot) -> str:
     if lot.url:
         rows.append(f'<a href="{html.escape(lot.url)}">Страница лота у продавца</a>')
     rows.append(f'<a href="{settings.site_url}/lots/{lot.id}/?utm_source=telegram&amp;utm_medium=bot">Карточка на torgi.kz</a>')
-    return ("Здравствуйте! Вы оставляли заявку на сайте torgi.kz. Информация по лоту:\n\n" + "\n".join(rows))
+    return ("Здравствуйте! Вы оставляли заявку на сайте torgi.kz. Информация по лоту:\n\n" + "\n".join(rows)
+            + channel_invite(lot))
+
+
+def channel_invite(lot: Lot | None = None) -> str:
+    """Приглашение в каналы: основной и тот, куда попадает этот лот (Алматы, Астана, бизнес)."""
+    names = [name for name, rule, _ in channels() if rule is None or (lot is not None and matches_channel(lot, rule))]
+    if not names:
+        return ""
+    links = ", ".join(f'<a href="https://t.me/{n.lstrip("@")}">{html.escape(n)}</a>' for n in names[:2])
+    return f"\n\n📢 Подписывайтесь на {links} — новые выгодные лоты каждый день, чтобы не пропустить интересное."
 
 
 def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: int) -> None:
