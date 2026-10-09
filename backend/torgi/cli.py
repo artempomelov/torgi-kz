@@ -36,6 +36,10 @@ def main() -> None:
     b.add_argument("--check", action="store_true", help="проверить токен (getMe), не раскрывая его")
     m = sub.add_parser("email", help="письма о новых лотах по подпискам с сайта (Brevo)")
     m.add_argument("--dry-run", action="store_true", help="только показать, кому что ушло бы")
+    k = sub.add_parser("market", help="оценка лотов по рынку (krisha.kz) — внутренний отчёт, на сайт не попадает")
+    k.add_argument("action", choices=["collect", "report"])
+    k.add_argument("--pages", type=int, default=25, help="страниц выдачи на город и раздел")
+    k.add_argument("--city", action="append", help="slug города на Крыше (almaty, astana…); по умолчанию все")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
@@ -99,6 +103,16 @@ def main() -> None:
         init_db()
         with SessionLocal() as session:
             logging.info("email: %s", run_from_env(session, dry_run=args.dry_run))
+    elif args.cmd == "market":
+        from torgi import market
+
+        db = market.connect()
+        if args.action == "collect":
+            logging.info("krisha: %s", market.collect(db, pages=args.pages, cities=args.city))
+        else:
+            init_db()
+            with SessionLocal() as session:
+                logging.info("оценка: %s → %s", market.report(session, db), market.REPORT_DIR / "valuation.csv")
     elif args.cmd == "export":
         from pathlib import Path
 

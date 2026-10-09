@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 *.db
 *.db-journal
+# внутренние отчёты (оценка по рынку) — не публикуем
+backend/reports/
 .env
 
 # Node
