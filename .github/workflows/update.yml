@@ -55,16 +55,15 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       # Письма о новых лотах (Brevo): секрет BREVO_API_KEY. Работает вместе с Cloudflare — подписки лежат в D1
       BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      # ключ шифрования данных пользователей в релизе «data»; без него — токен бота
+      TORGI_DB_KEY: ${{ secrets.TORGI_DB_KEY }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Скачать базу из релиза «data»
         run: |
-          if gh release download data --pattern torgi.db.gz --dir . 2>/dev/null; then
-            gunzip -f torgi.db.gz && ls -la torgi.db
-          else
-            echo "Базы ещё нет — будет первый полный парсинг"
-          fi
+          # лоты — открыто, данные пользователей (подписки, бот, аккаунты) — в зашифрованном файле
+          bash .github/scripts/db-release.sh load
           # сводные рыночные цены м² для раздела «ТОП» (обновляет workflow «Рыночные цены»)
           gh release download data --pattern market-index.json --dir . 2>/dev/null || echo "Рыночных цен ещё нет — ТОП будет пустым"
 
@@ -97,10 +96,7 @@ jobs:
       - name: Сохранить базу в релиз «data»
         if: steps.parse.outputs.sources != ''
         run: |
-          gzip -kf torgi.db
-          gh release view data >/dev/null 2>&1 || gh release create data --title "База данных" \
-            --notes "SQLite-база лотов, обновляется автоматически workflow «Парсинг и публикация сайта»." --latest=false
-          gh release upload data torgi.db.gz --clobber
+          bash .github/scripts/db-release.sh save
 
       - uses: actions/setup-node@v4
         with:
@@ -185,7 +181,7 @@ jobs:
           fi
           uv run python -m torgi.cli bot --check || echo "::warning::Токен бота не принят Telegram — проверьте секрет TORGI_TELEGRAM_BOT_TOKEN"
           uv run python -m torgi.cli bot || echo "::warning::Бот подписок завершился с ошибкой"
-          gzip -kf ../torgi.db && gh release upload data ../torgi.db.gz --clobber
+          (cd .. && bash .github/scripts/db-release.sh save)
 
       - name: Письма о новых лотах по подпискам с сайта
         if: env.BREVO_API_KEY != '' && steps.cf.outputs.db_id != '' && steps.parse.outputs.sources != ''

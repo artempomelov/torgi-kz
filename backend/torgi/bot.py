@@ -23,7 +23,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from sqlalchemy import select
@@ -41,6 +41,7 @@ ORG = {"a": "arrested", "b": "bank_balance", "z": "bank_pledge", "s": "court",
        "g": "state", "k": "bankrupt", "t": "tax_debtor", "f": "confiscated"}
 CATEGORY_PLURAL = {"apartment": "Квартиры", "house": "Дома", "commercial": "Коммерция", "land": "Земля",
                    "parking": "Паркинги", "industrial": "Промбазы", "other": "Прочее"}
+ALMATY = timezone(timedelta(hours=5))  # весь Казахстан в UTC+5
 PER_SUBSCRIPTION = 5  # лотов в одном уведомлении по поиску, остальные — ссылкой на сайт
 MAX_SUBSCRIPTIONS = 20  # на один чат
 
@@ -177,19 +178,21 @@ class Bot:
     def __init__(self, dry_run: bool):
         self.dry_run = dry_run
         self.api = None if dry_run else TelegramBot(settings.telegram_bot_token)
+        self._fake_id = 0
 
-    def send(self, chat_id: int, text: str) -> bool:
-        """False — пользователь заблокировал бота (подписки чата отключаются)."""
+    def send(self, chat_id: int, text: str) -> int:
+        """Номер отправленного сообщения; 0 — пользователь заблокировал бота (подписки чата отключаются)."""
         if self.dry_run:
             print(f"--> {chat_id}\n{text}\n")
-            return True
+            self._fake_id += 1
+            return self._fake_id
         try:
-            self.api.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
-                          link_preview_options={"is_disabled": True})
-            return True
+            result = self.api.call("sendMessage", chat_id=chat_id, text=text, parse_mode="HTML",
+                                   link_preview_options={"is_disabled": True})
+            return result["message_id"]
         except RuntimeError as exc:
             if "blocked" in str(exc) or "deactivated" in str(exc) or "chat not found" in str(exc):
-                return False
+                return 0
             raise
 
 
@@ -217,15 +220,35 @@ def _who(user: dict) -> str:
     return link + (f" @{html.escape(user['username'])}" if user.get("username") else "")
 
 
-def notify_admins(session: Session, bot: Bot, text: str) -> None:
-    """Заявки — администраторам; пока ни один не написал боту, копятся в очереди."""
+MAX_THREADS = 300  # сколько последних заявок/вопросов помнить для ответа через бота
+REPLY_HINT = "\n\n<i>Ответьте на это сообщение (Reply) — бот перешлёт ответ клиенту. /info в ответе — сводка по лоту.</i>"
+
+
+def _remember_thread(session: Session, admin_chat: int, message_id: int, thread: dict) -> None:
+    threads = json.loads(_state(session, "threads") or "{}")
+    threads[f"{admin_chat}:{message_id}"] = thread
+    _set_state(session, "threads", json.dumps(dict(list(threads.items())[-MAX_THREADS:])))
+
+
+def _send_to_admin(session: Session, bot: Bot, chat: int, text: str, thread: dict | None) -> None:
+    message_id = bot.send(chat, text + (REPLY_HINT if thread else ""))
+    if message_id and thread:
+        _remember_thread(session, chat, message_id, thread)
+
+
+def notify_admins(session: Session, bot: Bot, text: str, thread: dict | None = None) -> None:
+    """Заявки — администраторам; пока ни один не написал боту, копятся в очереди.
+
+    thread — кому отвечать: {"chat": id клиента, "lot": id лота или None}.
+    """
     chats = _admin_chats(session)
     if not chats:
         queue = json.loads(_state(session, "pending_leads") or "[]")
-        _set_state(session, "pending_leads", json.dumps((queue + [text])[-20:], ensure_ascii=False))
+        item = {"text": text, "thread": thread}
+        _set_state(session, "pending_leads", json.dumps((queue + [item])[-20:], ensure_ascii=False))
         return
     for chat in chats:
-        bot.send(chat, text)
+        _send_to_admin(session, bot, chat, text, thread)
 
 
 def register_admin(session: Session, bot: Bot, chat_id: int, user: dict) -> bool:
@@ -236,8 +259,9 @@ def register_admin(session: Session, bot: Bot, chat_id: int, user: dict) -> bool
     if chat_id not in chats:
         _set_state(session, "admin_chats", json.dumps(chats + [chat_id]))
         bot.send(chat_id, "Вы — администратор torgi.kz: сюда будут приходить заявки и вопросы пользователей.")
-        for text in json.loads(_state(session, "pending_leads") or "[]"):
-            bot.send(chat_id, text)
+        for item in json.loads(_state(session, "pending_leads") or "[]"):
+            item = item if isinstance(item, dict) else {"text": item, "thread": None}
+            _send_to_admin(session, bot, chat_id, item["text"], item["thread"])
         _set_state(session, "pending_leads", "[]")
     return True
 
@@ -245,7 +269,8 @@ def register_admin(session: Session, bot: Bot, chat_id: int, user: dict) -> bool
 def lead(session: Session, bot: Bot, chat_id: int, user: dict, parsed: Lead) -> None:
     lot = session.get(Lot, parsed.lot_id) if parsed.lot_id else None
     about = f"\n{_lot_line(lot)}" if lot else ""
-    notify_admins(session, bot, f"📩 Заявка: <b>{LEAD_TITLES[parsed.kind]}</b> от {_who(user)}{about}")
+    notify_admins(session, bot, f"📩 Заявка: <b>{LEAD_TITLES[parsed.kind]}</b> от {_who(user)}{about}",
+                  {"chat": chat_id, "lot": parsed.lot_id})
     if parsed.kind == "check":
         reply = ("Заявка на бесплатную проверку принята. Проверим документы, обременения и риски по объекту "
                  "и напишем вам здесь в Telegram.")
@@ -302,11 +327,63 @@ def _describe(sub: Subscription, session: Session) -> str:
     return f"цена лота: {CATEGORIES.get(lot.category, 'объект')}, {lot.city or ''}{target}" if lot else "лот"
 
 
+def _last_lot(session: Session, client_chat: int) -> int | None:
+    """Лот из последней заявки клиента — чтобы /info работал и в ответ на его вопрос."""
+    for thread in reversed(list(json.loads(_state(session, "threads") or "{}").values())):
+        if thread.get("chat") == client_chat and thread.get("lot"):
+            return thread["lot"]
+    return None
+
+
+def lot_info(lot: Lot) -> str:
+    """Сводка по лоту для клиента (по команде администратора /info)."""
+    rows = [f"<b>{html.escape(CATEGORIES.get(lot.category, 'Объект'))}</b>"
+            + (f", {lot.area_m2:g} м²".replace(".", ",") if lot.area_m2 else "")]
+    if lot.address:
+        rows.append(f"Адрес: {html.escape(lot.address)}")
+    if lot.price:
+        label = "Стартовая цена" if lot.sale_type in ("auction", "auction_down") else "Цена"
+        rows.append(f"{label}: <b>{_money(lot.price)}</b>")
+    if lot.min_price:
+        rows.append(f"Минимальная цена на понижении: {_money(lot.min_price)}")
+    if lot.deposit:
+        rows.append(f"Гарантийный взнос (задаток): {_money(lot.deposit)}")
+    for label, value in (("Приём заявок до", lot.applications_deadline), ("Начало торгов", lot.auction_start)):
+        if value:
+            rows.append(f"{label}: {value.astimezone(ALMATY):%d.%m.%Y %H:%M}")
+    rows.append(f"Вид продажи: {html.escape(ORIGINS.get(lot.origin, lot.origin))}")
+    if lot.url:
+        rows.append(f'<a href="{html.escape(lot.url)}">Страница лота у продавца</a>')
+    rows.append(f'<a href="{settings.site_url}/lots/{lot.id}/?utm_source=telegram&amp;utm_medium=bot">Карточка на torgi.kz</a>')
+    return ("Здравствуйте! Вы оставляли заявку на сайте torgi.kz. Информация по лоту:\n\n" + "\n".join(rows))
+
+
+def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: int) -> None:
+    """Администратор ответил (Reply) на заявку или вопрос — пересылаем клиенту от имени бота."""
+    thread = json.loads(_state(session, "threads") or "{}").get(f"{chat_id}:{reply_to}")
+    if not thread:
+        bot.send(chat_id, "Не нашёл, кому ответить: нажмите «Ответить» (Reply) на сообщении с заявкой или вопросом.")
+        return
+    if text.split()[0] in ("/info", "/lot"):
+        lot = session.get(Lot, thread["lot"]) if thread.get("lot") else None
+        if lot is None:
+            bot.send(chat_id, "К этой заявке не привязан лот — напишите ответ текстом.")
+            return
+        message = lot_info(lot)
+    else:
+        message = html.escape(text)
+    delivered = bot.send(thread["chat"], message)
+    bot.send(chat_id, "✅ Отправлено клиенту." if delivered else "⚠️ Не доставлено: клиент заблокировал бота.")
+
+
 def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: datetime,
-                   user: dict | None = None) -> None:
+                   user: dict | None = None, reply_to: int | None = None) -> None:
     text = text.strip()
     user = user or {"id": chat_id}
     is_admin = register_admin(session, bot, chat_id, user)
+    if is_admin and reply_to:
+        admin_reply(session, bot, chat_id, text, reply_to)
+        return
     subs = session.scalars(
         select(Subscription).where(Subscription.chat_id == chat_id, Subscription.active).order_by(Subscription.id)
     ).all()
@@ -335,7 +412,8 @@ def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: dat
         bot.send(chat_id, HELP.format(site=settings.site_url))
     elif not is_admin:
         # вопрос пользователя — администраторам
-        notify_admins(session, bot, f"💬 Вопрос от {_who(user)}:\n{html.escape(text[:1500])}")
+        notify_admins(session, bot, f"💬 Вопрос от {_who(user)}:\n{html.escape(text[:1500])}",
+                      {"chat": chat_id, "lot": _last_lot(session, chat_id)})
         bot.send(chat_id, "Спасибо, вопрос передан — ответим здесь в Telegram.")
 
 
@@ -350,7 +428,8 @@ def process_updates(session: Session, bot: Bot, now: datetime) -> int:
         chat, text = msg.get("chat") or {}, msg.get("text")
         if chat.get("type") == "private" and text:
             try:
-                handle_message(session, bot, chat["id"], text, now, msg.get("from") or {"id": chat["id"]})
+                handle_message(session, bot, chat["id"], text, now, msg.get("from") or {"id": chat["id"]},
+                               (msg.get("reply_to_message") or {}).get("message_id"))
             except Exception:  # одно сообщение не должно ронять всю обработку
                 log.exception("бот: ошибка обработки сообщения от %s", chat.get("id"))
         _set_state(session, "updates_offset", str(offset))

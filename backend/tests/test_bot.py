@@ -93,3 +93,30 @@ def test_leads_and_target_price(capsys, monkeypatch):
         bot.notify(session, b, utcnow())
         assert "🎯 Цена опустилась до" in capsys.readouterr().out.replace(" ", " ")
         session.rollback()
+
+
+def test_admin_replies_through_bot(capsys, monkeypatch):
+    from torgi.config import settings
+
+    monkeypatch.setattr(settings, "telegram_admins", "boss")
+    init_db()
+    with SessionLocal() as session:
+        b = bot.Bot(dry_run=True)
+        lot = _lot(session, "reply1", price=5_405, address="г. Актобе, ул. Бопай ханым", deposit=216_250)
+        admin = {"id": 3003, "username": "boss"}
+        bot.handle_message(session, b, 3003, "/start", utcnow(), admin)
+        capsys.readouterr()
+        bot.handle_message(session, b, 2002, f"/start check-{lot.id}", utcnow(), {"id": 2002, "username": "ken"})
+        out = capsys.readouterr().out
+        # сообщения в dry-run нумеруются: 1 — приветствие админу, 2 — заявка админу, 3 — ответ клиенту
+        assert "Ответьте на это сообщение" in out
+        bot.handle_message(session, b, 3003, "Добрый вечер! Посмотрели лот.", utcnow(), admin, reply_to=2)
+        out = capsys.readouterr().out
+        assert "--> 2002\nДобрый вечер! Посмотрели лот." in out and "✅ Отправлено" in out
+        bot.handle_message(session, b, 3003, "/info", utcnow(), admin, reply_to=2)
+        out = capsys.readouterr().out.replace("\xa0", " ")
+        assert "--> 2002\nЗдравствуйте! Вы оставляли заявку на сайте torgi.kz" in out
+        assert "Бопай ханым" in out and "216 250" in out
+        bot.handle_message(session, b, 3003, "текст", utcnow(), admin, reply_to=999)
+        assert "Не нашёл, кому ответить" in capsys.readouterr().out
+        session.rollback()
