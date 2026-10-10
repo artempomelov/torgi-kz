@@ -66,7 +66,7 @@ def build(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> dict:
     candidates = []
     for x in items:
         lot = lots.get(x["id"])
-        if lot is None or not x.get("price") or x.get("flags") or nz.deal_flags(lot.title):
+        if lot is None or not x.get("price") or x.get("flags") or nz.deal_flags(lot.title, lot.description):
             continue
         lo, hi = AREA_RANGE.get(x["category"], (0, 0))
         if not x.get("area_m2") or not lo <= x["area_m2"] <= hi:

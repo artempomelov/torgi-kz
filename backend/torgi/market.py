@@ -264,7 +264,7 @@ def report(session: Session, db: sqlite3.Connection, out: Path | None = None) ->
         city, _ = nz.reconcile_place(lot.city, lot.region, lot.address, lot.title)
         district = nz.canonical_district(address_district(nz.clean_address(lot.address or "")), city)
         est = index.estimate(lot.category, city, district, lot.rooms, lot.area_m2)
-        if not est or not lot.price or lot.flags or nz.deal_flags(lot.title):
+        if not est or not lot.price or lot.flags or nz.deal_flags(lot.title, lot.description):
             continue
         discount = (1 - lot.price / est.value) * 100
         rows.append({

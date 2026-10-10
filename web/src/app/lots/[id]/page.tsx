@@ -191,7 +191,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             )}
             {lot.flags.includes("rent") ? (
               <div className="mt-3 rounded-lg bg-accent/15 p-3 text-sm text-accent-ink">
-                <b>Это аренда, а не продажа:</b> на торгах разыгрывается право имущественного найма, цена — плата за аренду.
+                <b>Это аренда, а не покупка в собственность:</b> на торгах разыгрывается право аренды, цена — за это право.
               </div>
             ) : lot.flags.includes("share") ? (
               <div className="mt-3 rounded-lg bg-accent/15 p-3 text-sm text-accent-ink">

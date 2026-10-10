@@ -481,11 +481,18 @@ _RENT_RE = re.compile(r"предоставлени\w*\s+(?:права\s+на\s+|
 _SHARE_RE = re.compile(r"(?:\d+\s*/\s*\d+|[½¼⅓¾])\s*дол|(?<!числе\s)\bдол[яи]\b", re.I)
 
 
-def deal_flags(title: str | None) -> list[str]:
-    """Что продаётся на самом деле: rent — аренда (цена — плата за наём), share — доля (цена — за долю)."""
+# право аренды земли: «Право временного возмездного землепользования (аренды)», «Срок аренды, мес.: 36» (E-Qazyna)
+_LAND_LEASE_TITLE_RE = re.compile(r"^\W*(?:недвижимость\W*)?прав\w*\s+(?:на\s+)?временного\s+(?:\(?\w+[,)]?\s+){0,3}землепользован", re.I)
+_LEASE_TERM_RE = re.compile(r"срок\s+аренды,?\s*мес", re.I)  # поле карточки E-Qazyna
+
+
+def deal_flags(title: str | None, description: str | None = None) -> list[str]:
+    """Что продаётся на самом деле: rent — аренда (имущественный наём или право аренды земли),
+    share — доля (цена — за долю)."""
     head = (title or "")[:80]
     flags = []
-    if _RENT_RE.search(title or ""):
+    if (_RENT_RE.search(title or "") or _LAND_LEASE_TITLE_RE.search(title or "")
+            or _LEASE_TERM_RE.search(description or "")):
         flags.append("rent")
     if _SHARE_RE.search(head):
         flags.append("share")
