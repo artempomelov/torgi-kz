@@ -26,3 +26,6 @@ Thumbs.db
 web/data/
 web/public/data/
 web/public/CNAME
+
+# материалы для соцсетей (фото с сайтов продавцов)
+marketing/
