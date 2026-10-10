@@ -123,3 +123,25 @@ def test_admin_replies_through_bot(capsys, monkeypatch):
         bot.handle_message(session, b, 3003, "текст", utcnow(), admin, reply_to=999)
         assert "Не нашёл, кому ответить" in capsys.readouterr().out
         session.rollback()
+
+
+def test_admin_reply_to_old_lead(capsys, monkeypatch):
+    """Старая заявка (до сохранения переписок): клиент и лот — из ссылок в самом сообщении."""
+    from torgi.config import settings
+
+    monkeypatch.setattr(settings, "telegram_admins", "boss")
+    init_db()
+    with SessionLocal() as session:
+        b = bot.Bot(dry_run=True)
+        lot = _lot(session, "old1", price=5_405)
+        admin = {"id": 3003, "username": "boss"}
+        bot.handle_message(session, b, 3003, "/start", utcnow(), admin)
+        capsys.readouterr()
+        old = {"message_id": 777, "text": "📩 Заявка: бесплатная проверка лота от Ken @kendevelopment",
+               "entities": [{"type": "text_link", "offset": 0, "length": 3, "url": "tg://user?id=5551234"},
+                            {"type": "text_link", "offset": 5, "length": 5,
+                             "url": f"https://torgi.kz/lots/{lot.id}/?utm_source=telegram&utm_medium=bot"}]}
+        bot.handle_message(session, b, 3003, "/info", utcnow(), admin, reply_to=old)
+        out = capsys.readouterr().out
+        assert "--> 5551234\nЗдравствуйте! Вы оставляли заявку" in out and "✅ Отправлено" in out
+        session.rollback()

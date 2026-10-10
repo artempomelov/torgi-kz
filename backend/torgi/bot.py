@@ -339,8 +339,12 @@ def lot_info(lot: Lot) -> str:
     """Сводка по лоту для клиента (по команде администратора /info)."""
     rows = [f"<b>{html.escape(CATEGORIES.get(lot.category, 'Объект'))}</b>"
             + (f", {lot.area_m2:g} м²".replace(".", ",") if lot.area_m2 else "")]
+    if lot.land_area_ha:
+        rows.append(f"Участок: {lot.land_area_ha:g} га ({lot.land_area_ha * 10_000:g} м²)".replace(".", ","))
     if lot.address:
         rows.append(f"Адрес: {html.escape(lot.address)}")
+    if m := _LEASE_RE.search(lot.description or ""):
+        rows.append(f"Предмет торгов: <b>право аренды на {m.group(1)} мес.</b>, а не покупка в собственность")
     if lot.price:
         label = "Стартовая цена" if lot.sale_type in ("auction", "auction_down") else "Цена"
         rows.append(f"{label}: <b>{_money(lot.price)}</b>")
@@ -368,9 +372,31 @@ def channel_invite(lot: Lot | None = None) -> str:
     return f"\n\n📢 Подписывайтесь на {links} — новые выгодные лоты каждый день, чтобы не пропустить интересное."
 
 
-def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: int) -> None:
+_LEASE_RE = re.compile(r"Срок аренды,?\s*мес\.?:\s*(\d+)", re.I)
+_USER_LINK_RE = re.compile(r"^tg://user\?id=(\d+)$")
+_LOT_LINK_RE = re.compile(r"/lots/(\d+)/")
+
+
+def thread_from_message(message: dict) -> dict | None:
+    """Кому отвечать — из самого сообщения с заявкой: имя клиента в нём — ссылка tg://user?id=…,
+    лот — ссылка на torgi.kz/lots/N/. Работает и для старых заявок, которых нет в сохранённых."""
+    chat, lot = None, None
+    for entity in message.get("entities") or []:
+        url = entity.get("url") or ""
+        if chat is None and (m := _USER_LINK_RE.match(url)):
+            chat = int(m.group(1))
+        elif entity.get("type") == "text_mention" and chat is None:
+            chat = (entity.get("user") or {}).get("id")
+        if lot is None and (m := _LOT_LINK_RE.search(url)):
+            lot = int(m.group(1))
+    return {"chat": chat, "lot": lot} if chat else None
+
+
+def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: dict | int) -> None:
     """Администратор ответил (Reply) на заявку или вопрос — пересылаем клиенту от имени бота."""
-    thread = json.loads(_state(session, "threads") or "{}").get(f"{chat_id}:{reply_to}")
+    message = reply_to if isinstance(reply_to, dict) else {"message_id": reply_to}
+    thread = json.loads(_state(session, "threads") or "{}").get(f"{chat_id}:{message.get('message_id')}")
+    thread = thread or thread_from_message(message)
     if not thread:
         bot.send(chat_id, "Не нашёл, кому ответить: нажмите «Ответить» (Reply) на сообщении с заявкой или вопросом.")
         return
@@ -387,7 +413,7 @@ def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: i
 
 
 def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: datetime,
-                   user: dict | None = None, reply_to: int | None = None) -> None:
+                   user: dict | None = None, reply_to: dict | int | None = None) -> None:
     text = text.strip()
     user = user or {"id": chat_id}
     is_admin = register_admin(session, bot, chat_id, user)
@@ -439,7 +465,7 @@ def process_updates(session: Session, bot: Bot, now: datetime) -> int:
         if chat.get("type") == "private" and text:
             try:
                 handle_message(session, bot, chat["id"], text, now, msg.get("from") or {"id": chat["id"]},
-                               (msg.get("reply_to_message") or {}).get("message_id"))
+                               msg.get("reply_to_message"))
             except Exception:  # одно сообщение не должно ронять всю обработку
                 log.exception("бот: ошибка обработки сообщения от %s", chat.get("id"))
         _set_state(session, "updates_offset", str(offset))
