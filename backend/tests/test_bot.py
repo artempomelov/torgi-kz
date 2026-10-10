@@ -145,3 +145,10 @@ def test_admin_reply_to_old_lead(capsys, monkeypatch):
         out = capsys.readouterr().out
         assert "--> 5551234\nЗдравствуйте! Вы оставляли заявку" in out and "✅ Отправлено" in out
         session.rollback()
+
+
+def test_thread_from_plain_client_id():
+    # ссылку на профиль Telegram убрал (приватность клиента) — ID берём из текста
+    msg = {"text": "📩 Заявка: бесплатная проверка лота от Ken @kendevelopment · ID 5551234\n• Участок",
+           "entities": [{"type": "text_link", "offset": 0, "length": 5, "url": "https://torgi.kz/lots/3763/?utm_source=telegram"}]}
+    assert bot.thread_from_message(msg) == {"chat": 5551234, "lot": 3763}

@@ -217,7 +217,8 @@ def _admin_chats(session: Session) -> list[int]:
 def _who(user: dict) -> str:
     name = html.escape(" ".join(p for p in (user.get("first_name"), user.get("last_name")) if p) or "Пользователь")
     link = f'<a href="tg://user?id={user["id"]}">{name}</a>'
-    return link + (f" @{html.escape(user['username'])}" if user.get("username") else "")
+    # ID — и текстом: если клиент запретил ссылки на профиль, Telegram убирает ссылку вместе с ID
+    return link + (f" @{html.escape(user['username'])}" if user.get("username") else "") + f" · ID {user['id']}"
 
 
 MAX_THREADS = 300  # сколько последних заявок/вопросов помнить для ответа через бота
@@ -373,6 +374,7 @@ def channel_invite(lot: Lot | None = None) -> str:
 
 
 _LEASE_RE = re.compile(r"Срок аренды,?\s*мес\.?:\s*(\d+)", re.I)
+_CLIENT_ID_RE = re.compile(r"· ID (\d+)")
 _USER_LINK_RE = re.compile(r"^tg://user\?id=(\d+)$")
 _LOT_LINK_RE = re.compile(r"/lots/(\d+)/")
 
@@ -389,6 +391,8 @@ def thread_from_message(message: dict) -> dict | None:
             chat = (entity.get("user") or {}).get("id")
         if lot is None and (m := _LOT_LINK_RE.search(url)):
             lot = int(m.group(1))
+    if chat is None and (m := _CLIENT_ID_RE.search(message.get("text") or "")):
+        chat = int(m.group(1))
     return {"chat": chat, "lot": lot} if chat else None
 
 
