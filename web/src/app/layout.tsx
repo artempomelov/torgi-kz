@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AccountButton } from "@/components/AccountButton";
 import { FavoritesLink } from "@/components/FavoritesLink";
 import { LogoMark } from "@/components/LogoMark";
-import { YandexMetrika } from "@/components/YandexMetrika";
+import { GoogleAnalytics, Goals, YandexMetrika } from "@/components/YandexMetrika";
 import { FEATURES } from "@/lib/features";
 import "./globals.css";
 
@@ -68,6 +68,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
 
         <main className="flex-1">{children}</main>
         <YandexMetrika />
+        <GoogleAnalytics />
+        {(FEATURES.yandexMetrikaId || FEATURES.googleAnalyticsId) && <Goals />}
 
         <footer className="mt-16 border-t border-border bg-surface">
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-8 text-sm text-muted">

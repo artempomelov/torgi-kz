@@ -17,4 +17,5 @@ export const FEATURES = {
   // письма о новых лотах по сохранённому поиску (Brevo через API) — включается вместе с ключом BREVO_API_KEY
   email: process.env.NEXT_PUBLIC_EMAIL === "1" && !!process.env.NEXT_PUBLIC_API_URL,
   yandexMetrikaId: process.env.NEXT_PUBLIC_YM_ID || null,
+  googleAnalyticsId: process.env.NEXT_PUBLIC_GA_ID || null, // G-…: второй счётчик — на случай сбоев Метрики
 } as const;

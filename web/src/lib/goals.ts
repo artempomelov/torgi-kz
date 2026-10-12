@@ -24,8 +24,11 @@ export const GOALS = {
 export type Goal = keyof typeof GOALS;
 
 export function reachGoal(goal: Goal, params?: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
   const id = Number(FEATURES.yandexMetrikaId);
-  if (id && typeof window !== "undefined") window.ym?.(id, "reachGoal", goal, params);
+  if (id) window.ym?.(id, "reachGoal", goal, params);
+  // в Google Analytics — событие с тем же именем (отмечается ключевым событием в интерфейсе GA)
+  if (FEATURES.googleAnalyticsId) window.gtag?.("event", goal, params ?? {});
 }
 
 const BOT = /t\.me\/\w+_bot\?start=([\w-]+)/;

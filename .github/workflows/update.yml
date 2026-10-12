@@ -152,6 +152,7 @@ jobs:
           # Переменные репозитория (Settings → Secrets and variables → Actions → Variables):
           # номер счётчика Яндекс.Метрики и ссылка на Telegram-канал — пустые значения просто отключают блоки
           NEXT_PUBLIC_YM_ID: ${{ vars.NEXT_PUBLIC_YM_ID }}
+          NEXT_PUBLIC_GA_ID: ${{ vars.NEXT_PUBLIC_GA_ID }}
           NEXT_PUBLIC_TELEGRAM_URL: ${{ vars.NEXT_PUBLIC_TELEGRAM_URL }}
           NEXT_PUBLIC_TELEGRAM_BOT: ${{ vars.NEXT_PUBLIC_TELEGRAM_BOT }}
           # закрытый режим включается, только когда worker на Cloudflare опубликован

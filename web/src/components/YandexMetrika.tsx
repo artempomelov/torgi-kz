@@ -13,6 +13,8 @@ import { type Goal, goalFromHref, reachGoal } from "@/lib/goals";
 declare global {
   interface Window {
     ym?: (id: number, method: string, ...args: unknown[]) => void;
+    gtag?: (...args: unknown[]) => void;
+    dataLayer?: unknown[];
   }
 }
 
@@ -33,8 +35,9 @@ function PageViews({ id }: { id: number }) {
   return null;
 }
 
-/** Цели по кликам: ссылки распознаются по адресу, прочие кнопки — по data-goal; отправка формы каталога. */
-function Goals() {
+/** Цели по кликам: ссылки распознаются по адресу, прочие кнопки — по data-goal; отправка формы каталога.
+ *  Одни на оба счётчика (reachGoal шлёт и в Метрику, и в Google Analytics). */
+export function Goals() {
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       const el = (e.target as Element | null)?.closest<HTMLElement>("[data-goal], a[href]");
@@ -53,6 +56,24 @@ function Goals() {
     };
   }, []);
   return null;
+}
+
+/** Google Analytics 4: просмотры страниц при переходах внутри сайта GA считает сам (история браузера). */
+export function GoogleAnalytics() {
+  const id = FEATURES.googleAnalyticsId;
+  if (!id) return null;
+  return (
+    <>
+      <Script src={`https://www.googletagmanager.com/gtag/js?id=${id}`} strategy="afterInteractive" />
+      <Script id="google-analytics" strategy="afterInteractive">{`
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', '${id}');
+      `}</Script>
+    </>
+  );
 }
 
 export function YandexMetrika() {
@@ -75,7 +96,6 @@ export function YandexMetrika() {
       <Suspense>
         <PageViews id={id} />
       </Suspense>
-      <Goals />
     </>
   );
 }
