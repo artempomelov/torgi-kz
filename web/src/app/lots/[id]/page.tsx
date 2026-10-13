@@ -16,7 +16,7 @@ import { collectionsForLot } from "@/lib/collections";
 import { getAllLotsFull, getLot, getLots, getTopItem } from "@/lib/data";
 import { describeLot } from "@/lib/describe";
 import { compareToMarket, isStale, similarLots } from "@/lib/insights";
-import { checkLink, consultLink } from "@/lib/subscribe";
+import { consultLink } from "@/lib/subscribe";
 import {
   CATEGORY_LABELS,
   ORIGIN_LABELS,
@@ -223,15 +223,11 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
 
           <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
             <div className="text-sm font-semibold">Нужна помощь с покупкой?</div>
-            <a href={checkLink(lot.id)} target="_blank" rel="noopener noreferrer"
-               className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
-              Бесплатная проверка лота
-            </a>
-            <p className="text-xs text-muted">Проверим документы, обременения и риски — ответим в Telegram.</p>
             <a href={consultLink(lot.id)} target="_blank" rel="noopener noreferrer"
-               className="block rounded-lg border border-border px-4 py-2.5 text-center text-sm font-medium hover:border-brand-ink/40">
-              Консультация в Telegram
+               className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
+              Бесплатная консультация по лоту
             </a>
+            <p className="text-xs text-muted">Ответим на вопросы и подскажем, что проверить перед покупкой, — в Telegram.</p>
           </div>
 
           {lot.status === "active" && (

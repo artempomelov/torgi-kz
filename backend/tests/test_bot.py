@@ -74,10 +74,10 @@ def test_leads_and_target_price(capsys, monkeypatch):
         # заявка до того, как админ написал боту, — ждёт в очереди
         bot.handle_message(session, b, 2002, f"/start check-{lot.id}", utcnow(), user)
         out = capsys.readouterr().out
-        assert "--> 2002" in out and "бесплатную проверку" in out
+        assert "--> 2002" in out and "бесплатную консультацию" in out
         bot.handle_message(session, b, 3003, "/start", utcnow(), {"id": 3003, "username": "Boss"})
         out = capsys.readouterr().out
-        assert "--> 3003" in out and "📩 Заявка: <b>бесплатная проверка лота</b>" in out and "@buyer" in out
+        assert "--> 3003" in out and "📩 Заявка: <b>консультация по лоту</b>" in out and "@buyer" in out
         # вопрос пользователя — сразу админу
         bot.handle_message(session, b, 2002, "Есть ли обременения?", utcnow(), user)
         out = capsys.readouterr().out

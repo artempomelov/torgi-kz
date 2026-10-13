@@ -12,7 +12,7 @@
     lot-123       слежение за лотом 123 (любое изменение цены)
     lot-123-t5000 сообщить, когда цена опустится до 5 000 тыс. ₸
     c-123         заявка на консультацию по лоту 123 («c» — без лота)
-    check-123     бесплатная проверка лота 123
+    check-123     консультация по лоту 123 (старые ссылки «бесплатная проверка»)
 
 Заявки и вопросы пересылаются администраторам (TORGI_TELEGRAM_ADMINS — их username через запятую);
 администратор должен один раз написать боту /start, чтобы бот узнал его чат.
@@ -207,7 +207,7 @@ def _set_state(session: Session, key: str, value: str) -> None:
     session.add(row)
 
 
-LEAD_TITLES = {"consult": "консультация", "check": "бесплатная проверка лота"}
+LEAD_TITLES = {"consult": "консультация по лоту", "check": "консультация по лоту"}
 
 
 def _admin_chats(session: Session) -> list[int]:
@@ -272,11 +272,8 @@ def lead(session: Session, bot: Bot, chat_id: int, user: dict, parsed: Lead) -> 
     about = f"\n{_lot_line(lot)}" if lot else ""
     notify_admins(session, bot, f"📩 Заявка: <b>{LEAD_TITLES[parsed.kind]}</b> от {_who(user)}{about}",
                   {"chat": chat_id, "lot": parsed.lot_id})
-    if parsed.kind == "check":
-        reply = ("Заявка на бесплатную проверку принята. Проверим документы, обременения и риски по объекту "
-                 "и напишем вам здесь в Telegram.")
-    else:
-        reply = "Заявка на консультацию принята — напишем вам здесь в Telegram."
+    reply = ("Заявка на бесплатную консультацию принята — ответим на вопросы по объекту и подскажем, "
+             "что проверить перед покупкой. Напишем вам здесь в Telegram.")
     bot.send(chat_id, reply + about + "\n\nМожете сразу написать вопрос следующим сообщением — мы его получим." + channel_invite(lot))
 
 
