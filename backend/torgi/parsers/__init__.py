@@ -7,6 +7,7 @@ from torgi.parsers.eurasian import EurasianParser
 from torgi.parsers.forte import ForteParser
 from torgi.parsers.freedom import FreedomParser
 from torgi.parsers.halyk import HalykParser
+from torgi.parsers.krisha import KrishaParser
 from torgi.parsers.nurbank import NurbankParser
 from torgi.parsers.rbk import RbkParser
 from torgi.parsers.sauda import SaudaParser
@@ -14,5 +15,5 @@ from torgi.parsers.sauda import SaudaParser
 PARSERS: dict[str, type[Parser]] = {
     p.name: p
     for p in (AdiletParser, SaudaParser, HalykParser, AlatauParser, ForteParser, BccParser, FreedomParser,
-              EurasianParser, NurbankParser, BerekeParser, RbkParser)
+              EurasianParser, NurbankParser, BerekeParser, RbkParser, KrishaParser)
 }

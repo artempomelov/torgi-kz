@@ -48,6 +48,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   nurbank: "Нурбанк",
   bereke: "Bereke Bank",
   rbk: "Bank RBK",
+  krisha: "Крыша (krisha.kz)",
 };
 
 const TZ = "Asia/Almaty";

@@ -265,3 +265,20 @@ def test_sauda_min_price():
     card = {"id": "339335707459000000", "title": "Паркинг", "price": 6_648_063, "region": "Астана", "start": None}
     lot = sauda.parse_detail(text("sauda_detail_down.html"), card, "RealEstate")
     assert (lot.price, lot.min_price, lot.deposit) == (6_648_063, 1_994_419, 332_404)
+
+
+def test_krisha_curated_ad():
+    from torgi.parsers.krisha import parse_ad
+
+    html = """<html><script>window.data = {"advert": {"id": "1", "status": "live", "title": "Участок · 19.5 соток",
+    "categoryAlias": "uchastkov", "price": "102000000", "square": null, "rooms": null, "addressTitle": "ул. Абая 1",
+    "map": {"lat": 54.87, "lon": 69.14}, "photos": [{"src": "https://krisha-photos.kcdn.online/1-full.jpg"}]}};
+</script>
+<div class="offer__info-item"><div class="offer__info-title">Город</div>
+<div class="offer__location offer__advert-short-info"><span>Петропавловск</span><a class="btm-map">показать на карте</a></div></div>
+<div class="js-description a-text">Торги ЧСИ (Дисконт до 25%). Участок под застройку.</div></html>"""
+    lot = parse_ad(html, "1015060721", {"origin": "arrested", "sale_type": "auction"})
+    assert lot.category == "land" and lot.land_area_ha == 0.195 and lot.area_m2 is None
+    assert lot.city == "Петропавловск" and lot.region == "Северо-Казахстанская область"
+    assert lot.price == 102_000_000 and lot.url == "https://krisha.kz/a/show/1015060721"
+    assert lot.origin == "arrested" and lot.images and "Торги ЧСИ" in lot.description

@@ -30,7 +30,7 @@ EMOJI = {"apartment": "🏢", "house": "🏡", "commercial": "🏬", "land": "�
          "other": "📦"}
 SOURCE_TITLES = {"adilet": "ЕЭТП Минюста", "sauda": "E-Qazyna", "halyk": "Halyk Bank", "alatau": "Alatau City Bank",
                  "forte": "ForteBank", "bcc": "Bank CenterCredit", "freedom": "Freedom Bank",
-                 "eurasian": "Евразийский банк", "nurbank": "Нурбанк", "bereke": "Bereke Bank", "rbk": "Bank RBK"}
+                 "eurasian": "Евразийский банк", "nurbank": "Нурбанк", "bereke": "Bereke Bank", "rbk": "Bank RBK", "krisha": "Крыша"}
 ORIGIN_TAGS = {"arrested": "арест", "bank_balance": "банк", "bank_pledge": "залог", "court": "суд",
                "state": "госимущество", "bankrupt": "банкрот", "tax_debtor": "налоговый_должник",
                "confiscated": "конфискат"}

@@ -58,7 +58,7 @@ def headline(lot: dict) -> str:
 
 
 # Если один объект продают на двух площадках, в каталоге оставляем один — источник с лучшими данными
-SOURCE_PRIORITY = ["adilet", "sauda", "halyk", "forte", "bcc", "alatau", "freedom", "eurasian", "nurbank", "bereke", "rbk"]
+SOURCE_PRIORITY = ["adilet", "sauda", "halyk", "forte", "bcc", "alatau", "freedom", "eurasian", "nurbank", "bereke", "rbk", "krisha"]
 
 
 def find_duplicates(lots: list[Lot]) -> dict[int, int]:
