@@ -58,6 +58,7 @@ export type LotFull = Lot &
     published_at: string | null;
     last_seen_at: string;
     duplicate_of?: number | null; // тот же объект у другого источника — основной лот
+    source_lot?: string | null; // номер лота у продавца (E-Qazyna)
   };
 
 /** Раздел «ТОП»: выгодные лоты относительно рынка (backend/torgi/top.py). */

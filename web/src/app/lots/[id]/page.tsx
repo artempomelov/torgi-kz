@@ -40,10 +40,16 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: PageProps<"/lots/[id]">): Promise<Metadata> {
   const lot = getLot((await params).id);
   if (!lot) return { title: "Лот не найден" };
-  // Только публичные поля — метаданные одинаковы в бесплатном и платном режиме
+  // Только публичные поля — метаданные одинаковы в бесплатном и платном режиме.
+  // Дата торгов и номер лота отличают одинаковые лоты (серии участков) — иначе Google считает их копиями.
+  const auction = lot.auction_start ? `торги ${formatDate(lot.auction_start)}` : null;
+  const number = lot.source_lot ? `лот № ${lot.source_lot}` : `№ ${lot.id}`;
   return {
-    title: `${lot.headline} — ${formatPrice(lot.price)}`,
-    description: [lotSubtitle(lot), lot.city ?? lot.region, ORIGIN_LABELS[lot.origin], SOURCE_LABELS[lot.source]]
+    title: `${lot.headline} — ${formatPrice(lot.price)}${auction ? `, ${auction}` : ""} · ${number}`,
+    description: [lotSubtitle(lot), lot.city ?? lot.region, ORIGIN_LABELS[lot.origin], SOURCE_LABELS[lot.source],
+                  auction && `Торги ${formatDate(lot.auction_start!, true)}`,
+                  lot.applications_deadline && `заявки до ${formatDate(lot.applications_deadline, true)}`,
+                  lot.source_lot && `номер лота у продавца ${lot.source_lot}`]
       .filter(Boolean)
       .join(". "),
     // своя картинка превью, если у источника нет фото (для WhatsApp, Telegram и соцсетей)
@@ -72,6 +78,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
       ["Приём заявок до", lot.applications_deadline ? formatDate(lot.applications_deadline, true) : null],
       ["Начало торгов", lot.auction_start ? formatDate(lot.auction_start, true) : null],
       ["Окончание торгов", lot.auction_end ? formatDate(lot.auction_end, true) : null],
+      ["Номер лота у продавца", lot.source_lot],
       ["Опубликовано", lot.published_at ? formatDate(lot.published_at) : null],
       ["На torgi.kz с", formatDate(lot.first_seen_at)],
     ] as [string, React.ReactNode][]

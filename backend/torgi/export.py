@@ -157,7 +157,10 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
         item.image = lot.images[0] if lot.images else None
         item.price_drop_pct = _drop_pct(lot)
         item.listed_at = lot.published_at or lot.first_seen_at
-        data = _prepare(item.model_dump(mode="json"), gated, private)
+        raw = item.model_dump(mode="json")
+        # номер лота у продавца — публичный: отличает одинаковые лоты (серии участков) для поисковиков
+        raw["source_lot"] = (raw.get("extra") or {}).get("lot_number")
+        data = _prepare(raw, gated, private)
         data["duplicate_of"] = dups.get(lot.id)
         full.append(data)
 
