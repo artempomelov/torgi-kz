@@ -208,10 +208,44 @@ def _explicit_city(name: str, *texts: str | None) -> bool:
     return False
 
 
+# «г. Шардара», «город Сарыагаш» — явно названный город, даже если его нет в CITY_REGION
+_TOWN_RE = re.compile(r"(?:\bг\.\s*|\bгород\s+)([А-ЯЁӘІҢҒҮҰҚӨҺ][а-яёәіңғүұқөһ]+(?:-[А-ЯЁа-яё][а-яё]+)?)")
+# сельский район области: «Шардаринский р-н», «Карасайский район», «Жамбыл ауданы»
+_RURAL_DISTRICT_RE = re.compile(r"[\w-]+(?:ский|цкий)\s+(?:р-?о?н\b\.?|район)|[\w-]+\s+ауданы", re.I)
+
+
+def _explicit_town(*texts: str | None) -> str | None:
+    """Город, названный через «г.»/«город», которого нет в нашем списке крупных городов."""
+    for text in texts:
+        for m in _TOWN_RE.finditer(fix_homoglyphs(text)):
+            name = m.group(1)
+            if detect_city(f"г. {name}") is None and len(name) >= 4:
+                return name
+    return None
+
+
+def _rural_only(city: str, *texts: str | None) -> bool:
+    """В адресе сельский район области, а сам город не упомянут: «Туркестанская обл., Шардаринский р-н»."""
+    low = " ".join(fix_homoglyphs(t).lower() for t in texts if t)
+    if city.lower() in low.replace("ская", "").replace("ской", ""):
+        return False
+    for m in _RURAL_DISTRICT_RE.finditer(low):
+        # районы самого города («Октябрьский район» Караганды) — не сельские
+        if not any(stem in m.group() for stem, _ in _CITY_DISTRICTS.get(city, [])):
+            return True
+    return False
+
+
 def reconcile_place(city: str | None, region: str | None, *texts: str | None) -> tuple[str | None, str | None]:
     """Сверка города и региона с адресом: явный город из адреса важнее, город не может быть из чужой области."""
     found_city = detect_city(*texts)
     found_region = detect_region(*texts)
+    if not found_city and (town := _explicit_town(*texts)):
+        # «Туркестанская обл, Шардаринский р-н, г. Шардара» — Шардара, а не Туркестан из карточки источника
+        return town, found_region or (region if city is None or CITY_REGION.get(city) == region else None)
+    if not found_city and city in CITY_REGION and city not in ("Алматы", "Астана", "Шымкент") \
+            and _rural_only(city, *texts):
+        return None, found_region or CITY_REGION[city]
     if not found_city and not found_region:
         return city, region  # в адресе нет ни города, ни области — верим источнику
     if found_city in ("Алматы", "Астана", "Шымкент") and found_region and not _explicit_city(found_city, *texts):
