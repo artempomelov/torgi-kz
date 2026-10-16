@@ -454,13 +454,73 @@ def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: dat
         bot.send(chat_id, "Спасибо, вопрос передан — ответим здесь в Telegram.")
 
 
+# --- подписки и отписки в каналах -------------------------------------------------------------------
+# Telegram присылает боту-администратору канала события chat_member, если их явно запросить в getUpdates.
+# Копим их в BotState (зашифрованная часть базы — это данные людей) и раз в день шлём администраторам сводку.
+
+_IN = {"member", "administrator", "creator", "restricted"}
+MEMBER_REPORT_HOUR = 9  # по Алматы
+
+
+def record_member_event(session: Session, update: dict) -> None:
+    chat = update.get("chat") or {}
+    if chat.get("type") != "channel":
+        return
+    old = (update.get("old_chat_member") or {}).get("status")
+    new_member = update.get("new_chat_member") or {}
+    new = new_member.get("status")
+    if (old in _IN) == (new in _IN):
+        return  # смена прав администратора и т. п. — не подписка и не отписка
+    user = new_member.get("user") or {}
+    if user.get("is_bot"):
+        return
+    events = json.loads(_state(session, "member_events") or "[]")
+    events.append({
+        "channel": f"@{chat['username']}" if chat.get("username") else chat.get("title", str(chat.get("id"))),
+        "event": "join" if new in _IN else "leave",
+        "name": " ".join(x for x in (user.get("first_name"), user.get("last_name")) if x) or "Без имени",
+        "username": user.get("username"),
+        "user_id": user.get("id"),
+        "at": update.get("date"),
+    })
+    _set_state(session, "member_events", json.dumps(events[-500:], ensure_ascii=False))
+
+
+def member_report(session: Session, bot: Bot, now: datetime) -> bool:
+    """Раз в день (после 9:00 по Алматы) — сводка администраторам: кто подписался и кто отписался."""
+    local = now.astimezone(ALMATY)
+    today = local.date().isoformat()
+    if local.hour < MEMBER_REPORT_HOUR or _state(session, "member_report_day") == today:
+        return False
+    events = json.loads(_state(session, "member_events") or "[]")
+    _set_state(session, "member_report_day", today)
+    _set_state(session, "member_events", "[]")
+    if not events:
+        return False
+    by_channel: dict[str, dict[str, list[dict]]] = {}
+    for e in events:
+        by_channel.setdefault(e["channel"], {"join": [], "leave": []})[e["event"]].append(e)
+    lines = ["📊 <b>Подписчики каналов за сутки</b>"]
+    for channel, ev in sorted(by_channel.items()):
+        lines.append(f"\n<b>{html.escape(channel)}</b>: +{len(ev['join'])} / −{len(ev['leave'])}")
+        for kind, mark in (("join", "➕"), ("leave", "➖")):
+            for e in ev[kind][:30]:
+                who = html.escape(e["name"]) + (f" @{html.escape(e['username'])}" if e.get("username") else "")
+                lines.append(f"{mark} {who}")
+    for chat in _admin_chats(session):
+        bot.send(chat, "\n".join(lines))
+    return True
+
+
 def process_updates(session: Session, bot: Bot, now: datetime) -> int:
     if bot.dry_run:
         return 0
     offset = int(_state(session, "updates_offset") or 0)
-    updates = bot.api.call("getUpdates", offset=offset, timeout=0, allowed_updates=["message"])
+    updates = bot.api.call("getUpdates", offset=offset, timeout=0, allowed_updates=["message", "chat_member"])
     for upd in updates:
         offset = max(offset, upd["update_id"] + 1)
+        if "chat_member" in upd:
+            record_member_event(session, upd["chat_member"])
         msg = upd.get("message") or {}
         chat, text = msg.get("chat") or {}, msg.get("text")
         if chat.get("type") == "private" and text:
@@ -550,5 +610,7 @@ def run(session: Session, dry_run: bool = False) -> dict[str, int]:
     setup(bot, session)
     updates = process_updates(session, bot, now)
     sent = notify(session, bot, now)
+    if member_report(session, bot, now) and not dry_run:
+        session.commit()
     log.info("бот: входящих %d, уведомлений %d", updates, sent)
     return {"updates": updates, "sent": sent}

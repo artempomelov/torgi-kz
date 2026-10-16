@@ -152,3 +152,33 @@ def test_thread_from_plain_client_id():
     msg = {"text": "📩 Заявка: бесплатная проверка лота от Ken @kendevelopment · ID 5551234\n• Участок",
            "entities": [{"type": "text_link", "offset": 0, "length": 5, "url": "https://torgi.kz/lots/3763/?utm_source=telegram"}]}
     assert bot.thread_from_message(msg) == {"chat": 5551234, "lot": 3763}
+
+
+def test_channel_member_report(capsys, monkeypatch):
+    from datetime import datetime, timezone
+
+    from torgi.config import settings
+
+    monkeypatch.setattr(settings, "telegram_admins", "boss")
+    init_db()
+    with SessionLocal() as session:
+        b = bot.Bot(dry_run=True)
+        bot.handle_message(session, b, 3003, "/start", utcnow(), {"id": 3003, "username": "boss"})
+        chat = {"id": -100, "type": "channel", "username": "torgi_kz_news", "title": "torgi.kz"}
+
+        def upd(old, new, uid, name):
+            return {"chat": chat, "date": 1, "old_chat_member": {"status": old},
+                    "new_chat_member": {"status": new, "user": {"id": uid, "first_name": name, "username": name.lower()}}}
+
+        bot.record_member_event(session, upd("left", "member", 1, "Aru"))
+        bot.record_member_event(session, upd("member", "left", 2, "Ken"))
+        bot.record_member_event(session, upd("member", "administrator", 3, "Admin"))  # не подписка
+        capsys.readouterr()
+        # до 9:00 по Алматы сводки нет, после — одна в день
+        assert not bot.member_report(session, b, datetime(2026, 10, 16, 2, 0, tzinfo=timezone.utc))
+        assert bot.member_report(session, b, datetime(2026, 10, 16, 5, 0, tzinfo=timezone.utc))
+        out = capsys.readouterr().out
+        assert "@torgi_kz_news</b>: +1 / −1" in out and "➕ Aru @aru" in out and "➖ Ken @ken" in out
+        assert "Admin" not in out
+        assert not bot.member_report(session, b, datetime(2026, 10, 16, 8, 0, tzinfo=timezone.utc))
+        session.rollback()
