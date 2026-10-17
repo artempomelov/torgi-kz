@@ -2,7 +2,8 @@
 
 Отбор: оценка надёжная (не «низкая»), ниже рынка на 10–60% (больше — почти всегда ошибка данных),
 без пометок об ошибках, аренды и долей; из одного дома или ЖК — не больше двух объектов,
-иначе один застройщик-залогодатель занимает весь список.
+иначе один застройщик-залогодатель занимает весь список. В Алматы и Астане — только с известным районом:
+цена м² там по районам различается в полтора раза, и оценка по всему городу завышает скидку окраин.
 """
 
 import re
@@ -72,6 +73,9 @@ def build(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> dict:
         if lot is None or not x.get("price") or x.get("flags") or nz.deal_flags(lot.title, lot.description):
             continue
         if EXCLUDED_RE.search(f"{lot.address or ''} {lot.title or ''}"):
+            continue
+        # решение владельца сайта от 17.10.2026: без района в Алматы и Астане в ТОП не берём (в каталоге остаются)
+        if x.get("city") in BIG_CITIES and not x.get("district"):
             continue
         lo, hi = AREA_RANGE.get(x["category"], (0, 0))
         if not x.get("area_m2") or not lo <= x["area_m2"] <= hi:

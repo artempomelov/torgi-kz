@@ -59,20 +59,23 @@ def test_top_limits_one_building():
     index = market.MarketIndex({("apartment", "Алматы", None, None): (900_000, 1_000_000, 1_100_000, 50)})
     items, lots = [], {}
     for i in range(6):  # шесть квартир одного ЖК и одна в другом доме
-        items.append({"id": i, "source": "halyk", "category": "apartment", "city": "Алматы", "district": None,
+        items.append({"id": i, "source": "halyk", "category": "apartment", "city": "Алматы", "district": "Бостандыкский район",
                       "rooms": 2, "area_m2": 60 + i, "price": 30_000_000 + i * 100_000, "flags": []})
         lots[i] = SimpleNamespace(title="Квартира", description=None, address=f"Алматы, ЖК Нурлы Тау, ул. Аль-Фараби 17, кв. {i}")
-    items.append({"id": 9, "source": "bcc", "category": "apartment", "city": "Алматы", "district": None,
+    items.append({"id": 9, "source": "bcc", "category": "apartment", "city": "Алматы", "district": "Алмалинский район",
                   "rooms": 2, "area_m2": 50, "price": 35_000_000, "flags": []})
     lots[9] = SimpleNamespace(title="Квартира", description=None, address="Алматы, ул. Гоголя, д. 166, кв. 6")
-    items.append({"id": 10, "source": "bcc", "category": "apartment", "city": "Алматы", "district": None,
+    items.append({"id": 10, "source": "bcc", "category": "apartment", "city": "Алматы", "district": "Медеуский район",
                   "rooms": 9, "area_m2": 463, "price": 60_000_000, "flags": []})  # «квартира» 463 м² — не берём
     lots[10] = SimpleNamespace(title="Квартира", description=None, address="Алматы, ул. Абая, д. 1")
-    items.append({"id": 11, "source": "halyk", "category": "apartment", "city": "Алматы", "district": None,
+    items.append({"id": 11, "source": "halyk", "category": "apartment", "city": "Алматы", "district": "Медеуский район",
                   "rooms": 2, "area_m2": 90, "price": 40_000_000, "flags": []})  # ЖК из списка исключений
     lots[11] = SimpleNamespace(title="ЖК Европолис, пятно 8", description=None, address="Алматы, ул. Ж. Омаровой 35/1, кв. 147")
+    items.append({"id": 12, "source": "rbk", "category": "apartment", "city": "Алматы", "district": None,
+                  "rooms": 2, "area_m2": 60, "price": 45_000_000, "flags": []})  # район неизвестен — оценка по городу ненадёжна
+    lots[12] = SimpleNamespace(title="Квартиры в ЖК Панорама", description=None, address=None)
     data = top.build(items, lots, index)
     almaty = next(s for s in data["sections"] if s["slug"] == "kvartiry-almaty")
     ids = [x["id"] for x in almaty["items"]]
-    assert len(ids) == 3 and 9 in ids and 10 not in ids and 11 not in ids
+    assert len(ids) == 3 and 9 in ids and 10 not in ids and 11 not in ids and 12 not in ids
     assert almaty["items"][0]["discount_pct"] >= almaty["items"][-1]["discount_pct"]

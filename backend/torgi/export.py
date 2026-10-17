@@ -51,7 +51,7 @@ def headline(lot: dict) -> str:
         parts.append(f"{lot['land_area_ha']:g} га".replace(".", ","))
     place = lot.get("city") or lot.get("region")
     # «— Алматы, Бостандыкский район»: человечнее и полезнее для поиска
-    area = nz.canonical_district(district(lot.get("address")), lot.get("city") or lot.get("region"))
+    area = lot.get("district")
     if place and area:
         place = f"{place}, {area}"
     return ", ".join(parts) + (f" — {place}" if place else "")
@@ -80,8 +80,12 @@ def find_duplicates(lots: list[Lot]) -> dict[int, int]:
     return dups
 
 
-# Район из адреса: «р-н Есиль», «Бостандыкский район» — публичный ориентир вместо точного адреса
-_DISTRICT_RE = re.compile(r"(?:р-н|район)\s+([А-ЯЁӘІҢҒҮҰҚӨҺ][\w-]+)|([А-ЯЁӘІҢҒҮҰҚӨҺ][\w-]+)\s+(?:р-н|район)\b")
+# Район из адреса: «р-н Есиль», «р-он Сарыарка», «район "Сарыарка"», «Бостандыкский Район», «в Наурызбайском районе» —
+# публичный ориентир вместо точного адреса. Не район: «микрорайон Левый Берег», «район Новоальджанского элеватора».
+_DISTRICT_RE = re.compile(
+    r"(?<![\w-])(?:р-о?н|[Рр]айон)\.?\s+[\"«]?([А-ЯЁӘІҢҒҮҰҚӨҺ][\w-]+)(?<!ого)(?<!его)(?![\w-])"
+    r"|([А-ЯЁӘІҢҒҮҰҚӨҺ][\w-]+(?:\s+[Бб]и)?)\s+(?:р-о?н|[Рр]айон[еа]?)\b"  # «Казыбек Би Район» в Караганде
+)
 # «..., ул. Ақмешіт, зд. 19Б, п.м. 78» → «..., ул. Ақмешіт, зд. 19Б» (как groupParkings в web/src/lib/filter.ts)
 _PLACE_RE = re.compile(
     r",?\s*(?:п\.\s?м\.?|м/м|машино[\s-]*мест\w*|парковочн\w+\s+мест\w*|паркинг\w*|№)\s*№?\s*[\w/-]+.*$", re.I
@@ -89,11 +93,30 @@ _PLACE_RE = re.compile(
 APPROX_DIGITS = 2  # в закрытом режиме координаты публично — до ~1 км
 
 
+def _district_name(m: re.Match) -> str:
+    if m.group(1):
+        return f"район {m.group(1)}"
+    name = re.sub(r"([сц]к)(?:ом|ого|ому)$", r"\1ий", m.group(2))  # «Наурызбайском» → «Наурызбайский»
+    return f"{name} район"
+
+
 def district(address: str | None) -> str | None:
     m = _DISTRICT_RE.search(address or "")
-    if not m:
-        return None
-    return f"район {m.group(1)}" if m.group(1) else f"{m.group(2)} район"
+    return _district_name(m) if m else None
+
+
+def lot_district(address: str | None, city: str | None, title: str | None = None,
+                 description: str | None = None) -> str | None:
+    """Район лота: явный из адреса, заголовка или описания; только если его нет — по известному микрорайону."""
+    for text in (address, title):
+        if found := nz.canonical_district(district(text), city):
+            return found
+    # в описании бывает и «район Мега» — оттуда берём только официальные районы города: «район Нұра», «Сарыаркинский»
+    known = nz.city_districts(city)
+    for m in _DISTRICT_RE.finditer(nz.fix_homoglyphs(description)):
+        if (found := nz.canonical_district(_district_name(m), city)) in known:
+            return found
+    return nz.infer_district(city, address, title)
 
 
 def group_key(item: dict) -> str | None:
@@ -106,7 +129,7 @@ def group_key(item: dict) -> str | None:
     return hashlib.sha1(f"{item['source']}|{base}".encode()).hexdigest()[:12]
 
 
-def _prepare(item: dict, gated: bool, private: dict | None = None) -> dict:
+def _prepare(item: dict, gated: bool, private: dict | None = None, description: str | None = None) -> dict:
     for field in ("address", "title"):
         if item.get(field):
             item[field] = nz.clean_address(item[field])
@@ -114,8 +137,10 @@ def _prepare(item: dict, gated: bool, private: dict | None = None) -> dict:
         item["cadastral"] = nz.valid_cadastral(item["cadastral"])
     item["city"], item["region"] = nz.reconcile_place(item.get("city"), item.get("region"),
                                                       item.get("address"), item.get("title"))
+    # описания в коротком формате нет — передаём отдельно
+    item["district"] = lot_district(item.get("address"), item.get("city") or item.get("region"), item.get("title"),
+                                    description)
     item["headline"] = headline(item)
-    item["district"] = nz.canonical_district(district(item.get("address")), item.get("city") or item.get("region"))
     item["group_key"] = group_key(item)
     if gated:
         if private is not None:
@@ -144,7 +169,7 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
 
     dups = find_duplicates(lots)
     short = [
-        _prepare(_short(lot).model_dump(mode="json"), gated)
+        _prepare(_short(lot).model_dump(mode="json"), gated, description=lot.description)
         for lot in lots
         if lot.status == "active" and lot.id not in dups
     ]
@@ -160,7 +185,7 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
         raw = item.model_dump(mode="json")
         # номер лота у продавца — публичный: отличает одинаковые лоты (серии участков) для поисковиков
         raw["source_lot"] = (raw.get("extra") or {}).get("lot_number")
-        data = _prepare(raw, gated, private)
+        data = _prepare(raw, gated, private, lot.description)
         data["duplicate_of"] = dups.get(lot.id)
         full.append(data)
 

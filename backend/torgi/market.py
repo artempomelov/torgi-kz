@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from torgi import normalize as nz
-from torgi.export import district as address_district
+from torgi.export import lot_district
 from torgi.models import Lot
 
 log = logging.getLogger(__name__)
@@ -262,7 +262,7 @@ def report(session: Session, db: sqlite3.Connection, out: Path | None = None) ->
     lots = session.scalars(select(Lot).where(Lot.status == "active")).all()
     for lot in lots:
         city, _ = nz.reconcile_place(lot.city, lot.region, lot.address, lot.title)
-        district = nz.canonical_district(address_district(nz.clean_address(lot.address or "")), city)
+        district = lot_district(nz.clean_address(lot.address or ""), city, lot.title, lot.description)
         est = index.estimate(lot.category, city, district, lot.rooms, lot.area_m2)
         if not est or not lot.price or lot.flags or nz.deal_flags(lot.title, lot.description):
             continue
