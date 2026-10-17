@@ -19,6 +19,9 @@ MIN_DISCOUNT, MAX_DISCOUNT = 10, 55
 AREA_RANGE = {"apartment": (20, 200), "house": (40, 400), "commercial": (15, 1500)}
 PER_BUILDING = 2
 BIG_CITIES = ("Алматы", "Астана")
+# ЖК, которые в ТОП не берём (в каталоге они остаются): «Европолис» — сотня однотипных лотов Halyk в черновой
+# отделке, решение владельца сайта от 17.10.2026
+EXCLUDED_RE = re.compile(r"европолис", re.I)
 
 
 @dataclass
@@ -67,6 +70,8 @@ def build(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> dict:
     for x in items:
         lot = lots.get(x["id"])
         if lot is None or not x.get("price") or x.get("flags") or nz.deal_flags(lot.title, lot.description):
+            continue
+        if EXCLUDED_RE.search(f"{lot.address or ''} {lot.title or ''}"):
             continue
         lo, hi = AREA_RANGE.get(x["category"], (0, 0))
         if not x.get("area_m2") or not lo <= x["area_m2"] <= hi:
