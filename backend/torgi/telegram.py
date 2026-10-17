@@ -169,6 +169,69 @@ def pending_lots(session: Session, channel: str, limit: int, since_days: int, ru
     return lots[:limit]
 
 
+# Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям. Квартиры Алматы
+# и Астаны при этом дублируются с городскими каналами — так и задумано. Дома, квартиры в регионах и промышленные
+# объекты в основной канал не идут.
+MAIN_MIX = [
+    ("квартиры Алматы и Астаны", 0.7,
+     lambda lot: lot.category == "apartment" and bool({lot.region, lot.city} & {"Алматы", "Астана"})),
+    ("коммерция", 0.2, lambda lot: lot.category == "commercial"),
+    ("паркоместа и земля", 0.1, lambda lot: lot.category in ("parking", "land")),
+]
+
+
+def _building(lot: Lot) -> str:
+    from torgi.top import building_key
+
+    return building_key({"city": lot.city or lot.region, "id": lot.id}, lot.address, lot.title)
+
+
+def mixed_lots(session: Session, channel: str, limit: int, since_days: int) -> list[Lot]:
+    """Лоты основного канала по долям MAIN_MIX: в каждый слот — категория, сильнее всех отстающая от своей доли
+    среди сегодняшних постов. Новых квартир Алматы и Астаны мало (2–3 в день), поэтому к ним добавляются ещё не
+    опубликованные в канале активные квартиры с фото. Из одного дома или ЖК — один лот в день (у банков бывают
+    серии по 8 квартир в одном доме). Нет подходящих лотов — слот пустует: доли важнее количества постов."""
+    fresh = pending_lots(session, channel, 10**9, since_days)
+    published = select(ChannelPost.lot_id).where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None))
+    backlog = session.scalars(
+        select(Lot).where(Lot.status == "active", Lot.price.is_not(None), Lot.category == "apartment",
+                          Lot.id.not_in(published)).order_by(Lot.first_seen_at.desc(), Lot.id.desc())
+    )
+    queues = [[lot for lot in fresh if match(lot)] for _, _, match in MAIN_MIX]
+    queued = {lot.id for lot in queues[0]}
+    queues[0] += [lot for lot in backlog if lot.id not in queued and lot.images and not lot.flags and MAIN_MIX[0][2](lot)]
+
+    today = utcnow().astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    recent = session.scalars(
+        select(Lot).join(ChannelPost, ChannelPost.lot_id == Lot.id)
+        .where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None), ChannelPost.posted_at >= today)
+    ).all()
+    counts = [sum(1 for lot in recent if match(lot)) for _, _, match in MAIN_MIX]
+    keys: dict[int, str] = {}
+
+    def house(lot: Lot) -> str:
+        if lot.id not in keys:
+            keys[lot.id] = _building(lot)
+        return keys[lot.id]
+
+    buildings = {house(lot) for lot in recent}
+    picked: list[Lot] = []
+    while len(picked) < limit:
+        total = sum(counts) + 1
+        # недобор доли после ещё одного поста; при равенстве — категория выше в списке
+        gaps = [(round(share * total - counts[i], 6), -i) for i, (_, share, _) in enumerate(MAIN_MIX) if queues[i]]
+        if not gaps or max(gaps)[0] <= 0:
+            break
+        i = -max(gaps)[1]
+        lot = queues[i].pop(0)
+        if house(lot) in buildings:
+            continue  # из этого дома сегодня уже был пост — слот не тратим
+        picked.append(lot)
+        counts[i] += 1
+        buildings.add(house(lot))
+    return picked
+
+
 def posted_today(session: Session, channel: str, now: datetime | None = None) -> int:
     start = (now or utcnow()).astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
     return session.scalar(select(func.count()).select_from(ChannelPost).where(
@@ -309,7 +372,8 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
         if limit <= 0:
             log.info("канал %s: дневной лимит (%s) исчерпан", channel, daily)
             return 0
-    lots = pending_lots(session, channel, limit, since_days, rule)
+    main = rule is None and channel == settings.telegram_channel
+    lots = mixed_lots(session, channel, limit, since_days) if main else pending_lots(session, channel, limit, since_days, rule)
     hub = (settings.telegram_channel or "").lstrip("@")
     footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
     for i, lot in enumerate(lots):
@@ -320,7 +384,12 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
         if i:
             time.sleep(settings.telegram_post_delay)
         message_id = bot.post_lot(channel, lot, text)
-        session.add(ChannelPost(lot_id=lot.id, channel=channel, message_id=message_id))
+        # квартира из основного канала могла быть помечена без публикации при первом запуске — обновляем отметку
+        post = session.scalar(select(ChannelPost).where(ChannelPost.lot_id == lot.id, ChannelPost.channel == channel))
+        if post:
+            post.message_id, post.posted_at = message_id, utcnow()
+        else:
+            session.add(ChannelPost(lot_id=lot.id, channel=channel, message_id=message_id))
         session.commit()
         log.info("канал %s: опубликован лот %s → сообщение %s", channel, lot.id, message_id)
     return len(lots)
