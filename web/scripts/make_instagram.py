@@ -1,25 +1,33 @@
-"""Instagram torgi.kz: оформление профиля и готовые посты-карусели из раздела «ТОП».
+"""Instagram torgi.kz: оформление профиля и готовые посты-карусели с подборками недели.
 
-    uv run --with pillow --with httpx python web/scripts/make_instagram.py
+    uv run --project backend --with pillow python web/scripts/make_instagram.py
 
-Данные — web/data (выгрузка `torgi.cli export --market …`). Результат — marketing/instagram/<дата>/:
+Данные — web/data (выгрузка `torgi.cli export --market …` и market-index.json). Лоты для подборок
+отбираем глазами по контактным листам web/scripts/instagram_candidates.py и вписываем в PICKS.
+Результат — marketing/instagram/<дата>/:
   profile/      аватар, обложки «Актуального», тексты профиля (profile.md)
   posts/NN-*/   слайды 1080×1350 (формат 4:5) — загружать по порядку как карусель
   captions.md   подписи с хештегами к каждому посту
 Папка marketing/ в git не попадает: на слайдах фото с сайтов продавцов.
 """
 
+import hashlib
 import io
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
 import httpx
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "backend"))
+from torgi.market import MarketIndex  # noqa: E402
+
 DATA = ROOT / "web" / "data"
 OUT = ROOT / "marketing" / "instagram" / date.today().isoformat()
+CACHE = ROOT / "marketing" / "instagram" / "photo-cache"
 
 FONTS = Path("C:/Windows/Fonts")
 REG, BOLD = FONTS / "segoeui.ttf", FONTS / "segoeuib.ttf"
@@ -35,10 +43,20 @@ ORIGIN = {
     "tax_debtor": "Имущество налогового должника", "confiscated": "Конфискат",
 }
 SALE = {"auction": "аукцион", "auction_down": "аукцион на понижение", "direct": "прямая продажа", "tender": "тендер"}
+# подписи ячеек коллажа по умолчанию: главное фото без подписи
+CELL_LABELS = {"apartment": ["", "кухня", "санузел", "дом"], "house": ["", "кухня", "санузел", "дом"],
+               "commercial": ["", "", "", "здание"]}
 
 
 def font(path: Path, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(path), size)
+
+
+def fit_font(d: ImageDraw.ImageDraw, text: str, path: Path, size: int, width: int) -> ImageFont.FreeTypeFont:
+    """Самый крупный шрифт не больше size, с которым строка влезает в width."""
+    while size > 20 and d.textlength(text, font=font(path, size)) > width:
+        size -= 2
+    return font(path, size)
 
 
 def mln(v: float) -> str:
@@ -46,8 +64,16 @@ def mln(v: float) -> str:
 
 
 def wrap(d: ImageDraw.ImageDraw, text: str, f: ImageFont.FreeTypeFont, width: int) -> list[str]:
-    lines, line = [], ""
+    # неразрывные группы: предлог или союз — со следующим словом, тире — с предыдущим, «3 314» — целиком
+    units: list[str] = []
     for word in text.split():
+        prev = units[-1].split()[-1] if units else ""
+        if units and (word in ("—", "–") or (len(prev) <= 2 and prev.isalpha()) or (prev.isdigit() and word.isdigit())):
+            units[-1] += " " + word
+        else:
+            units.append(word)
+    lines, line = [], ""
+    for word in units:
         test = f"{line} {word}".strip()
         if d.textlength(test, font=f) <= width:
             line = test
@@ -95,14 +121,21 @@ def pill(d, xy, text, f, bg, fg, pad=(26, 12)):
 
 
 def fetch_photo(url: str | None) -> Image.Image | None:
+    """Фото продавца: поворот по EXIF и одна обработка для всех — автоконтраст, чуть ярче и сочнее
+    (фото у продавцов часто тёмные и серые, а в одной карусели должны смотреться ровно)."""
     if not url:
         return None
+    path = CACHE / (hashlib.md5(url.encode()).hexdigest() + ".jpg")
     try:
-        res = httpx.get(url, timeout=20, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
-        res.raise_for_status()
-        return Image.open(io.BytesIO(res.content)).convert("RGB")
+        if not path.exists():
+            res = httpx.get(url, timeout=25, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"})
+            res.raise_for_status()
+            CACHE.mkdir(parents=True, exist_ok=True)
+            ImageOps.exif_transpose(Image.open(io.BytesIO(res.content))).convert("RGB").save(path, quality=94)
+        img = ImageOps.autocontrast(Image.open(path).convert("RGB"), cutoff=0.6)
     except Exception:
         return None
+    return ImageEnhance.Color(ImageEnhance.Brightness(img).enhance(1.05)).enhance(1.1)
 
 
 # --- слайды -----------------------------------------------------------------------------------------
@@ -120,46 +153,59 @@ def cover_slide(title: str, subtitle: str, kicker: str) -> Image.Image:
     return img
 
 
-def lot_slide(lot: dict, top: dict, rank: int) -> Image.Image:
+def mosaic_cover(kicker: str, title: str, accent: str, subtitle: str, photos: list[Image.Image | None]) -> Image.Image:
+    """Обложка подборки: главные фото пяти объектов (2 сверху, 3 снизу) и заголовок."""
+    img = Image.new("RGB", (W, H), WHITE)
+    gap, mosaic_h = 6, 760
+    row_h = (mosaic_h - gap) // 2
+    for r, row in enumerate([photos[:2], photos[2:5]]):
+        cell_w = (W - gap * (len(row) - 1)) // len(row)
+        for k, photo in enumerate(row):
+            if photo:
+                img.paste(ImageOps.fit(photo, (cell_w, row_h), Image.LANCZOS), (k * (cell_w + gap), r * (row_h + gap)))
+    d = ImageDraw.Draw(img)
+    y = mosaic_h + 50
+    pill(d, (64, y), kicker, font(BOLD, 32), GREEN, WHITE)
+    d.text((64, y + 80), title, font=fit_font(d, title, BLACK, 76, W - 128), fill=INK)
+    d.text((64, y + 172), accent, font=fit_font(d, accent, BLACK, 76, W - 128), fill=GREEN)
+    d.text((64, y + 280), subtitle, font=fit_font(d, subtitle, REG, 32, W - 128), fill=MUTED)
+    d.text((W - 64, H - 50), "листайте →", font=font(BOLD, 34), fill=COBALT, anchor="rs")
+    return img
+
+
+def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Image | None, str]],
+                  estimate: float, discount: int, rank: int) -> Image.Image:
+    """Объект подборки: коллаж 2×2 (по умолчанию комната, кухня, санузел, дом) и белая плашка с ценой."""
     img = Image.new("RGB", (W, H), WHITE)
     d = ImageDraw.Draw(img)
-    photo_h = 760
-    images = lot.get("images") or [None]
-    # фото продавца иногда с людьми или документами — номер другого фото можно задать в PHOTO_INDEX
-    photo = fetch_photo(images[min(PHOTO_INDEX.get(lot["id"], 0), len(images) - 1)])
-    if photo:
-        img.paste(ImageOps.fit(photo, (W, photo_h), Image.LANCZOS), (0, 0))
-        # затемнение сверху — чтобы читался номер
-        grad = Image.linear_gradient("L").rotate(180).resize((W, 200))
-        img.paste(Image.new("RGB", (W, 200), "#000000"), (0, 0), grad.point(lambda v: int(v * 0.45)))
-    else:
-        d.rectangle([0, 0, W, photo_h], fill=SOFT)
-        house(d, W // 2, 190, 1.1, COBALT, arrow=None)
-        d.text((W // 2, 650), "фото нет у продавца", font=font(REG, 34), fill=MUTED, anchor="mm")
-    d = ImageDraw.Draw(img)
-    # номер места
-    d.ellipse([50, 50, 150, 150], fill=GREEN)
-    d.text((100, 100), str(rank), font=font(BLACK, 56), fill=WHITE, anchor="mm")
-    pill(d, (50, photo_h - 100), f"−{top['discount_pct']}% к рынку", font(BLACK, 44), GREEN, WHITE)
+    gap, grid_h = 6, 820
+    cell_w, cell_h = (W - gap) // 2, (grid_h - gap) // 2
+    for k, (photo, label) in enumerate(photos[:4]):
+        x, y = (k % 2) * (cell_w + gap), (k // 2) * (cell_h + gap)
+        if photo:
+            img.paste(ImageOps.fit(photo, (cell_w, cell_h), Image.LANCZOS), (x, y))
+        else:
+            d.rectangle([x, y, x + cell_w, y + cell_h], fill=SOFT)
+        if label:
+            pill(d, (x + 18, y + cell_h - 52), label, font(BOLD, 24), INK, WHITE, pad=(14, 6))
+    d.ellipse([36, 36, 126, 126], fill=GREEN)
+    d.text((81, 81), str(rank), font=font(BLACK, 52), fill=WHITE, anchor="mm")
+    badge, bf = f"−{discount}% к рынку", font(BLACK, 40)
+    pill(d, (W - 84 - d.textlength(badge, font=bf), grid_h - 96), badge, bf, GREEN, WHITE)
 
-    y = photo_h + 40
-    title, _, place = lot["headline"].partition(" — ")
-    d.text((70, y), title, font=font(BOLD, 46), fill=INK)
-    y += 66
-    d.text((70, y), place, font=font(REG, 36), fill=MUTED)
-    y += 80
-    d.text((70, y), mln(lot["price"]), font=font(BLACK, 88), fill=INK)
-    x = 70 + d.textlength(mln(lot["price"]), font=font(BLACK, 88)) + 30
-    market = f"рынок ≈ {mln(top['estimate'])}"
-    mf = font(REG, 38)
-    d.text((x, y + 38), market, font=mf, fill=MUTED)
-    y += 130
+    y = grid_h + 34
+    d.text((64, y), title, font=fit_font(d, title, BOLD, 44, W - 128), fill=INK)
+    d.text((64, y + 62), place, font=fit_font(d, place, REG, 32, W - 128), fill=MUTED)
+    y += 128
+    price, pf = mln(lot["price"]), font(BLACK, 84)
+    d.text((64, y), price, font=pf, fill=INK)
+    d.text((64 + d.textlength(price, font=pf) + 28, y + 40), f"рынок ≈ {mln(estimate)}", font=font(REG, 34), fill=MUTED)
     tags = [ORIGIN.get(lot["origin"], lot["origin"])]
     if lot.get("sale_type") in SALE:
         tags.append(SALE[lot["sale_type"]])
-    pill(d, (70, y), " · ".join(tags), font(BOLD, 30), LIGHT, COBALT)
-    d.text((W - 70, H - 70), "torgi.kz/top", font=font(BOLD, 32), fill=COBALT, anchor="rs")
-    d.text((70, H - 70), "оценка torgi.kz по объявлениям", font=font(REG, 26), fill=MUTED, anchor="ls")
+    pill(d, (64, y + 128), " · ".join(tags), font(BOLD, 28), LIGHT, COBALT)
+    d.text((64, H - 50), "оценка torgi.kz по объявлениям", font=font(REG, 24), fill=MUTED, anchor="ls")
+    d.text((W - 64, H - 50), "torgi.kz/top", font=font(BOLD, 30), fill=COBALT, anchor="rs")
     return img
 
 
@@ -233,51 +279,105 @@ def save_post(folder: str, slides: list[Image.Image]):
         s.save(path / f"{i:02d}.jpg", quality=92)
 
 
-# лот → номер фото (с нуля), если первое не подходит для соцсетей
-PHOTO_INDEX: dict[int, int] = {1704: 1}
-
 HASHTAGS = {
-    "Алматы": "#недвижимостьалматы #квартираалматы #алматы #купитьквартирувалматы",
-    "Астана": "#недвижимостьастана #квартираастана #астана #купитьквартирувастане",
-    "common": "#торги #недвижимостьказахстан #залоговоеимущество #аукцион #инвестициивнедвижимость "
-              "#квартиранижерынка #torgikz",
+    "Алматы": "#недвижимостьалматы #квартираалматы #алматы #купитьквартирувалматы #квартиранижерынка",
+    "Астана": "#недвижимостьастана #квартираастана #астана #купитьквартирувастане #квартиранижерынка",
+    "бизнес": "#коммерческаянедвижимость #готовыйбизнес #помещение #офис #бизнесказахстан",
+    "common": "#торги #недвижимостьказахстан #залоговоеимущество #аукцион #инвестициивнедвижимость #torgikz",
 }
 
+# Подборки недели. Лоты отбираем глазами (web/scripts/instagram_candidates.py): с нормальными фото ремонта,
+# не стройка и не захламлённые комнаты. photos — четыре фото коллажа по номеру в лоте (с нуля), по умолчанию
+# комната, кухня, санузел, дом; (номер, "подпись") — своя подпись ячейки. title — вместо «Коммерческая, N м²»,
+# district — если у лота не указан район (иначе оценка по городу в целом и скидка завышена).
+PICKS = [
+    {"folder": "02-top-almaty", "kicker": "ТОП недели · Алматы", "title": "5 квартир с ремонтом",
+     "headline": "ТОП-5 квартир с ремонтом в Алматы", "hashtags": "Алматы", "lots": [
+         {"id": 1583, "photos": [5, 2, (4, "спальня"), 0]},
+         {"id": 1206, "photos": [8, 7, 16, 0]},
+         {"id": 109, "photos": [8, 9, 6, 0]},
+         {"id": 1454, "photos": [6, 7, 5, 0], "district": "Наурызбайский район, мкр. Шугыла"},
+         {"id": 105, "photos": [3, 14, 1, 6], "district": "Наурызбайский район, мкр. Шугыла"},
+     ]},
+    {"folder": "03-top-astana", "kicker": "ТОП недели · Астана", "title": "5 квартир с ремонтом",
+     "headline": "ТОП-5 квартир с ремонтом в Астане", "hashtags": "Астана", "lots": [
+         {"id": 2347, "photos": [5, 7, 2, (3, "детская")]},
+         {"id": 1102, "title": "Квартира, 2-комн., 50,2 м²", "photos": [7, 6, 9, 0]},
+         {"id": 99, "photos": [11, 8, 7, 0]},
+         {"id": 189, "photos": [5, (6, "комната"), 9, 1]},
+         {"id": 138, "photos": [9, 6, (8, "спальня"), 0]},
+     ]},
+    {"folder": "06-top-biznes", "kicker": "ТОП недели · Бизнес", "title": "5 помещений для бизнеса",
+     "headline": "ТОП-5 коммерческих объектов с торгов", "hashtags": "бизнес",
+     "subtitle": "Офис, салон, детский сад, баня — торги и залоги банков", "lots": [
+         {"id": 1591, "title": "Офис, 222,4 м²", "photos": [2, (3, "опенспейс"), (6, "кабинет"), 0]},
+         {"id": 784, "title": "Помещение свободного назначения, 207,6 м²",
+          "photos": [1, (3, "зал"), (6, "кухня"), 7]},
+         {"id": 3339, "title": "Здание детского сада, 667 м² с участком",
+          "photos": [3, (0, "фасад"), (2, "площадка"), (1, "двор")]},
+         {"id": 736, "title": "Помещение под салон, 58,8 м²", "photos": [0, (2, "кабинет"), (4, "санузел"), 7]},
+         {"id": 699, "title": "Банный комплекс с бассейном, 875,7 м²",
+          "photos": [4, (1, "зона отдыха"), (7, "бильярд"), (0, "территория")]},
+     ]},
+]
 
-def top_post(section: dict, full: dict, city: str, folder: str, kicker: str) -> str:
-    items = [x for x in section["items"] if full.get(x["id"], {}).get("price")]
-    # в соцсетях без фото карточка не работает: сначала лоты с фото, без фото — только если не хватает
-    items = ([x for x in items if full[x["id"]].get("images")] + [x for x in items if not full[x["id"]].get("images")])[:5]
-    items.sort(key=lambda x: -x["discount_pct"])
-    best = items[0]["discount_pct"]
-    slides = [cover_slide(f"ТОП-5 квартир {city} ниже рынка",
-                          f"Торги и залоги банков: цены на {items[-1]['discount_pct']}–{best}% ниже объявлений "
-                          f"о продаже похожих квартир", kicker)]
-    slides += [lot_slide(full[x["id"]], x, i) for i, x in enumerate(items, 1)]
-    slides.append(cta_slide("Ещё 3 000+ объектов с торгов", [
-        "Полный ТОП-10 и карточки лотов — на torgi.kz/top",
+
+def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
+    rows = []
+    for p in pick["lots"]:
+        lot = full.get(p["id"])
+        if not lot or not lot.get("price"):
+            print(f"  {pick['folder']}: лота {p['id']} нет в выгрузке (снят с торгов?) — пропускаем")
+            continue
+        city = lot.get("city") or lot.get("region")
+        district = p.get("district", "").split(",")[0] or lot.get("district")
+        est = index.estimate(lot["category"], city, district, lot.get("rooms"), lot.get("area_m2"))
+        if est is None:
+            print(f"  {pick['folder']}: для лота {p['id']} нет оценки рынка — пропускаем")
+            continue
+        head, _, place = lot["headline"].partition(" — ")
+        labels = CELL_LABELS.get(lot["category"], CELL_LABELS["commercial"])
+        photos = []
+        for k, spec in enumerate(p["photos"]):
+            i, label = spec if isinstance(spec, tuple) else (spec, labels[k])
+            photos.append((fetch_photo(lot["images"][i]), label))
+        rows.append({"lot": lot, "title": p.get("title") or head, "photos": photos, "estimate": round(est.value, -4),
+                     "place": f"{city}, {p['district']}" if p.get("district") else place,
+                     "discount": round((1 - lot["price"] / est.value) * 100)})
+    rows.sort(key=lambda r: -r["discount"])
+    lo, hi = rows[-1]["discount"], rows[0]["discount"]
+    slides = [mosaic_cover(pick["kicker"], pick["title"], f"ниже рынка на {lo}–{hi}%",
+                           pick.get("subtitle", "Торги и залоги банков · фото продавцов"),
+                           [r["photos"][0][0] for r in rows])]
+    slides += [collage_slide(r["lot"], r["title"], r["place"], r["photos"], r["estimate"], r["discount"], i)
+               for i, r in enumerate(rows, 1)]
+    slides.append(cta_slide(f"Ещё {total} объектов с торгов", [
+        "Больше объектов ниже рынка — в разделе «ТОП» на torgi.kz",
         "Новые лоты каждый день — в Telegram @torgi_kz_news",
         "Бесплатная консультация по любому лоту",
     ]))
-    save_post(folder, slides)
-    lines = "\n".join(f"{i}. {full[x['id']]['headline']} — {mln(full[x['id']]['price'])} "
-                      f"(рынок ≈ {mln(x['estimate'])}, −{x['discount_pct']}%)" for i, x in enumerate(items, 1))
-    tag = HASHTAGS["Алматы"] if "Алмат" in city else HASHTAGS["Астана"] if "Астан" in city else ""
-    return (f"ТОП-5 квартир {city} с торгов — ниже рынка до {best}% 🔥\n\n{lines}\n\n"
-            "Как считаем: сравниваем цену лота с объявлениями о продаже похожих квартир в том же городе и районе. "
-            "Это ориентир, а не отчёт об оценке — перед покупкой проверяйте документы и состояние объекта.\n\n"
-            "Сохраните, чтобы не потерять 📌 Полный ТОП-10 — по ссылке в шапке профиля.\n\n"
-            f"{tag} {HASHTAGS['common']}")
+    save_post(pick["folder"], slides)
+
+    lines = "\n".join(f"{i}. {r['title']} — {r['place']} — {mln(r['lot']['price'])} "
+                      f"(рынок ≈ {mln(r['estimate'])}, −{r['discount']}%)" for i, r in enumerate(rows, 1))
+    commercial = all(r["lot"]["category"] == "commercial" for r in rows)
+    method = ("Как считаем: сравниваем цену за м² с объявлениями о продаже коммерческой недвижимости в том же городе. "
+              "Для коммерции оценка приблизительная — назначение и состояние помещений разные."
+              if commercial else
+              "Как считаем: сравниваем цену лота с объявлениями о продаже похожих квартир в том же городе и районе. "
+              "Это ориентир, а не отчёт об оценке — перед покупкой проверяйте документы и состояние объекта.")
+    return (f"{pick['headline']} — ниже рынка до {hi}% 🔥\n\n{lines}\n\n{method}\n\n"
+            "Сохраните, чтобы не потерять 📌 Карточки лотов и фото — по ссылке в шапке профиля.\n\n"
+            f"{HASHTAGS[pick['hashtags']]} {HASHTAGS['common']}")
 
 
 def main():
     # папки не удаляем (OneDrive держит их во время синхронизации) — только старые слайды
     for old in OUT.rglob("*.jpg") if OUT.exists() else []:
         old.unlink()
-    top = json.loads((DATA / "top.json").read_text(encoding="utf-8"))
     full = {lot["id"]: lot for lot in json.loads((DATA / "lots-full.json").read_text(encoding="utf-8"))}
     meta = json.loads((DATA / "meta.json").read_text(encoding="utf-8"))
-    sections = {s["slug"]: s for s in top["sections"]}
+    index = MarketIndex.from_json(DATA / "market-index.json")
     total = f"{meta['total']:,}".replace(",", " ")
 
     # профиль
@@ -319,13 +419,9 @@ def main():
         "Подписывайтесь — каждую неделю публикуем ТОП объектов ниже рынка. Каталог — по ссылке в шапке профиля.\n\n"
         f"{HASHTAGS['common']} #недвижимость #казахстан")))
 
-    # 2–3. ТОП Алматы и Астаны
-    if "kvartiry-almaty" in sections:
-        captions.append(("02-top-almaty", top_post(sections["kvartiry-almaty"], full, "Алматы", "02-top-almaty",
-                                                     "ТОП недели · Алматы")))
-    if "kvartiry-astana" in sections:
-        captions.append(("03-top-astana", top_post(sections["kvartiry-astana"], full, "Астаны", "03-top-astana",
-                                                     "ТОП недели · Астана")))
+    # 2, 3, 6. подборки недели: Алматы, Астана, бизнес
+    for pick in PICKS:
+        captions.append((pick["folder"], pick_post(pick, full, index, total)))
 
     # 4. как купить
     steps = [
@@ -369,12 +465,7 @@ def main():
         + "\n".join(f"• {t} — {b}" for t, b in kinds)
         + f"\n\nВсе виды — в каталоге torgi.kz (ссылка в шапке профиля).\n\n{HASHTAGS['common']}")))
 
-    # 6. до 30 млн
-    if "kvartiry-do-30-mln" in sections:
-        captions.append(("06-top-do-30-mln", top_post(sections["kvartiry-do-30-mln"], full, "до 30 млн ₸",
-                                                        "06-top-do-30-mln", "ТОП · бюджет до 30 млн")))
-
-    md = ["# Подписи к постам\n"] + [f"## {name}\n\n```\n{text}\n```\n" for name, text in captions]
+    md = ["# Подписи к постам\n"] + [f"## {name}\n\n```\n{text}\n```\n" for name, text in sorted(captions)]
     (OUT / "captions.md").write_text("\n".join(md), encoding="utf-8")
     print(f"готово: {OUT}")
 
