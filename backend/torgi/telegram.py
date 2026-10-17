@@ -246,6 +246,44 @@ def refresh(session: Session) -> int:
     return edited
 
 
+# Описания каналов и бота живут здесь, а не только в Telegram: `torgi post --about` выставляет их, если в Telegram
+# другой текст. Лимиты Telegram: описание канала — 255 символов, короткое описание бота — 120.
+INSTAGRAM = "instagram.com/torgi.kz"
+CHANNEL_ABOUT = {
+    "@torgi_kz_news": "Все торги недвижимостью Казахстана: арест, госимущество (E-Qazyna), банкроты, конфискат, залоги и "
+                      "имущество банков Halyk, Forte, BCC, Freedom, Alatau, Bereke, Евразийского, Нурбанка, RBK. "
+                      f"Новые лоты ежедневно → torgi.kz\nInstagram → {INSTAGRAM}",
+    "@torgi_kz_almaty": "Квартиры, дома, коммерция и земля в Алматы с торгов: арест, госимущество, банкроты, залоги банков. "
+                        "Новые лоты каждый день → torgi.kz. Все торги Казахстана — @torgi_kz_news\n"
+                        f"Instagram → {INSTAGRAM}",
+    "@torgi_kz_astana": "Квартиры, дома, коммерция и земля в Астане с торгов: арест, госимущество, банкроты, залоги банков. "
+                        "Новые лоты каждый день → torgi.kz. Все торги Казахстана — @torgi_kz_news\n"
+                        f"Instagram → {INSTAGRAM}",
+    "@torgi_kz_biz": "Офисы, магазины, склады, производственные базы и здания с торгов по всему Казахстану: арест, "
+                     "госимущество, банкроты, залоги банков. Новые лоты каждый день → torgi.kz. "
+                     f"Все торги — @torgi_kz_news\nInstagram → {INSTAGRAM}",
+}
+BOT_SHORT_ABOUT = f"Новые объекты с торгов по вашему поиску — torgi.kz\nInstagram → {INSTAGRAM}"
+
+
+def set_about(bot: TelegramBot) -> list[str]:
+    """Описания каналов и короткое описание бота — как в CHANNEL_ABOUT и BOT_SHORT_ABOUT. Возвращает, что изменилось;
+    канал, где у бота нет права «Изменение профиля канала», пропускается с предупреждением."""
+    changed = []
+    for chat, text in CHANNEL_ABOUT.items():
+        try:
+            if (bot.call("getChat", chat_id=chat).get("description") or "") != text:
+                bot.call("setChatDescription", chat_id=chat, description=text)
+                changed.append(chat)
+        except RuntimeError as exc:
+            log.warning("%s: описание не обновлено (%s)", chat, exc)
+    if bot.call("getMyShortDescription").get("short_description") != BOT_SHORT_ABOUT:
+        bot.call("setMyShortDescription", short_description=BOT_SHORT_ABOUT)
+        changed.append("бот")
+    log.info("описания: %s", ", ".join(changed) or "без изменений")
+    return changed
+
+
 def channels() -> list[tuple[str, dict | None, int]]:
     """Основной канал (все лоты) и дополнительные — региональные и тематические."""
     out: list[tuple[str, dict | None, int]] = []

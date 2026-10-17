@@ -37,3 +37,30 @@ def test_benefits_and_channel_rules():
     assert text.endswith("FOOTER")
     assert matches_channel(lot, {"region": "Астана"}) and not matches_channel(lot, {"region": ["Алматы"]})
     assert matches_channel(lot, {"category": ["apartment", "house"]}) and not matches_channel(lot, {"category": "land"})
+
+
+def test_about_fits_limits_and_updates_only_changed():
+    from torgi import telegram
+
+    assert all(len(text) <= 255 for text in telegram.CHANNEL_ABOUT.values())
+    assert len(telegram.BOT_SHORT_ABOUT) <= 120
+    assert all(telegram.INSTAGRAM in text for text in telegram.CHANNEL_ABOUT.values())
+
+    class FakeBot:
+        def __init__(self):
+            self.calls = []
+
+        def call(self, method, **params):
+            self.calls.append((method, params))
+            if method == "getChat":  # у основного канала описание уже актуальное
+                same = params["chat_id"] == "@torgi_kz_news"
+                return {"description": telegram.CHANNEL_ABOUT[params["chat_id"]] if same else "старое"}
+            if method == "setChatDescription" and params["chat_id"] == "@torgi_kz_biz":
+                raise RuntimeError("Telegram setChatDescription: not enough rights")
+            if method == "getMyShortDescription":
+                return {"short_description": telegram.BOT_SHORT_ABOUT}
+            return True
+
+    bot = FakeBot()
+    assert telegram.set_about(bot) == ["@torgi_kz_almaty", "@torgi_kz_astana"]
+    assert not any(m == "setMyShortDescription" for m, _ in bot.calls)
