@@ -35,10 +35,12 @@ MOSAICS = [
 ]
 
 # лот и фото (номера в лоте): главное и ещё два; trim — доля кадра снизу, которую отрезаем (дата съёмки на фото)
-# лоты из опубликованных постов — в Stories их не повторяем (вместе с лотами каруселей из make_instagram.PICKS)
-POSTED = {354, 1704, 1280, 2901, 3678,  # «ТОП-5 Алматы» 14.10
-          1583, 1206, 109, 1454, 105}  # «ТОП-5 квартир с ремонтом в Алматы» 17.10
-IN_POSTS = POSTED | {x["id"] for pick in ig.PICKS for x in pick["lots"]}
+# Мозаика не должна повторять пост: разовые совпадения с постами допустимы, но если в мозаике больше
+# MAX_REPEATS лотов из одного поста (опубликованного или готовой карусели из make_instagram.PICKS) — она лишняя
+POSTS = [{354, 1704, 1280, 2901, 3678},  # «ТОП-5 Алматы» 14.10
+         {1583, 1206, 109, 1454, 105}]  # «ТОП-5 квартир с ремонтом в Алматы» 17.10
+POSTS += [{x["id"] for x in pick["lots"]} for pick in ig.PICKS]
+MAX_REPEATS = 2
 
 STORIES = {
     "lot_of_day": {"id": 1272, "photos": [4, 11, 10], "city": "Алматы"},
@@ -218,12 +220,13 @@ def main():
         section = sections.get(slug)
         if not section:
             continue
-        fresh = [x for x in section["items"] if x["id"] in full and x["id"] not in IN_POSTS]
-        if len(fresh) < 6:
-            print(f"  мозаика {slug}: без повторов с постами только {len(fresh)} лотов — пропускаем")
+        chosen = [x for x in section["items"] if x["id"] in full][:9]
+        repeats = max(len({x["id"] for x in chosen} & post) for post in POSTS)
+        if repeats > MAX_REPEATS or len(chosen) < 6:
+            print(f"  мозаика {slug}: {repeats} лотов из одного поста — повторяет пост, пропускаем")
             continue
         items = [(full[x["id"]], x, ig.fetch_photo(x.get("image") or (full[x["id"]]["images"] or [None])[0]))
-                 for x in fresh[:9]]
+                 for x in chosen]
         best = max(REGION_CAP if x.get("discount_note") else x["discount_pct"] for _, x, _ in items)
         n = len(section["items"])
         img = story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best))
