@@ -205,8 +205,8 @@ def main():
     notes = ["# Stories — порядок публикации\n"]
 
     s = STORIES["lot_of_day"]
-    story_lot_of_day(full[s["id"]], tops[s["id"]], s).save(OUT / "01-lot-dnya.jpg", quality=92)
-    notes.append(f"1. `01-lot-dnya.jpg` — стикер «Ссылка»: {SITE}/lots/{s['id']}/?{UTM}")
+    story_lot_of_day(full[s["id"]], tops[s["id"]], s).save(OUT / "02-lot-dnya.jpg", quality=92)
+    notes.append(f"2. `02-lot-dnya.jpg` — стикер «Ссылка»: {SITE}/lots/{s['id']}/?{UTM}")
     s = STORIES["countdown"]
     img = story_countdown(full[s["id"]], tops[s["id"]], s, today)
     if img:
@@ -232,8 +232,8 @@ def main():
         img = story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best))
         img.save(OUT / "variants" / f"mozaika-{slug}.jpg", quality=92)
         if slug == STORIES["second"]:
-            img.save(OUT / "02-mozaika.jpg", quality=92)
-            notes.insert(2, f"2. `02-mozaika.jpg` — стикер «Ссылка»: {SITE}/top/?{UTM}#{slug}")
+            img.save(OUT / "01-mozaika.jpg", quality=92)
+            notes.insert(1, f"1. `01-mozaika.jpg` — стикер «Ссылка»: {SITE}/top/?{UTM}#{slug}")
     (OUT / "stories.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
     print(f"готово: {OUT}")
 
