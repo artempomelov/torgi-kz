@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from torgi.config import settings
@@ -209,6 +209,27 @@ def _set_state(session: Session, key: str, value: str) -> None:
 
 LEAD_TITLES = {"consult": "консультация по лоту", "check": "консультация по лоту"}
 
+# Стандартный ответ на заявку без лота (ссылка «Консультация» из шапки Instagram и т. п.) — администратор шлёт его
+# командой /info2 в ответ (Reply) на заявку или вопрос
+GENERAL_REPLY = (
+    "Здравствуйте, спасибо за обращение!\n\n"
+    'На портале <a href="{site}/?{utm}">torgi.kz</a> собрана полная база недвижимости с торгов Казахстана — '
+    "{count} объектов: квартиры, дома, коммерция, земля и паркоместа. Арестованное имущество (ЕЭТП Минюста), "
+    "госимущество и приватизация (E-Qazyna), имущество банкротов, залоги и имущество банков Halyk, Forte, BCC, "
+    "Freedom, Bereke, Евразийского и других.\n\n"
+    "Для удобства настройте в каталоге фильтры — город и район, тип объекта, цену, вид продажи — и нажмите "
+    "«Сохранить поиск»: новые подходящие лоты будут приходить сюда, в Telegram. Самые выгодные предложения "
+    'относительно рынка — в разделе <a href="{site}/top/?{utm}">«ТОП»</a>.\n\n'
+    "Если вас заинтересовал конкретный лот — пришлите ссылку на него или номер, и мы направим вам полную "
+    "информацию по нему."
+)
+
+
+def general_reply(session: Session) -> str:
+    active = session.scalar(select(func.count()).select_from(Lot).where(Lot.status == "active")) or 0
+    count = f"более {active // 100 * 100:,}".replace(",", " ") if active >= 1000 else "сотни"
+    return GENERAL_REPLY.format(site=settings.site_url, utm="utm_source=telegram&amp;utm_medium=bot", count=count)
+
 
 def _admin_chats(session: Session) -> list[int]:
     return json.loads(_state(session, "admin_chats") or "[]")
@@ -222,7 +243,8 @@ def _who(user: dict) -> str:
 
 
 MAX_THREADS = 300  # сколько последних заявок/вопросов помнить для ответа через бота
-REPLY_HINT = "\n\n<i>Ответьте на это сообщение (Reply) — бот перешлёт ответ клиенту. /info в ответе — сводка по лоту.</i>"
+REPLY_HINT = ("\n\n<i>Ответьте на это сообщение (Reply) — бот перешлёт ответ клиенту. /info в ответе — сводка "
+              "по лоту, /info2 — стандартный ответ о сайте.</i>")
 
 
 def _remember_thread(session: Session, admin_chat: int, message_id: int, thread: dict) -> None:
@@ -269,7 +291,15 @@ def register_admin(session: Session, bot: Bot, chat_id: int, user: dict) -> bool
 
 def lead(session: Session, bot: Bot, chat_id: int, user: dict, parsed: Lead) -> None:
     lot = session.get(Lot, parsed.lot_id) if parsed.lot_id else None
-    about = f"\n{_lot_line(lot)}" if lot else ""
+    if lot is None:
+        # без лота — человеку нужна консультация вообще; стандартный ответ о сайте администратор шлёт командой /info2
+        notify_admins(session, bot, f"📩 Заявка: <b>общая консультация (без лота)</b> от {_who(user)}\n"
+                                    "Ответьте /info2 — бот пришлёт клиенту стандартный ответ о сайте.",
+                      {"chat": chat_id, "lot": None})
+        bot.send(chat_id, "Заявка на бесплатную консультацию принята — напишем вам здесь в Telegram.\n\n"
+                          "Можете сразу написать вопрос следующим сообщением — мы его получим." + channel_invite())
+        return
+    about = f"\n{_lot_line(lot)}"
     notify_admins(session, bot, f"📩 Заявка: <b>{LEAD_TITLES[parsed.kind]}</b> от {_who(user)}{about}",
                   {"chat": chat_id, "lot": parsed.lot_id})
     reply = ("Заявка на бесплатную консультацию принята — ответим на вопросы по объекту и подскажем, "
@@ -374,6 +404,24 @@ _LEASE_RE = re.compile(r"Срок аренды,?\s*мес\.?:\s*(\d+)", re.I)
 _CLIENT_ID_RE = re.compile(r"· ID (\d+)")
 _USER_LINK_RE = re.compile(r"^tg://user\?id=(\d+)$")
 _LOT_LINK_RE = re.compile(r"/lots/(\d+)/")
+_LOT_NUMBER_RE = re.compile(r"(?:лот\w*|№|#)\s*:?\s*(\d{1,9})\b|^\s*(\d{1,9})\s*$", re.I)
+
+
+def lots_in_text(session: Session, text: str) -> list[Lot]:
+    """Лоты, о которых пишет клиент: ссылка torgi.kz/lots/N/, или «лот № N» / «#N» / просто число. Номер ищем
+    и среди наших (как в ссылке), и среди номеров лотов у продавца — на сайте показывается номер продавца."""
+    if m := re.search(r"torgi\.kz/lots/(\d+)", text):
+        lot = session.get(Lot, int(m.group(1)))
+        return [lot] if lot else []
+    numbers = {a or b for a, b in _LOT_NUMBER_RE.findall(text)}
+    found: dict[int, Lot] = {}
+    for number in numbers:
+        if (lot := session.get(Lot, int(number))) is not None:
+            found[lot.id] = lot
+        for lot in session.scalars(select(Lot).where(Lot.status == "active")):
+            if str((lot.extra or {}).get("lot_number") or "") == number:
+                found[lot.id] = lot
+    return list(found.values())[:3]
 
 
 def thread_from_message(message: dict) -> dict | None:
@@ -404,9 +452,11 @@ def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: d
     if text.split()[0] in ("/info", "/lot"):
         lot = session.get(Lot, thread["lot"]) if thread.get("lot") else None
         if lot is None:
-            bot.send(chat_id, "К этой заявке не привязан лот — напишите ответ текстом.")
+            bot.send(chat_id, "К этой заявке не привязан лот — ответьте /info2 (стандартный ответ о сайте) или текстом.")
             return
         message = lot_info(lot)
+    elif text.split()[0] == "/info2":
+        message = general_reply(session) + channel_invite()
     else:
         message = html.escape(text)
     delivered = bot.send(thread["chat"], message)
@@ -448,9 +498,15 @@ def handle_message(session: Session, bot: Bot, chat_id: int, text: str, now: dat
     elif text.startswith("/"):
         bot.send(chat_id, HELP.format(site=settings.site_url))
     elif not is_admin:
-        # вопрос пользователя — администраторам
-        notify_admins(session, bot, f"💬 Вопрос от {_who(user)}:\n{html.escape(text[:1500])}",
-                      {"chat": chat_id, "lot": _last_lot(session, chat_id)})
+        # вопрос пользователя — администраторам; ссылка или номер лота в нём — привязываем лот к переписке
+        found = lots_in_text(session, text)
+        note = ""
+        if found:
+            note = ("\n\nПохоже, речь о лоте:\n" + "\n".join(_lot_line(lot) for lot in found)
+                    + ("\nОтветьте /info — бот пришлёт клиенту сводку." if len(found) == 1 else
+                       "\nНесколько совпадений — уточните у клиента."))
+        notify_admins(session, bot, f"💬 Вопрос от {_who(user)}:\n{html.escape(text[:1500])}{note}",
+                      {"chat": chat_id, "lot": found[0].id if len(found) == 1 else _last_lot(session, chat_id)})
         bot.send(chat_id, "Спасибо, вопрос передан — ответим здесь в Telegram.")
 
 

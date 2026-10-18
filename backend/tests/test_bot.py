@@ -125,6 +125,41 @@ def test_admin_replies_through_bot(capsys, monkeypatch):
         session.rollback()
 
 
+def test_lead_without_lot_and_info2(capsys, monkeypatch):
+    """Заявка без лота: администратор отвечает /info2 — клиенту уходит стандартный ответ о сайте;
+    клиент присылает номер лота у продавца — лот привязывается к переписке, /info работает."""
+    from torgi.config import settings
+
+    monkeypatch.setattr(settings, "telegram_admins", "boss")
+    monkeypatch.setattr(settings, "telegram_channel", "@torgi_kz_news")
+    init_db()
+    with SessionLocal() as session:
+        b = bot.Bot(dry_run=True)
+        lot = _lot(session, "info2", extra={"lot_number": "778899"}, address="г. Астана, ул. Сыганак, 12")
+        admin = {"id": 3003, "username": "boss"}
+        bot.handle_message(session, b, 3003, "/start", utcnow(), admin)
+        capsys.readouterr()
+        bot.handle_message(session, b, 4004, "/start c", utcnow(), {"id": 4004, "first_name": "Айгерим"})
+        out = capsys.readouterr().out
+        # 1 — приветствие админу, 2 — заявка админу, 3 — «заявка принята» клиенту (без стандартного ответа)
+        assert "общая консультация (без лота)" in out and "Ответьте /info2" in out
+        assert "--> 4004\nЗаявка на бесплатную консультацию принята" in out and "спасибо за обращение" not in out
+        bot.handle_message(session, b, 3003, "/info", utcnow(), admin, reply_to=2)
+        assert "не привязан лот — ответьте /info2" in capsys.readouterr().out
+        bot.handle_message(session, b, 3003, "/info2", utcnow(), admin, reply_to=2)
+        out = capsys.readouterr().out.replace("\xa0", " ")
+        assert "--> 4004\nЗдравствуйте, спасибо за обращение!" in out and "«Сохранить поиск»" in out
+        assert "пришлите ссылку на него или номер" in out and "✅ Отправлено" in out
+
+        bot.handle_message(session, b, 4004, "Интересует лот № 778899", utcnow(), {"id": 4004, "first_name": "Айгерим"})
+        out = capsys.readouterr().out
+        assert "Похоже, речь о лоте" in out and f"/lots/{lot.id}/" in out and "Ответьте /info" in out
+        # 4 — «не привязан лот», 5–6 — стандартный ответ и «отправлено», 7 — вопрос клиента администратору
+        bot.handle_message(session, b, 3003, "/info", utcnow(), admin, reply_to=7)
+        assert "--> 4004\nЗдравствуйте! Вы оставляли заявку" in capsys.readouterr().out
+        session.rollback()
+
+
 def test_admin_reply_to_old_lead(capsys, monkeypatch):
     """Старая заявка (до сохранения переписок): клиент и лот — из ссылок в самом сообщении."""
     from torgi.config import settings
