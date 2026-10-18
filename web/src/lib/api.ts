@@ -70,6 +70,8 @@ export type TopItem = {
   segment: string; // «Алматы · Медеуский район · 2»
   sample: number;
   confidence: string;
+  image?: string | null; // фото для карточки ТОПа — выбрано вручную вместо первого фото продавца
+  discount_note?: string | null; // «более 30%» — вне Алматы и Астаны оценка грубее, точную скидку не показываем
 };
 export type TopData = {
   market_updated_at?: string | null;

@@ -60,7 +60,7 @@ def test_top_limits_one_building():
     items, lots = [], {}
     for i in range(6):  # шесть квартир одного ЖК и одна в другом доме
         items.append({"id": i, "source": "halyk", "category": "apartment", "city": "Алматы", "district": "Бостандыкский район",
-                      "rooms": 2, "area_m2": 60 + i, "price": 30_000_000 + i * 100_000, "flags": []})
+                      "rooms": 2, "area_m2": 60 + i, "price": 36_000_000 + i * 100_000, "flags": []})
         lots[i] = SimpleNamespace(title="Квартира", description=None, address=f"Алматы, ЖК Нурлы Тау, ул. Аль-Фараби 17, кв. {i}")
     items.append({"id": 9, "source": "bcc", "category": "apartment", "city": "Алматы", "district": "Алмалинский район",
                   "rooms": 2, "area_m2": 50, "price": 35_000_000, "flags": []})
@@ -74,8 +74,47 @@ def test_top_limits_one_building():
     items.append({"id": 12, "source": "rbk", "category": "apartment", "city": "Алматы", "district": None,
                   "rooms": 2, "area_m2": 60, "price": 45_000_000, "flags": []})  # район неизвестен — оценка по городу ненадёжна
     lots[12] = SimpleNamespace(title="Квартиры в ЖК Панорама", description=None, address=None)
+    items.append({"id": 13, "source": "bcc", "category": "apartment", "city": "Алматы", "district": "Алмалинский район",
+                  "rooms": 2, "area_m2": 70, "price": 45_000_000, "flags": []})  # черновая отделка — в ТОП не берём
+    lots[13] = SimpleNamespace(title="Квартира", description="Квартира в черновой отделке", address="Алматы, ул. Сатпаева, д. 5")
+    for lot in lots.values():
+        lot.images = ["1", "2", "3", "4"]
     data = top.build(items, lots, index)
     almaty = next(s for s in data["sections"] if s["slug"] == "kvartiry-almaty")
     ids = [x["id"] for x in almaty["items"]]
-    assert len(ids) == 3 and 9 in ids and 10 not in ids and 11 not in ids and 12 not in ids
+    assert len(ids) == 3 and 9 in ids and 10 not in ids and 11 not in ids and 12 not in ids and 13 not in ids
     assert almaty["items"][0]["discount_pct"] >= almaty["items"][-1]["discount_pct"]
+    assert almaty["title"] == "ТОП-3 квартир в Алматы"
+
+
+def test_top_from_picks():
+    """Ручной отбор: порядок по скидке, выбранное фото на карточке, снятые лоты выпадают, название — по числу лотов,
+    вне Алматы и Астаны скидка больше 30% — «более 30%»."""
+    from types import SimpleNamespace
+
+    from torgi import top
+
+    index = market.MarketIndex({("apartment", "Алматы", None, None): (900_000, 1_000_000, 1_100_000, 50),
+                                ("apartment", "Караганда", None, None): (300_000, 400_000, 500_000, 50)})
+    items = [
+        {"id": 1, "source": "a", "category": "apartment", "city": "Алматы", "district": None, "rooms": 3,
+         "area_m2": 70, "price": 59_500_000, "flags": []},  # −15%, района нет в данных — задан в списке
+        {"id": 2, "source": "a", "category": "apartment", "city": "Алматы", "district": "Алмалинский район", "rooms": 2,
+         "area_m2": 60, "price": 42_000_000, "flags": []},  # −30%
+        {"id": 3, "source": "a", "category": "apartment", "city": "Караганда", "district": None, "rooms": 2,
+         "area_m2": 50, "price": 12_000_000, "flags": []},  # −40% в регионе
+        {"id": 4, "source": "a", "category": "apartment", "city": "Алматы", "district": "Медеуский район", "rooms": 2,
+         "area_m2": 60, "price": 48_000_000, "flags": []},  # −20%
+    ]
+    lots = {i: SimpleNamespace(title="Квартира", description=None, address=None, images=[f"p{i}-{k}" for k in range(6)])
+            for i in range(1, 5)}
+    picks = {"kvartiry-almaty": [{"id": 1, "photo": 3, "district": "Наурызбайский район"}, {"id": 2, "photo": 0},
+                                 {"id": 99, "photo": 0}, {"id": 4, "photo": 5}],
+             "kvartiry-regiony": [{"id": 3, "photo": 2}, {"id": 1}, {"id": 2}]}
+    data = top.build(items, lots, index, picks)
+    almaty = next(s for s in data["sections"] if s["slug"] == "kvartiry-almaty")
+    assert [x["id"] for x in almaty["items"]] == [2, 4, 1] and almaty["title"] == "ТОП-3 квартир в Алматы"
+    assert almaty["items"][2]["image"] == "p1-3" and almaty["items"][2]["discount_pct"] == 15
+    assert "discount_note" not in almaty["items"][0]
+    regions = next(s for s in data["sections"] if s["slug"] == "kvartiry-regiony")
+    assert regions["items"][0]["id"] == 3 and regions["items"][0]["discount_note"] == "более 30%"

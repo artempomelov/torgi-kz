@@ -194,8 +194,9 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
     if market_index and market_index.exists():
         from torgi.market import MarketIndex  # market импортирует export — избегаем цикла
         from torgi.top import build as build_top
+        from torgi.top import load_picks
 
-        top = build_top(short, {lot.id: lot for lot in lots}, MarketIndex.from_json(market_index))
+        top = build_top(short, {lot.id: lot for lot in lots}, MarketIndex.from_json(market_index), load_picks())
     _dump(out_dir / "top.json", top)
 
     _dump(out_dir / "lots.json", short)

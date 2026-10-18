@@ -1,13 +1,17 @@
-"""Раздел «ТОП» сайта: самые выгодные объекты относительно рынка (оценка — torgi.market.MarketIndex).
+"""Раздел «ТОП» сайта: выгодные и презентабельные объекты относительно рынка (оценка — torgi.market.MarketIndex).
 
-Отбор: оценка надёжная (не «низкая»), ниже рынка на 10–60% (больше — почти всегда ошибка данных),
-без пометок об ошибках, аренды и долей; из одного дома или ЖК — не больше двух объектов,
-иначе один застройщик-залогодатель занимает весь список. В Алматы и Астане — только с известным районом:
-цена м² там по районам различается в полтора раза, и оценка по всему городу завышает скидку окраин.
+Основа — ручной отбор (top_picks.json): лоты, отобранные по фото — нормальное состояние, реальные фото интерьера,
+для карточки выбрано лучшее фото. Самая большая «скидка» обычно у недостроев, черновой отделки и разрухи —
+такие объекты никому не интересны, поэтому автоматический рейтинг по скидке — только запасной вариант для раздела
+без ручного списка. Его правила: оценка надёжная (не «низкая»), ниже рынка на 10–45%, не меньше 4 фото, без
+недостроя и черновой отделки, без пометок об ошибках, аренды и долей; из одного дома или ЖК — не больше двух.
+В Алматы и Астане — только с известным районом: оценка по всему городу завышает скидку окраин.
 """
 
+import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from torgi import normalize as nz
@@ -15,7 +19,13 @@ from torgi.market import MarketIndex, confidence
 from torgi.models import Lot
 
 TOP_SIZE = 10
-MIN_DISCOUNT, MAX_DISCOUNT = 10, 55
+MIN_DISCOUNT, MAX_DISCOUNT = 10, 45
+MIN_PHOTOS = 4
+# объекты с проблемами: их «скидка» — плата за проблемы (решение владельца сайта от 18.10.2026)
+PROBLEM_RE = re.compile(r"недостро|незаверш|чернов|без отделки|предчистов|капремонт|аварийн|под снос|котлован", re.I)
+# вне Алматы и Астаны оценка грубее — скидку больше 30% показываем как «более 30%»
+REGION_DISCOUNT_CAP = 30
+PICKS_FILE = Path(__file__).with_name("top_picks.json")
 # правдоподобная площадь: «квартира» 463 м² — обычно несколько квартир или целый этаж одним лотом
 AREA_RANGE = {"apartment": (20, 200), "house": (40, 400), "commercial": (15, 1500)}
 PER_BUILDING = 2
@@ -33,20 +43,22 @@ class Section:
     match: Callable[[dict], bool]
 
 
+# порядок — как на сайте (решение владельца): Алматы, Астана, коммерция, регионы, дома, до 30 млн;
+# {n} в названии — сколько объектов в разделе на самом деле
 SECTIONS = [
-    Section("kvartiry-almaty", "ТОП-10 квартир в Алматы", "Самые выгодные квартиры с торгов и из залогов в Алматы",
+    Section("kvartiry-almaty", "ТОП-{n} квартир в Алматы", "Самые выгодные квартиры с торгов и из залогов в Алматы",
             lambda x: x["category"] == "apartment" and x["city"] == "Алматы"),
-    Section("kvartiry-astana", "ТОП-10 квартир в Астане", "Самые выгодные квартиры с торгов и из залогов в Астане",
+    Section("kvartiry-astana", "ТОП-{n} квартир в Астане", "Самые выгодные квартиры с торгов и из залогов в Астане",
             lambda x: x["category"] == "apartment" and x["city"] == "Астана"),
-    Section("kvartiry-regiony", "ТОП-10 квартир в регионах", "Караганда, Шымкент, Уральск, Актау и другие города",
-            lambda x: x["category"] == "apartment" and x["city"] not in BIG_CITIES),
-    Section("kvartiry-do-30-mln", "ТОП-10 квартир до 30 млн ₸", "Лучшие предложения для небольшого бюджета по всей стране",
-            lambda x: x["category"] == "apartment" and x["price"] <= 30_000_000),
-    Section("doma", "ТОП-10 домов", "Частные дома ниже рынка",
-            lambda x: x["category"] == "house"),
-    Section("kommercheskaya", "ТОП-10 коммерческой недвижимости",
-            "Офисы, магазины и помещения ниже рынка — оценка приблизительная: назначение помещений разное",
+    Section("kommercheskaya", "ТОП-{n} коммерческой недвижимости",
+            "Офисы, салоны, помещения и готовый бизнес ниже рынка — оценка приблизительная: назначение помещений разное",
             lambda x: x["category"] == "commercial"),
+    Section("kvartiry-regiony", "ТОП-{n} квартир в регионах", "Караганда, Шымкент, Уральск, Актау и другие города",
+            lambda x: x["category"] == "apartment" and x["city"] not in BIG_CITIES),
+    Section("doma", "ТОП-{n} домов", "Частные дома ниже рынка",
+            lambda x: x["category"] == "house"),
+    Section("kvartiry-do-30-mln", "ТОП-{n} квартир до 30 млн ₸", "Лучшие предложения для небольшого бюджета по всей стране",
+            lambda x: x["category"] == "apartment" and x["price"] <= 30_000_000),
 ]
 
 _ZHK_RE = re.compile(r"\bжк\s*[«\"']?([\w-]+)", re.I)
@@ -65,8 +77,34 @@ def building_key(item: dict, address: str | None, title: str | None = None) -> s
     return f"id|{item['id']}"
 
 
-def build(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> dict:
-    """items — публичные лоты выгрузки (город и район уже сверены), lots — те же лоты из базы (адрес, заголовок)."""
+def load_picks(path: Path = PICKS_FILE) -> dict[str, list[dict]]:
+    """Ручной отбор: {раздел: [{"id": лот, "photo": номер фото для карточки, "district": район, если его нет в данных}]}."""
+    return json.loads(path.read_text(encoding="utf-8"))["sections"] if path.exists() else {}
+
+
+def _estimate(x: dict, index: MarketIndex, district: str | None = None) -> dict | None:
+    """Оценка лота для ТОПа; вне Алматы и Астаны большую скидку показываем как «более 30%»."""
+    district = district or x.get("district")
+    est = index.estimate(x["category"], x.get("city") or x.get("region"), district, x.get("rooms"), x.get("area_m2"))
+    if est is None:
+        return None
+    discount = round((1 - x["price"] / est.value) * 100)
+    top = {
+        "id": x["id"],
+        "estimate": round(est.value, -4),
+        "market_m2": round(est.ppm, -2),
+        "discount_pct": discount,
+        "segment": est.segment,
+        "sample": est.sample,
+        "confidence": confidence(est, district),
+    }
+    if x.get("city") not in BIG_CITIES and discount > REGION_DISCOUNT_CAP:
+        top["discount_note"] = f"более {REGION_DISCOUNT_CAP}%"
+    return top
+
+
+def _auto_candidates(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> list[dict]:
+    """Запасной рейтинг по скидке — для раздела без ручного списка."""
     candidates = []
     for x in items:
         lot = lots.get(x["id"])
@@ -74,49 +112,69 @@ def build(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> dict:
             continue
         if EXCLUDED_RE.search(f"{lot.address or ''} {lot.title or ''}"):
             continue
+        if PROBLEM_RE.search(f"{lot.title or ''} {lot.description or ''}") or len(getattr(lot, "images", None) or []) < MIN_PHOTOS:
+            continue
         # решение владельца сайта от 17.10.2026: без района в Алматы и Астане в ТОП не берём (в каталоге остаются)
         if x.get("city") in BIG_CITIES and not x.get("district"):
             continue
         lo, hi = AREA_RANGE.get(x["category"], (0, 0))
         if not x.get("area_m2") or not lo <= x["area_m2"] <= hi:
             continue
-        est = index.estimate(x["category"], x.get("city") or x.get("region"), x.get("district"), x.get("rooms"), x.get("area_m2"))
-        if est is None:
-            continue
-        level = confidence(est, x.get("district"))
-        discount = (1 - x["price"] / est.value) * 100
-        if level == "низкая" or not MIN_DISCOUNT <= discount < MAX_DISCOUNT:
+        top = _estimate(x, index)
+        if top is None or top["confidence"] == "низкая" or not MIN_DISCOUNT <= top["discount_pct"] < MAX_DISCOUNT:
             continue
         candidates.append({
             "item": x,
             "building": building_key(x, lot.address, lot.title),
             # однотипные лоты одного продавца (офисы одного ЖК с разными адресами) — тоже не больше двух
             "series": f"{x['source']}|{x.get('city')}|{x.get('district')}|{round(x['price'] / x['area_m2'], -4)}",
-            "top": {
-                "id": x["id"],
-                "estimate": round(est.value, -4),
-                "market_m2": round(est.ppm, -2),
-                "discount_pct": round(discount),
-                "segment": est.segment,
-                "sample": est.sample,
-                "confidence": level,
-            },
+            "top": top,
         })
     candidates.sort(key=lambda c: -c["top"]["discount_pct"])
+    return candidates
 
+
+def _from_picks(picks: list[dict], by_id: dict[int, dict], lots: dict[int, Lot], index: MarketIndex) -> list[dict]:
+    """Отобранные вручную лоты, которые ещё в продаже и всё ещё ниже рынка; карточка — с выбранным фото."""
+    picked = []
+    for p in picks:
+        x, lot = by_id.get(p["id"]), lots.get(p["id"])
+        if x is None or lot is None or not x.get("price"):
+            continue  # снят с торгов
+        top = _estimate(x, index, p.get("district"))
+        if top is None or top["discount_pct"] < MIN_DISCOUNT:
+            continue
+        images = getattr(lot, "images", None) or []
+        if p.get("photo") is not None and p["photo"] < len(images):
+            top["image"] = images[p["photo"]]
+        picked.append(top)
+    return sorted(picked, key=lambda t: -t["discount_pct"])
+
+
+def build(items: list[dict], lots: dict[int, Lot], index: MarketIndex, picks: dict[str, list[dict]] | None = None) -> dict:
+    """items — публичные лоты выгрузки (город и район уже сверены), lots — те же лоты из базы (адрес, заголовок, фото),
+    picks — ручной отбор по разделам (load_picks); раздел без него собирается автоматически."""
+    picks = picks or {}
+    by_id = {x["id"]: x for x in items}
+    candidates = None
     sections = []
     for section in SECTIONS:
-        picked, per_building = [], {}
-        for c in candidates:
-            if not section.match(c["item"]):
-                continue
-            if any(per_building.get(k, 0) >= PER_BUILDING for k in (c["building"], c["series"])):
-                continue
-            for k in (c["building"], c["series"]):
-                per_building[k] = per_building.get(k, 0) + 1
-            picked.append(c["top"])
-            if len(picked) == TOP_SIZE:
-                break
+        if picks.get(section.slug):
+            picked = _from_picks(picks[section.slug], by_id, lots, index)[:TOP_SIZE]
+        else:
+            candidates = candidates if candidates is not None else _auto_candidates(items, lots, index)
+            picked, per_building = [], {}
+            for c in candidates:
+                if not section.match(c["item"]):
+                    continue
+                if any(per_building.get(k, 0) >= PER_BUILDING for k in (c["building"], c["series"])):
+                    continue
+                for k in (c["building"], c["series"]):
+                    per_building[k] = per_building.get(k, 0) + 1
+                picked.append(c["top"])
+                if len(picked) == TOP_SIZE:
+                    break
         if len(picked) >= 3:
-            sections.append({"slug": section.slug, "title": section.title, "subtitle": section.subtitle, "items": picked})
+            sections.append({"slug": section.slug, "title": section.title.format(n=len(picked)),
+                             "subtitle": section.subtitle, "items": picked})
     return {"market_updated_at": index.updated_at, "sections": sections}

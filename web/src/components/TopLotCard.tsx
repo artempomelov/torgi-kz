@@ -12,14 +12,16 @@ export function TopLotCard({ lot, top, rank }: { lot: Lot; top: TopItem; rank: n
           {rank}
         </span>
         <div className="min-w-0 leading-tight">
-          <div className="text-sm font-bold text-success">−{top.discount_pct}% к рынку</div>
+          <div className="text-sm font-bold text-success">
+            {top.discount_note ? `Скидка ${top.discount_note}` : `−${top.discount_pct}% к рынку`}
+          </div>
           <div className="truncate text-xs text-muted" title={`Оценка по ${top.sample} объявлениям: ${top.segment}`}>
-            рынок ≈ {formatPriceShort(top.estimate)}
+            {top.discount_note ? "оценка рынка приблизительная" : `рынок ≈ ${formatPriceShort(top.estimate)}`}
           </div>
         </div>
       </div>
       <div className="-mt-px flex-1 [&>a]:h-full [&>a]:rounded-t-none">
-        <LotCard lot={lot} />
+        <LotCard lot={top.image ? { ...lot, image: top.image } : lot} />
       </div>
     </div>
   );

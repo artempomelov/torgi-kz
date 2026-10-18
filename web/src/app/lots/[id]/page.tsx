@@ -176,8 +176,13 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             ) : null}
             {top && (
               <Link href={`/top/#${top.slug}`} className="mt-3 block rounded-lg bg-success/10 p-3 text-sm text-success hover:bg-success/15">
-                🔥 <b>#{top.rank} в «{top.section}»</b> — ниже рынка на <b>{top.discount_pct}%</b>. Оценка torgi.kz ≈{" "}
-                {formatPrice(top.estimate)} по {top.sample} объявлениям ({top.segment}).
+                🔥 <b>#{top.rank} в «{top.section}»</b> —{" "}
+                {top.discount_note ? (
+                  <>ниже рынка <b>{top.discount_note}</b>. Оценка приблизительная: по {top.sample} объявлениям ({top.segment}).</>
+                ) : (
+                  <>ниже рынка на <b>{top.discount_pct}%</b>. Оценка torgi.kz ≈ {formatPrice(top.estimate)} по {top.sample}{" "}
+                    объявлениям ({top.segment}).</>
+                )}
               </Link>
             )}
             {!top && market && (
