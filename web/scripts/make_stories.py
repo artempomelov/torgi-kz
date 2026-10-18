@@ -1,5 +1,4 @@
-"""Instagram Stories torgi.kz: «Лот дня», вторая история на выбор (подборка, экономия, новый пост, цифры),
-«До торгов N дней».
+"""Instagram Stories torgi.kz: «Лот дня», мозаика раздела ТОПа, «До торгов N дней» — без лотов из постов.
 
     uv run --project backend --with pillow python web/scripts/make_stories.py
 
@@ -36,14 +35,15 @@ MOSAICS = [
 ]
 
 # лот и фото (номера в лоте): главное и ещё два; trim — доля кадра снизу, которую отрезаем (дата съёмки на фото)
+# лоты из опубликованных постов — в Stories их не повторяем (вместе с лотами каруселей из make_instagram.PICKS)
+POSTED = {354, 1704, 1280, 2901, 3678,  # «ТОП-5 Алматы» 14.10
+          1583, 1206, 109, 1454, 105}  # «ТОП-5 квартир с ремонтом в Алматы» 17.10
+IN_POSTS = POSTED | {x["id"] for pick in ig.PICKS for x in pick["lots"]}
+
 STORIES = {
-    "lot_of_day": {"id": 1583, "photos": [5, 2, 4], "city": "Алматы"},
-    "selection": {"city": "Астана", "lots": [{"id": 98, "photo": 10}, {"id": 99, "photo": 11},
-                                             {"id": 189, "photo": 5}]},
-    "savings": {"id": 1102, "photo": 7, "title": "2-комн., 50,2 м²", "trim": 0.08},
-    "new_post": {"title": "ТОП-5 квартир с ремонтом в Алматы", "lots": [{"id": 1583, "photo": 5}, {"id": 109, "photo": 8},
-                                                                        {"id": 1454, "photo": 7}, {"id": 105, "photo": 14}]},
+    "lot_of_day": {"id": 1272, "photos": [4, 11, 10], "city": "Алматы"},
     "countdown": {"id": 3812, "photos": [14, 12, 11], "title": "Квартира 130,7 м²"},
+    "second": "kvartiry-do-30-mln",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
 }
 
 
@@ -115,66 +115,6 @@ def story_lot_of_day(lot: dict, top: dict, spec: dict) -> Image.Image:
     x = ig.pill(d, (60 + d.textlength(ig.mln(lot["price"]), font=ig.font(ig.BLACK, 96)) + 30, 1478),
                 discount_text(top), ig.font(ig.BLACK, 36), ig.GREEN, ig.WHITE, pad=(22, 10))
     portal_line(d)
-    return img
-
-
-def story_selection(lots: list[tuple[dict, dict, Image.Image | None]], city: str) -> Image.Image:
-    """Вариант 1 — «Подборка дня»: три объекта одного города, у каждого фото, цена и скидка."""
-    img, d = canvas(ig.LIGHT)
-    header(d, f"Подборка дня · {city}", dark_bg=False)
-    y, row_h = 380, 380
-    for lot, top, photo in lots:
-        d.rounded_rectangle([40, y, W - 40, y + row_h - 24], 28, fill=ig.WHITE)
-        tile = ImageOps.fit(photo, (430, row_h - 24), Image.LANCZOS) if photo else Image.new("RGB", (430, row_h - 24), ig.SOFT)
-        mask = Image.new("L", tile.size, 0)
-        ImageDraw.Draw(mask).rounded_rectangle([0, 0, tile.width - 1, tile.height - 1], 28, fill=255)
-        img.paste(tile, (40, y), mask)
-        tx, title = 500, lot["headline"].partition(" — ")[0].replace("Квартира, ", "")
-        d.text((tx, y + 30), title, font=ig.fit_font(d, title, ig.BOLD, 40, W - 40 - tx - 30), fill=ig.INK)
-        place = lot_place(lot).replace(f"{city}, ", "")
-        d.text((tx, y + 84), place, font=ig.fit_font(d, place, ig.REG, 30, W - 40 - tx - 30), fill=ig.MUTED)
-        d.text((tx, y + 140), ig.mln(lot["price"]), font=ig.font(ig.BLACK, 64), fill=ig.INK)
-        ig.pill(d, (tx, y + 240), discount_text(top), ig.font(ig.BLACK, 32), ig.GREEN, ig.WHITE, pad=(20, 10))
-        y += row_h
-    portal_line(d, y=y + 40)
-    return img
-
-
-def story_savings(lot: dict, top: dict, spec: dict) -> Image.Image:
-    """Вариант 2 — «Экономия на торгах»: фото, цена против рынка полосами и сумма экономии."""
-    img, d = canvas()
-    ph = photos(lot, [spec["photo"]], spec.get("trim", 0))
-    paste(img, ph[0], (0, 0, W, 900))
-    shade_top(img)
-    d = ImageDraw.Draw(img)
-    header(d, "Экономия на торгах")
-    sub = f"{spec['title']} · {lot_place(lot)}"
-    d.text((60, 940), sub, font=ig.fit_font(d, sub, ig.BOLD, 40, W - 120), fill=ig.INK)
-    full_w = W - 120
-    d.rounded_rectangle([60, 1020, 60 + full_w, 1110], 18, fill="#e3e8f0")
-    d.text((90, 1065), f"Рынок ≈ {ig.mln(top['estimate'])}", font=ig.font(ig.BOLD, 40), fill=ig.MUTED, anchor="lm")
-    lot_w = int(full_w * lot["price"] / top["estimate"])
-    d.rounded_rectangle([60, 1130, 60 + lot_w, 1240], 20, fill=ig.GREEN)
-    d.text((90, 1185), f"На торгах {ig.mln(lot['price'])}", font=ig.font(ig.BLACK, 46), fill=ig.WHITE, anchor="lm")
-    d.text((60, 1290), "Экономия", font=ig.font(ig.BOLD, 40), fill=ig.MUTED)
-    d.text((60, 1340), f"≈ {ig.mln(top['estimate'] - lot['price'])}", font=ig.font(ig.BLACK, 110), fill=ig.GREEN)
-    portal_line(d)
-    return img
-
-
-def story_new_post(items: list[tuple[dict, Image.Image | None]], title: str, best: int) -> Image.Image:
-    """Вариант 3 — «Новый пост»: мозаика квартир из свежей карусели и её заголовок."""
-    img, d = canvas(ig.INK)
-    cw, ch = (W - 6) // 2, 560
-    for k, (_, p) in enumerate(items[:4]):
-        paste(img, p, ((k % 2) * (cw + 6), (k // 2) * (ch + 6), (k % 2) * (cw + 6) + cw, (k // 2) * (ch + 6) + ch))
-    shade_top(img)
-    d = ImageDraw.Draw(img)
-    header(d, "Новый пост")
-    y = 2 * ch + 6 + 50
-    y = ig.text_block(d, (60, y), title, ig.font(ig.BLACK, 66), ig.WHITE, W - 120, 1.12) + 10
-    d.text((60, y), f"ниже рынка до {best}%", font=ig.font(ig.BLACK, 66), fill="#3ddc84")
-    portal_line(d, dark=True)
     return img
 
 
@@ -265,37 +205,32 @@ def main():
     s = STORIES["lot_of_day"]
     story_lot_of_day(full[s["id"]], tops[s["id"]], s).save(OUT / "01-lot-dnya.jpg", quality=92)
     notes.append(f"1. `01-lot-dnya.jpg` — стикер «Ссылка»: {SITE}/lots/{s['id']}/?{UTM}")
-    notes.append("2. вторая история — один из вариантов в `variants/`")
     s = STORIES["countdown"]
     img = story_countdown(full[s["id"]], tops[s["id"]], s, today)
     if img:
         img.save(OUT / "03-do-torgov.jpg", quality=92)
         notes.append(f"3. `03-do-torgov.jpg` — стикер «Ссылка»: {SITE}/lots/{s['id']}/?{UTM} · дни — на {today:%d.%m}")
 
-    # варианты второй истории
-    s = STORIES["selection"]
-    rows = [(full[x["id"]], tops[x["id"]], photos(full[x["id"]], [x["photo"]])[0]) for x in s["lots"]]
-    story_selection(rows, s["city"]).save(OUT / "variants" / "1-podborka-dnya.jpg", quality=92)
-    s = STORIES["savings"]
-    story_savings(full[s["id"]], tops[s["id"]], s).save(OUT / "variants" / "2-ekonomiya.jpg", quality=92)
-    s = STORIES["new_post"]
-    items = [(full[x["id"]], photos(full[x["id"]], [x["photo"]])[0]) for x in s["lots"]]
-    best = max(tops[x["id"]]["discount_pct"] for x in s["lots"] if x["id"] in tops)
-    story_new_post(items, s["title"], best).save(OUT / "variants" / "3-novyj-post.jpg", quality=92)
-    story_numbers(meta).save(OUT / "variants" / "4-cifry.jpg", quality=92)
+    # вторая история — мозаика раздела ТОПа без лотов из постов; остальные разделы — варианты на замену
+    story_numbers(meta).save(OUT / "variants" / "cifry.jpg", quality=92)
     sections = {s["slug"]: s for s in json.loads((ig.DATA / "top.json").read_text(encoding="utf-8"))["sections"]}
-    for k, (slug, kicker, title, accent) in enumerate(MOSAICS, 5):
+    for slug, kicker, title, accent in MOSAICS:
         section = sections.get(slug)
         if not section:
             continue
+        fresh = [x for x in section["items"] if x["id"] in full and x["id"] not in IN_POSTS]
+        if len(fresh) < 6:
+            print(f"  мозаика {slug}: без повторов с постами только {len(fresh)} лотов — пропускаем")
+            continue
         items = [(full[x["id"]], x, ig.fetch_photo(x.get("image") or (full[x["id"]]["images"] or [None])[0]))
-                 for x in section["items"][:9] if x["id"] in full]
+                 for x in fresh[:9]]
         best = max(REGION_CAP if x.get("discount_note") else x["discount_pct"] for _, x, _ in items)
         n = len(section["items"])
-        story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best)).save(
-            OUT / "variants" / f"{k}-mozaika-{slug}.jpg", quality=92)
-    notes.append(f"\nСсылки для вариантов: подборка — {SITE}/top/?{UTM}#kvartiry-astana; экономия — "
-                 f"{SITE}/lots/{STORIES['savings']['id']}/?{UTM}; новый пост — репост поста; цифры — {SITE}/?{UTM}")
+        img = story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best))
+        img.save(OUT / "variants" / f"mozaika-{slug}.jpg", quality=92)
+        if slug == STORIES["second"]:
+            img.save(OUT / "02-mozaika.jpg", quality=92)
+            notes.insert(2, f"2. `02-mozaika.jpg` — стикер «Ссылка»: {SITE}/top/?{UTM}#{slug}")
     (OUT / "stories.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
     print(f"готово: {OUT}")
 
