@@ -24,6 +24,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 from torgi.market import MarketIndex  # noqa: E402
+from torgi.top import BIG_CITIES, REGION_DISCOUNT_CAP  # noqa: E402
 
 DATA = ROOT / "web" / "data"
 OUT = ROOT / "marketing" / "instagram" / date.today().isoformat()
@@ -174,8 +175,9 @@ def mosaic_cover(kicker: str, title: str, accent: str, subtitle: str, photos: li
 
 
 def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Image | None, str]],
-                  estimate: float, discount: int, rank: int) -> Image.Image:
-    """Объект подборки: коллаж 2×2 (по умолчанию комната, кухня, санузел, дом) и белая плашка с ценой."""
+                  estimate: float, discount: int, rank: int, note: str | None = None) -> Image.Image:
+    """Объект подборки: коллаж 2×2 (по умолчанию комната, кухня, санузел, дом) и белая плашка с ценой.
+    note — «более 30%» вместо точной скидки (вне Алматы и Астаны оценка грубее, как в ТОПе на сайте)."""
     img = Image.new("RGB", (W, H), WHITE)
     d = ImageDraw.Draw(img)
     gap, grid_h = 6, 820
@@ -190,7 +192,7 @@ def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Im
             pill(d, (x + 18, y + cell_h - 52), label, font(BOLD, 24), INK, WHITE, pad=(14, 6))
     d.ellipse([36, 36, 126, 126], fill=GREEN)
     d.text((81, 81), str(rank), font=font(BLACK, 52), fill=WHITE, anchor="mm")
-    badge, bf = f"−{discount}% к рынку", font(BLACK, 40)
+    badge, bf = (f"скидка {note}" if note else f"−{discount}% к рынку"), font(BLACK, 40)
     pill(d, (W - 84 - d.textlength(badge, font=bf), grid_h - 96), badge, bf, GREEN, WHITE)
 
     y = grid_h + 34
@@ -199,7 +201,9 @@ def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Im
     y += 128
     price, pf = mln(lot["price"]), font(BLACK, 84)
     d.text((64, y), price, font=pf, fill=INK)
-    d.text((64 + d.textlength(price, font=pf) + 28, y + 40), f"рынок ≈ {mln(estimate)}", font=font(REG, 34), fill=MUTED)
+    market = "оценка приблизительная" if note else f"рынок ≈ {mln(estimate)}"
+    x = 64 + d.textlength(price, font=pf) + 28
+    d.text((x, y + 40), market, font=fit_font(d, market, REG, 34, int(W - 40 - x)), fill=MUTED)
     tags = [ORIGIN.get(lot["origin"], lot["origin"])]
     if lot.get("sale_type") in SALE:
         tags.append(SALE[lot["sale_type"]])
@@ -297,14 +301,14 @@ PICKS = [
     {"folder": "02-top-almaty", "kicker": "ТОП недели · Алматы", "title": "5 квартир с ремонтом",
      "headline": "ТОП-5 квартир с ремонтом в Алматы", "hashtags": "Алматы", "lots": [
          {"id": 1583, "photos": [5, 2, (4, "спальня"), 0]},
-         {"id": 1206, "photos": [8, 7, 16, 0]},
+         {"id": 1272, "photos": [4, 11, 10, 8]},
          {"id": 109, "photos": [8, 9, 6, 0]},
          {"id": 1454, "photos": [6, 7, 5, 0], "district": "Наурызбайский район, мкр. Шугыла"},
          {"id": 105, "photos": [3, 14, 1, 6], "district": "Наурызбайский район, мкр. Шугыла"},
      ]},
     {"folder": "03-top-astana", "kicker": "ТОП недели · Астана", "title": "5 квартир с ремонтом",
      "headline": "ТОП-5 квартир с ремонтом в Астане", "hashtags": "Астана", "lots": [
-         {"id": 2347, "photos": [5, 7, 2, (3, "детская")]},
+         {"id": 193, "photos": [5, 3, (9, "вид из окна"), 0]},
          {"id": 1102, "title": "Квартира, 2-комн., 50,2 м²", "photos": [7, 6, 9, 0]},
          {"id": 99, "photos": [11, 8, 7, 0]},
          {"id": 189, "photos": [5, (6, "комната"), 9, 1]},
@@ -313,7 +317,7 @@ PICKS = [
     {"folder": "06-top-biznes", "kicker": "ТОП недели · Бизнес", "title": "5 помещений для бизнеса",
      "headline": "ТОП-5 коммерческих объектов с торгов", "hashtags": "бизнес",
      "subtitle": "Офис, салон, детский сад, баня — торги и залоги банков", "lots": [
-         {"id": 1591, "title": "Офис, 222,4 м²", "photos": [2, (3, "опенспейс"), (6, "кабинет"), 0]},
+         {"id": 802, "title": "Офис, 313,7 м²", "photos": [2, (1, "кабинет"), (4, "кабинет"), (3, "кабинет")]},
          {"id": 784, "title": "Помещение свободного назначения, 207,6 м²",
           "photos": [1, (3, "зал"), (6, "кухня"), 7]},
          {"id": 3339, "title": "Здание детского сада, 667 м² с участком",
@@ -344,15 +348,18 @@ def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
         for k, spec in enumerate(p["photos"]):
             i, label = spec if isinstance(spec, tuple) else (spec, labels[k])
             photos.append((fetch_photo(lot["images"][i]), label))
+        discount = round((1 - lot["price"] / est.value) * 100)
+        capped = city not in BIG_CITIES and discount > REGION_DISCOUNT_CAP
         rows.append({"lot": lot, "title": p.get("title") or head, "photos": photos, "estimate": round(est.value, -4),
-                     "place": f"{city}, {p['district']}" if p.get("district") else place,
-                     "discount": round((1 - lot["price"] / est.value) * 100)})
+                     "place": f"{city}, {p['district']}" if p.get("district") else place, "discount": discount,
+                     "note": f"более {REGION_DISCOUNT_CAP}%" if capped else None,
+                     "shown": REGION_DISCOUNT_CAP if capped else discount})
     rows.sort(key=lambda r: -r["discount"])
-    lo, hi = rows[-1]["discount"], rows[0]["discount"]
+    lo, hi = min(r["shown"] for r in rows), max(r["shown"] for r in rows)
     slides = [mosaic_cover(pick["kicker"], pick["title"], f"ниже рынка на {lo}–{hi}%",
-                           pick.get("subtitle", "Торги и залоги банков · фото продавцов"),
+                           pick.get("subtitle", "Торги и залоги банков"),
                            [r["photos"][0][0] for r in rows])]
-    slides += [collage_slide(r["lot"], r["title"], r["place"], r["photos"], r["estimate"], r["discount"], i)
+    slides += [collage_slide(r["lot"], r["title"], r["place"], r["photos"], r["estimate"], r["discount"], i, r["note"])
                for i, r in enumerate(rows, 1)]
     slides.append(cta_slide(f"Ещё {total} объектов с торгов", [
         "Больше объектов ниже рынка — в разделе «ТОП» на torgi.kz",
@@ -362,7 +369,8 @@ def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
     save_post(pick["folder"], slides)
 
     lines = "\n".join(f"{i}. {r['title']} — {r['place']} — {mln(r['lot']['price'])} "
-                      f"(рынок ≈ {mln(r['estimate'])}, −{r['discount']}%)" for i, r in enumerate(rows, 1))
+                      + (f"(ниже рынка {r['note']})" if r["note"] else f"(рынок ≈ {mln(r['estimate'])}, −{r['discount']}%)")
+                      for i, r in enumerate(rows, 1))
     commercial = all(r["lot"]["category"] == "commercial" for r in rows)
     method = ("Как считаем: сравниваем цену за м² с объявлениями о продаже коммерческой недвижимости в том же городе. "
               "Для коммерции оценка приблизительная — назначение и состояние помещений разные."
