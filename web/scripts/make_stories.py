@@ -27,6 +27,13 @@ UTM = "utm_source=instagram&utm_medium=stories"
 MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
           "ноября", "декабря"]
 CATEGORY_WORDS = {"apartment": "квартир", "house": "домов", "commercial": "коммерческих", "land": "участков"}
+REGION_CAP = 30  # как в ТОПе сайта: вне Алматы и Астаны — «30%+» вместо точной скидки
+# мозаики из разделов ТОПа: раздел, плашка, заголовок (n — сколько объектов), вторая строка
+MOSAICS = [
+    ("kvartiry-astana", "ТОП недели · Астана", "{n} квартир в Астане", "ниже рынка до {best}%"),
+    ("kommercheskaya", "ТОП недели · Бизнес", "{n} помещений для бизнеса", "ниже рынка до {best}%"),
+    ("kvartiry-do-30-mln", "ТОП недели · до 30 млн", "Квартиры до 30 млн ₸", "{n} вариантов по Казахстану"),
+]
 
 # лот и фото (номера в лоте): главное и ещё два; trim — доля кадра снизу, которую отрезаем (дата съёмки на фото)
 STORIES = {
@@ -192,6 +199,33 @@ def story_numbers(meta: dict) -> Image.Image:
     return img
 
 
+def story_mosaic(items: list[tuple[dict, dict, Image.Image | None]], kicker: str, title: str, accent: str) -> Image.Image:
+    """Мозаика 3×3 из раздела ТОПа: обложки с ценой и скидкой на каждой плитке, крупный заголовок под ней."""
+    img, d = canvas(ig.INK)
+    gap, top_y = 6, 360
+    tile = (W - 2 * gap) // 3
+    rows = max(1, min(3, len(items) // 3))  # только полные ряды — без пустых клеток
+    items = items[:rows * 3]
+    if rows < 3:
+        top_y += (3 - rows) * (tile + gap) // 2
+    for k, (lot, top, photo) in enumerate(items):
+        x, y = (k % 3) * (tile + gap), top_y + (k // 3) * (tile + gap)
+        paste(img, photo, (x, y, x + tile, y + tile))
+        shade = Image.linear_gradient("L").resize((tile, 120)).point(lambda v: int(v * 0.75))
+        img.paste(Image.new("RGB", (tile, 120), "#000000"), (x, y + tile - 120), shade)
+        d = ImageDraw.Draw(img)
+        d.text((x + 16, y + tile - 16), ig.mln(lot["price"]).replace(" ₸", ""), font=ig.font(ig.BLACK, 34),
+               fill=ig.WHITE, anchor="ls")
+        chip = f"{REGION_CAP}%+" if top.get("discount_note") else f"−{top['discount_pct']}%"
+        ig.pill(d, (x + 12, y + 12), chip, ig.font(ig.BLACK, 28), ig.GREEN, ig.WHITE, pad=(14, 6))
+    header(d, kicker)
+    y = top_y + rows * (tile + gap) + 40
+    d.text((60, y), title, font=ig.fit_font(d, title, ig.BLACK, 70, W - 120), fill=ig.WHITE)
+    d.text((60, y + 90), accent, font=ig.fit_font(d, accent, ig.BLACK, 70, W - 120), fill="#3ddc84")
+    portal_line(d, y=y + 200, dark=True)
+    return img
+
+
 def story_countdown(lot: dict, top: dict, spec: dict, today: date) -> Image.Image | None:
     start = lot.get("auction_start")
     if not start:
@@ -249,6 +283,17 @@ def main():
     best = max(tops[x["id"]]["discount_pct"] for x in s["lots"] if x["id"] in tops)
     story_new_post(items, s["title"], best).save(OUT / "variants" / "3-novyj-post.jpg", quality=92)
     story_numbers(meta).save(OUT / "variants" / "4-cifry.jpg", quality=92)
+    sections = {s["slug"]: s for s in json.loads((ig.DATA / "top.json").read_text(encoding="utf-8"))["sections"]}
+    for k, (slug, kicker, title, accent) in enumerate(MOSAICS, 5):
+        section = sections.get(slug)
+        if not section:
+            continue
+        items = [(full[x["id"]], x, ig.fetch_photo(x.get("image") or (full[x["id"]]["images"] or [None])[0]))
+                 for x in section["items"][:9] if x["id"] in full]
+        best = max(REGION_CAP if x.get("discount_note") else x["discount_pct"] for _, x, _ in items)
+        n = len(section["items"])
+        story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best)).save(
+            OUT / "variants" / f"{k}-mozaika-{slug}.jpg", quality=92)
     notes.append(f"\nСсылки для вариантов: подборка — {SITE}/top/?{UTM}#kvartiry-astana; экономия — "
                  f"{SITE}/lots/{STORIES['savings']['id']}/?{UTM}; новый пост — репост поста; цифры — {SITE}/?{UTM}")
     (OUT / "stories.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
