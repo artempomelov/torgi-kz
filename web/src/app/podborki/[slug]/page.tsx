@@ -5,9 +5,9 @@ import { notFound } from "next/navigation";
 import { Faq } from "@/components/Faq";
 import { LotCard } from "@/components/LotCard";
 import { getCollections } from "@/lib/collections";
-import { getLots, getMeta } from "@/lib/data";
+import { getLots } from "@/lib/data";
 import { isUpcoming } from "@/lib/filter";
-import { formatDate, formatPrice, plural } from "@/lib/format";
+import { formatPrice, plural } from "@/lib/format";
 
 export const dynamicParams = false;
 const SHOWN = 48;
@@ -72,8 +72,7 @@ export default async function CollectionPage({ params }: PageProps<"/podborki/[s
         {minPrice ? <>, цены от {formatPrice(minPrice)}</> : null}
         {medianPpm ? <>, типичная цена — {formatPrice(medianPpm)} за м²</> : null}
         {upcoming ? <>; торги назначены по {upcoming} {plural(upcoming, ["лоту", "лотам", "лотам"])}</> : null}.
-        Данные собираются с площадок и сайтов банков каждый день, последнее обновление —{" "}
-        {formatDate(getMeta().updated_at)}
+        Данные собираются с площадок и сайтов банков каждый день.
       </p>
       <Link
         href={c.catalogHref}

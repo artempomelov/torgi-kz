@@ -5,7 +5,7 @@ import { TopLotCard } from "@/components/TopLotCard";
 import type { Lot } from "@/lib/api";
 import { getLots, getMeta, getTop, getUpcomingAuctions } from "@/lib/data";
 import { applyFilters, parseFilters } from "@/lib/filter";
-import { CATEGORY_PLURAL, formatDate, plural } from "@/lib/format";
+import { CATEGORY_PLURAL, plural } from "@/lib/format";
 import { pickShowcase } from "@/lib/insights";
 
 // Готовые подборки на главной: ссылка в каталог с фильтрами и число объектов в ней
@@ -51,7 +51,7 @@ export default function Home() {
           <p className="mt-4 max-w-2xl text-base text-muted md:text-lg">
             Полная база: {meta.total.toLocaleString("ru-RU")} {plural(meta.total, ["объект", "объекта", "объектов"])} —
             квартиры, дома, коммерция, земля и паркоместа. Арестованное имущество, госимущество и приватизация,
-            имущество банкротов, залоги и имущество банков. Обновлено {formatDate(meta.updated_at, true)}.
+            имущество банкротов, залоги и имущество банков.
           </p>
           <form action="/lots/" className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row">
             <input

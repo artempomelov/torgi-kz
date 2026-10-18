@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { TopLotCard } from "@/components/TopLotCard";
 import { getLots, getTop } from "@/lib/data";
-import { formatDate } from "@/lib/format";
 
 export const metadata: Metadata = {
   title: "ТОП выгодных объектов с торгов — ниже рынка",
@@ -66,7 +65,6 @@ export default function TopPage() {
         <p className="mt-2">
           Цены в объявлениях обычно на 5–10% выше цен сделок, а состояние объекта, долги, обременения и проживающие
           жильцы в оценке не учтены. Это ориентир, а не отчёт об оценке — перед покупкой проверяйте объект и документы.
-          {top.market_updated_at ? <> Рыночные цены обновлены {formatDate(top.market_updated_at)}.</> : null}
         </p>
       </section>
     </div>
