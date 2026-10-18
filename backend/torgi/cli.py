@@ -31,7 +31,7 @@ def main() -> None:
     t.add_argument("--dry-run", action="store_true", help="только показать посты")
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
     t.add_argument("--refresh", action="store_true", help="переписать опубликованные посты по текущему шаблону")
-    t.add_argument("--about", action="store_true", help="выставить описания каналов и бота из telegram.CHANNEL_ABOUT")
+    t.add_argument("--about", action="store_true", help="выставить описания каналов и бота (telegram.channel_about)")
     b = sub.add_parser("bot", help="бот подписок: обработать входящие и разослать уведомления")
     b.add_argument("--dry-run", action="store_true", help="только показать уведомления")
     b.add_argument("--check", action="store_true", help="проверить токен (getMe), не раскрывая его")
@@ -76,9 +76,15 @@ def main() -> None:
         from torgi import telegram
 
         if args.about:
-            from torgi.config import settings
+            from sqlalchemy import func, select
 
-            telegram.set_about(telegram.TelegramBot(settings.telegram_bot_token or ""))
+            from torgi.config import settings
+            from torgi.models import Lot
+
+            init_db()
+            with SessionLocal() as session:
+                total = session.scalar(select(func.count()).select_from(Lot).where(Lot.status == "active"))
+            telegram.set_about(telegram.TelegramBot(settings.telegram_bot_token or ""), total)
             return
         init_db()
         with SessionLocal() as session:

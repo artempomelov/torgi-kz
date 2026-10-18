@@ -18,9 +18,8 @@ export const metadata: Metadata = {
     template: "%s — torgi.kz",
   },
   description:
-    "Агрегатор торгов недвижимостью в Казахстане: арестованное имущество, госимущество и приватизация, " +
-    "имущество банкротов, конфискат, залоги и имущество банков Halyk, Forte, BCC, Freedom, Alatau, Bereke, " +
-    "Евразийского, Нурбанка, RBK. Квартиры, дома, коммерция и земля ниже рынка.",
+    "Полная база недвижимости с торгов Казахстана: квартиры, дома, коммерция, земля и паркоместа. " +
+    "Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков.",
   openGraph: { siteName: "torgi.kz", locale: "ru_KZ", type: "website", images: ["/og/default.png"] },
   twitter: { card: "summary_large_image" },
 };
@@ -61,6 +60,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                   Telegram
                 </a>
               )}
+              <a href={FEATURES.instagramUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-ink">
+                Instagram
+              </a>
               {FEATURES.auth && <AccountButton />}
             </div>
           </div>
@@ -89,6 +91,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/podborki/kvartiry-astana/" className="hover:text-brand-ink">Квартиры с торгов в Астане</Link>
               <Link href="/podborki/zalogovoe-imushchestvo-bankov/" className="hover:text-brand-ink">Залоговое имущество банков</Link>
               <Link href="/podborki/gosimushchestvo-i-privatizaciya/" className="hover:text-brand-ink">Госимущество</Link>
+            </p>
+            <p className="flex flex-wrap gap-x-5 gap-y-1">
+              {FEATURES.telegramUrl && (
+                <a href={FEATURES.telegramUrl} target="_blank" rel="noopener noreferrer" className="hover:text-brand-ink">
+                  Telegram-канал
+                </a>
+              )}
+              <a href={FEATURES.instagramUrl} target="_blank" rel="noopener noreferrer" className="hover:text-brand-ink">
+                Instagram
+              </a>
             </p>
             <p>© {new Date().getFullYear()} torgi.kz</p>
           </div>

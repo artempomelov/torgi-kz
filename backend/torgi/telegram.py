@@ -311,29 +311,36 @@ def refresh(session: Session) -> int:
 
 # Описания каналов и бота живут здесь, а не только в Telegram: `torgi post --about` выставляет их, если в Telegram
 # другой текст. Лимиты Telegram: описание канала — 255 символов, короткое описание бота — 120.
+# Коротко и одинаково на всех площадках (сайт, Telegram, Instagram); ссылки — на другие площадки, не на себя.
 INSTAGRAM = "instagram.com/torgi.kz"
-CHANNEL_ABOUT = {
-    "@torgi_kz_news": "Все торги недвижимостью Казахстана: арест, госимущество (E-Qazyna), банкроты, конфискат, залоги и "
-                      "имущество банков Halyk, Forte, BCC, Freedom, Alatau, Bereke, Евразийского, Нурбанка, RBK. "
-                      f"Новые лоты ежедневно → torgi.kz\nInstagram → {INSTAGRAM}",
-    "@torgi_kz_almaty": "Квартиры, дома, коммерция и земля в Алматы с торгов: арест, госимущество, банкроты, залоги банков. "
-                        "Новые лоты каждый день → torgi.kz. Все торги Казахстана — @torgi_kz_news\n"
-                        f"Instagram → {INSTAGRAM}",
-    "@torgi_kz_astana": "Квартиры, дома, коммерция и земля в Астане с торгов: арест, госимущество, банкроты, залоги банков. "
-                        "Новые лоты каждый день → torgi.kz. Все торги Казахстана — @torgi_kz_news\n"
-                        f"Instagram → {INSTAGRAM}",
-    "@torgi_kz_biz": "Офисы, магазины, склады, производственные базы и здания с торгов по всему Казахстану: арест, "
-                     "госимущество, банкроты, залоги банков. Новые лоты каждый день → torgi.kz. "
-                     f"Все торги — @torgi_kz_news\nInstagram → {INSTAGRAM}",
-}
-BOT_SHORT_ABOUT = f"Новые объекты с торгов по вашему поиску — torgi.kz\nInstagram → {INSTAGRAM}"
+KINDS = "Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков."
+LINKS = f"torgi.kz · {INSTAGRAM}"
+HUB_LINE = "Все торги Казахстана → @torgi_kz_news"
+BOT_SHORT_ABOUT = f"Новые объекты с торгов по вашему поиску\n{LINKS}"
 
 
-def set_about(bot: TelegramBot) -> list[str]:
-    """Описания каналов и короткое описание бота — как в CHANNEL_ABOUT и BOT_SHORT_ABOUT. Возвращает, что изменилось;
+def total_phrase(total: int | None) -> str:
+    """«более 3 300» — число активных лотов, округлённое вниз до сотен, чтобы текст менялся не каждый день."""
+    return f"более {total // 100 * 100:,}".replace(",", " ") if total and total >= 1000 else ""
+
+
+def channel_about(total: int | None = None) -> dict[str, str]:
+    count = f" — {total_phrase(total)} объектов" if total_phrase(total) else ""
+    return {
+        "@torgi_kz_news": f"Полная база недвижимости с торгов Казахстана{count}: квартиры, дома, коммерция, земля "
+                          f"и паркоместа. {KINDS}\n{LINKS}",
+        "@torgi_kz_almaty": f"Недвижимость Алматы с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{HUB_LINE}\n{LINKS}",
+        "@torgi_kz_astana": f"Недвижимость Астаны с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{HUB_LINE}\n{LINKS}",
+        "@torgi_kz_biz": "Коммерческая недвижимость с торгов Казахстана: офисы, магазины, склады и здания. "
+                         f"{KINDS}\n{HUB_LINE}\n{LINKS}",
+    }
+
+
+def set_about(bot: TelegramBot, total: int | None = None) -> list[str]:
+    """Описания каналов (channel_about) и короткое описание бота. Возвращает, что изменилось;
     канал, где у бота нет права «Изменение профиля канала», пропускается с предупреждением."""
     changed = []
-    for chat, text in CHANNEL_ABOUT.items():
+    for chat, text in channel_about(total).items():
         try:
             if (bot.call("getChat", chat_id=chat).get("description") or "") != text:
                 bot.call("setChatDescription", chat_id=chat, description=text)

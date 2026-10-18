@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 from torgi.config import settings
 from torgi.models import BotState, Lot, Subscription, utcnow
 from torgi.normalize import CATEGORIES, ORIGINS, REGIONS
-from torgi.telegram import TelegramBot, _money, channels, matches_channel
+from torgi.telegram import INSTAGRAM, TelegramBot, _money, channels, matches_channel, total_phrase
 
 log = logging.getLogger(__name__)
 
@@ -214,21 +214,21 @@ LEAD_TITLES = {"consult": "консультация по лоту", "check": "к
 GENERAL_REPLY = (
     "Здравствуйте, спасибо за обращение!\n\n"
     'На портале <a href="{site}/?{utm}">torgi.kz</a> собрана полная база недвижимости с торгов Казахстана — '
-    "{count} объектов: квартиры, дома, коммерция, земля и паркоместа. Арестованное имущество (ЕЭТП Минюста), "
-    "госимущество и приватизация (E-Qazyna), имущество банкротов, залоги и имущество банков Halyk, Forte, BCC, "
-    "Freedom, Bereke, Евразийского и других.\n\n"
+    "{count} объектов: квартиры, дома, коммерция, земля и паркоместа. Арестованное имущество, госимущество "
+    "и приватизация, имущество банкротов, залоги и имущество банков.\n\n"
     "Для удобства настройте в каталоге фильтры — город и район, тип объекта, цену, вид продажи — и нажмите "
     "«Сохранить поиск»: новые подходящие лоты будут приходить сюда, в Telegram. Самые выгодные предложения "
     'относительно рынка — в разделе <a href="{site}/top/?{utm}">«ТОП»</a>.\n\n'
     "Если вас заинтересовал конкретный лот — пришлите ссылку на него или номер, и мы направим вам полную "
-    "информацию по нему."
+    "информацию по нему.\n\n"
+    '📸 Мы в Instagram: <a href="https://{instagram}/">{instagram}</a>'
 )
 
 
 def general_reply(session: Session) -> str:
     active = session.scalar(select(func.count()).select_from(Lot).where(Lot.status == "active")) or 0
-    count = f"более {active // 100 * 100:,}".replace(",", " ") if active >= 1000 else "сотни"
-    return GENERAL_REPLY.format(site=settings.site_url, utm="utm_source=telegram&amp;utm_medium=bot", count=count)
+    return GENERAL_REPLY.format(site=settings.site_url, utm="utm_source=telegram&amp;utm_medium=bot",
+                                count=total_phrase(active) or "сотни", instagram=INSTAGRAM)
 
 
 def _admin_chats(session: Session) -> list[int]:

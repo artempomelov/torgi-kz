@@ -42,9 +42,11 @@ def test_benefits_and_channel_rules():
 def test_about_fits_limits_and_updates_only_changed():
     from torgi import telegram
 
-    assert all(len(text) <= 255 for text in telegram.CHANNEL_ABOUT.values())
+    about = telegram.channel_about(123_456)  # с самым длинным числом объектов
+    assert all(len(text) <= 255 for text in about.values())
     assert len(telegram.BOT_SHORT_ABOUT) <= 120
-    assert all(telegram.INSTAGRAM in text for text in telegram.CHANNEL_ABOUT.values())
+    assert all(telegram.INSTAGRAM in text and "torgi.kz ·" in text for text in about.values())
+    assert "более 123 400 объектов" in about["@torgi_kz_news"] and "@torgi_kz_news" in about["@torgi_kz_biz"]
 
     class FakeBot:
         def __init__(self):
@@ -54,7 +56,7 @@ def test_about_fits_limits_and_updates_only_changed():
             self.calls.append((method, params))
             if method == "getChat":  # у основного канала описание уже актуальное
                 same = params["chat_id"] == "@torgi_kz_news"
-                return {"description": telegram.CHANNEL_ABOUT[params["chat_id"]] if same else "старое"}
+                return {"description": about[params["chat_id"]] if same else "старое"}
             if method == "setChatDescription" and params["chat_id"] == "@torgi_kz_biz":
                 raise RuntimeError("Telegram setChatDescription: not enough rights")
             if method == "getMyShortDescription":
@@ -62,7 +64,7 @@ def test_about_fits_limits_and_updates_only_changed():
             return True
 
     bot = FakeBot()
-    assert telegram.set_about(bot) == ["@torgi_kz_almaty", "@torgi_kz_astana"]
+    assert telegram.set_about(bot, 123_456) == ["@torgi_kz_almaty", "@torgi_kz_astana"]
     assert not any(m == "setMyShortDescription" for m, _ in bot.calls)
 
 
