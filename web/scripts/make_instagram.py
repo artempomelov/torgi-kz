@@ -383,8 +383,9 @@ def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
 
 
 def main():
-    # папки не удаляем (OneDrive держит их во время синхронизации) — только старые слайды
-    for old in OUT.rglob("*.jpg") if OUT.exists() else []:
+    # папки не удаляем (OneDrive держит их во время синхронизации) — только старые слайды постов и профиля;
+    # stories/ ведёт make_stories.py
+    for old in [p for sub in ("posts", "profile") if (OUT / sub).exists() for p in (OUT / sub).rglob("*.jpg")]:
         old.unlink()
     full = {lot["id"]: lot for lot in json.loads((DATA / "lots-full.json").read_text(encoding="utf-8"))}
     meta = json.loads((DATA / "meta.json").read_text(encoding="utf-8"))
