@@ -3,7 +3,7 @@
 // Фото лота с заглушкой. Фото грузим через бесплатный кэширующий прокси wsrv.nl (уменьшенная копия
 // в WebP — быстрее, чем оригинал с сайта банка). Если прокси не отдал — берём оригинал,
 // если и он недоступен или фото нет — картинка-заглушка по типу объекта с надписью «Нет фото».
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const PLACEHOLDER_CATEGORIES = new Set(["apartment", "house", "land", "commercial", "parking", "industrial"]);
 
@@ -33,9 +33,16 @@ export function LotImage({
   // 0 — через прокси, 1 — оригинал, 2 — заглушка
   const [stage, setStage] = useState(src ? (width ? 0 : 1) : 2);
   const url = !src || stage === 2 ? placeholderFor(category) : stage === 0 ? proxied(src, width) : src;
+  const ref = useRef<HTMLImageElement>(null);
+  // в статической странице картинка может не загрузиться ещё до запуска скриптов — onError тогда не сработает
+  useEffect(() => {
+    const img = ref.current;
+    if (img && img.complete && img.naturalWidth === 0 && stage < 2) setStage((s) => Math.min(s + 1, 2));
+  }, [stage]);
   return (
     // eslint-disable-next-line @next/next/no-img-element -- фото с десятка внешних доменов источников
     <img
+      ref={ref}
       src={url}
       alt={stage === 2 ? `${alt} — нет фото` : alt}
       loading={eager ? "eager" : "lazy"}
