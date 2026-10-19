@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { getCollections } from "@/lib/collections";
-import { getLots, getMeta } from "@/lib/data";
+import { getCars, getLots, getMeta } from "@/lib/data";
 
 export const dynamic = "force-static";
 
@@ -14,6 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/`, lastModified: updated, changeFrequency: "daily", priority: 1 },
     { url: `${SITE}/lots/`, lastModified: updated, changeFrequency: "daily", priority: 0.9 },
     { url: `${SITE}/top/`, lastModified: updated, changeFrequency: "daily", priority: 0.9 },
+    { url: `${SITE}/avto/`, lastModified: updated, changeFrequency: "daily", priority: 0.9 },
     { url: `${SITE}/podborki/`, lastModified: updated, changeFrequency: "daily", priority: 0.8 },
     ...getCollections(lots).map((c) => ({
       url: `${SITE}/podborki/${c.slug}/`,
@@ -24,6 +25,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...lots.map((lot) => ({
       url: `${SITE}/lots/${lot.id}/`,
       lastModified: new Date(lot.first_seen_at),
+      changeFrequency: "weekly" as const,
+      priority: 0.5,
+    })),
+    ...getCars().map((car) => ({
+      url: `${SITE}/avto/${car.id}/`,
+      lastModified: car.listed_at ? new Date(car.listed_at) : updated,
       changeFrequency: "weekly" as const,
       priority: 0.5,
     })),

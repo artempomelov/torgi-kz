@@ -80,6 +80,7 @@ export type TopData = {
 
 export type Meta = {
   total: number;
+  vehicles?: number; // машины — отдельный раздел /avto/
   updated_at: string;
   gated?: boolean;
   categories: { id: string; title: string; count: number }[];

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Lot, LotFull, Meta, TopData, TopItem } from "./api";
+import type { Car } from "./cars";
 import { isUpcoming } from "./filter";
 
 const DATA_DIR = process.env.TORGI_DATA_DIR ?? path.join(process.cwd(), "data");
@@ -18,6 +19,17 @@ function read<T>(name: string): T {
 export const getMeta = () => read<Meta>("meta.json");
 export const getLots = () => read<Lot[]>("lots.json");
 export const getAllLotsFull = () => read<LotFull[]>("lots-full.json");
+
+/** Раздел «Автомобили»; без файла (старая выгрузка) — пустой. */
+export function getCars(): Car[] {
+  try {
+    return read<{ items: Car[] }>("cars.json").items;
+  } catch {
+    return [];
+  }
+}
+
+export const getCar = (id: string) => getCars().find((c) => String(c.id) === id);
 
 /** Раздел «ТОП»; без файла (старая выгрузка) — пустой. */
 export function getTop(): TopData {

@@ -93,7 +93,38 @@ def utm(channel: str | None) -> str:
     return f"?utm_source=telegram&amp;utm_medium=channel&amp;utm_campaign={campaign}"
 
 
+def format_vehicle_post(lot: Lot, footer: str = "", channel: str | None = None) -> str:
+    """Пост о машине: марка, модель, год, характеристики, цена, город, вид продажи и дата торгов."""
+    esc, extra = html.escape, lot.extra or {}
+    specs = [f"{extra['mileage_km']:,} км".replace(",", " ") if extra.get("mileage_km") else None,
+             extra.get("engine"), extra.get("transmission"), extra.get("body"), extra.get("color")]
+    lines = [f"🚗 <b>{esc(lot.title)}</b>" + (f" — {esc(lot.city)}" if lot.city else ""), ""]
+    lines.append(f"💰 <b>{_money(lot.price)}</b>" if lot.price else "💰 Цена не указана")
+    lines += benefit_lines(lot)
+    if any(specs):
+        lines.append("⚙️ " + esc(" · ".join(s for s in specs if s)))
+    if not lot.city and lot.region:
+        lines.append(f"📍 {esc(lot.region)}")
+    kind = [SALE_TYPES.get(lot.sale_type or "", ""), ORIGINS.get(lot.origin, "")]
+    lines.append("🔨 " + " · ".join(esc(k) for k in kind if k))
+    if extra.get("note"):
+        lines.append(f"⚠️ {esc(extra['note'].capitalize())}")
+    if lot.auction_start or lot.auction_end:
+        lines.append(f"🗓 Торги: {_date(lot.auction_start or lot.auction_end)}")
+    if lot.applications_deadline:
+        lines.append(f"⏳ Заявки до {_date(lot.applications_deadline)}")
+    lines += ["", f'<a href="{settings.site_url}/avto/{lot.id}/{utm(channel)}">Подробнее на torgi.kz</a>']
+    tags = [_hashtag(lot.city)] if lot.city else []
+    tags += [_hashtag(extra.get("brand") or ""), _hashtag(ORIGIN_TAGS.get(lot.origin, ""))]
+    lines.append(" ".join(t for t in tags if len(t) > 1))
+    if footer:
+        lines += ["", footer]
+    return "\n".join(lines)[:CAPTION_LIMIT]
+
+
 def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel: str | None = None) -> str:
+    if lot.category == "vehicle":
+        return format_vehicle_post(lot, footer, channel)
     esc = html.escape
     parts = [CATEGORIES.get(lot.category, "Объект")]
     if lot.rooms and lot.category in ("apartment", "house"):
@@ -143,7 +174,12 @@ HUB_FOOTER = '📢 Все торги Казахстана — <a href="https://t
 
 
 def matches_channel(lot: Lot, rule: dict | None) -> bool:
-    """Фильтр дополнительного канала: {"region": "Алматы"}, {"category": ["commercial", "industrial"]}."""
+    """Фильтр дополнительного канала: {"region": "Алматы"}, {"category": ["commercial", "industrial"]}.
+    Машины попадают только в канал, где категория «vehicle» указана явно."""
+    categories = (rule or {}).get("category")
+    categories = [categories] if isinstance(categories, str) else categories or []
+    if lot.category == "vehicle" and "vehicle" not in categories:
+        return False
     if not rule:
         return True
     regions = rule.get("region")
@@ -316,7 +352,8 @@ INSTAGRAM = "instagram.com/torgi.kz"
 KINDS = "Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков."
 LINKS = f"torgi.kz · {INSTAGRAM}"
 HUB_LINE = "Все торги Казахстана → @torgi_kz_news"
-BOT_SHORT_ABOUT = f"Новые объекты с торгов по вашему поиску\n{LINKS}"
+AUTO_CHANNEL = "@torgi_kz_auto"
+BOT_SHORT_ABOUT = f"Недвижимость и автотранспорт с торгов — новые лоты по вашему поиску\n{LINKS}"
 
 
 def total_phrase(total: int | None) -> str:
@@ -327,8 +364,11 @@ def total_phrase(total: int | None) -> str:
 def channel_about(total: int | None = None) -> dict[str, str]:
     count = f" — {total_phrase(total)} объектов" if total_phrase(total) else ""
     return {
-        "@torgi_kz_news": f"Полная база недвижимости с торгов Казахстана{count}: квартиры, дома, коммерция, земля "
-                          f"и паркоместа. {KINDS}\n{LINKS}",
+        "@torgi_kz_news": f"Полная база недвижимости и автотранспорта с торгов Казахстана{count}: квартиры, дома, "
+                          "коммерция, земля, автомобили. Арестованное имущество, госимущество, банкроты, залоги банков."
+                          f"\nАвто → {AUTO_CHANNEL}\n{LINKS}",
+        AUTO_CHANNEL: "Автомобили и спецтехника с торгов Казахстана: марка, год, цена и фото. Арестованное имущество, "
+                      f"госимущество, залоги и имущество банков.\n{HUB_LINE}\n{LINKS}",
         "@torgi_kz_almaty": f"Недвижимость Алматы с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{HUB_LINE}\n{LINKS}",
         "@torgi_kz_astana": f"Недвижимость Астаны с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{HUB_LINE}\n{LINKS}",
         "@torgi_kz_biz": "Коммерческая недвижимость с торгов Казахстана: офисы, магазины, склады и здания. "

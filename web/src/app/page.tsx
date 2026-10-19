@@ -1,9 +1,10 @@
 import Link from "next/link";
 
+import { CarCard } from "@/components/CarCatalog";
 import { LotCard } from "@/components/LotCard";
 import { TopLotCard } from "@/components/TopLotCard";
 import type { Lot } from "@/lib/api";
-import { getLots, getMeta, getTop, getUpcomingAuctions } from "@/lib/data";
+import { getCars, getLots, getMeta, getTop, getUpcomingAuctions } from "@/lib/data";
 import { applyFilters, parseFilters } from "@/lib/filter";
 import { CATEGORY_PLURAL, plural } from "@/lib/format";
 import { pickShowcase } from "@/lib/insights";
@@ -40,18 +41,23 @@ export default function Home() {
   const auctions = { total: upcoming.total, items: pickShowcase(upcoming.items.slice(0, 200), 4) };
   const quick = QUICK.map((q) => ({ ...q, count: quickCount(lots, q) })).filter((q) => q.count > 0);
   const categories = meta.categories.filter((c) => c.count > 0);
+  const cars = getCars();
+  // на главной — свежие легковые с фото, разных марок
+  const carPicks = cars.filter((c) => c.vehicle_type === "car" && c.images.length > 1 && c.brand)
+    .filter((c, i, all) => all.findIndex((x) => x.brand === c.brand) === i).slice(0, 4);
+  const total = meta.total + cars.length;
 
   return (
     <div>
       <section className="hero-bg border-b border-border">
         <div className="mx-auto max-w-7xl px-4 py-12 md:py-16">
           <h1 className="max-w-3xl text-3xl font-bold leading-tight text-foreground md:text-5xl">
-            Все торги недвижимостью Казахстана в одном месте
+            Все торги недвижимостью и автотранспортом Казахстана в одном месте
           </h1>
           <p className="mt-4 max-w-2xl text-base text-muted md:text-lg">
-            Полная база: {meta.total.toLocaleString("ru-RU")} {plural(meta.total, ["объект", "объекта", "объектов"])} —
-            квартиры, дома, коммерция, земля и паркоместа. Арестованное имущество, госимущество и приватизация,
-            имущество банкротов, залоги и имущество банков.
+            Полная база: {total.toLocaleString("ru-RU")} {plural(total, ["объект", "объекта", "объектов"])} —
+            квартиры, дома, коммерция, земля, автомобили и спецтехника. Арестованное имущество, госимущество
+            и приватизация, имущество банкротов, залоги и имущество банков.
           </p>
           <form action="/lots/" className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row">
             <input
@@ -73,6 +79,12 @@ export default function Home() {
                 {CATEGORY_PLURAL[c.id] ?? c.title} <span className="text-muted">{c.count}</span>
               </Link>
             ))}
+            {cars.length > 0 && (
+              <Link href="/avto/"
+                    className="rounded-full border border-border bg-white px-4 py-1.5 text-sm text-foreground hover:border-brand-ink hover:text-brand-ink">
+                🚗 Автомобили <span className="text-muted">{cars.length}</span>
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -87,6 +99,18 @@ export default function Home() {
             {topPicks.map(({ lot, top }) => (
               <TopLotCard key={lot.id} lot={lot} top={top} rank={top.rank} />
             ))}
+          </div>
+        </section>
+      )}
+
+      {carPicks.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pt-10">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="text-2xl font-bold">🚗 Автомобили с торгов</h2>
+            <Link href="/avto/" className="text-sm font-medium text-brand-ink">Все {cars.length} →</Link>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {carPicks.map((car) => <CarCard key={car.id} car={car} />)}
           </div>
         </section>
       )}

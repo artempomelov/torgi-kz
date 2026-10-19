@@ -282,3 +282,58 @@ def test_krisha_curated_ad():
     assert lot.city == "Петропавловск" and lot.region == "Северо-Казахстанская область"
     assert lot.price == 102_000_000 and lot.url == "https://krisha.kz/a/show/1015060721"
     assert lot.origin == "arrested" and lot.images and "Торги ЧСИ" in lot.description
+
+
+def test_vehicles_parsing():
+    from types import SimpleNamespace
+
+    from torgi.parsers import vehicles as v
+
+    assert v.find_brand("TOYOTA CAMRY 2.5") == ("Toyota", "Camry")
+    assert v.find_brand("ВАЗ 21900 GRANTA") == ("Lada", "Granta")
+    assert v.find_brand("Chery TIGGO4 PRO") == ("Chery", "Tiggo4 Pro")
+    assert v.engine(1598, "Бензин") == "1.6 бензин" and v.transmission("коробка автомат") == "АКПП"
+
+    item = {"id": 777, "region": "г. Алматы", "initialContractPrice": 7_500_000, "assuranceAmount": 750_000,
+            "procurementClassifiers": [{"title": "Легковые автомобили"}], "tradeStartDate": 1_793_000_000_000,
+            "images": [{"href": "/files/1.jpg"}],
+            "lots": [{"methodAucDown": True, "goodsDescription":
+                      "Объект: Легковой автомобиль, 1.000 ШТУКА, TOYOTA CAMRY, 2015, XW7BF4FK10S123456, 123ABC02, черный\n"
+                      "Комментарий: Должник Иванов И.И., ИИН 900101300123, аварийное состояние\n"
+                      "Имеются обременения"}]}
+    lot = v.adilet_vehicle(item)
+    assert lot.category == "vehicle" and lot.title == "Toyota Camry, 2015 г." and lot.city == "Алматы"
+    assert lot.extra["year"] == 2015 and lot.extra["color"] == "черный" and lot.sale_type == "auction_down"
+    assert "аварийный" in lot.extra["note"] and "имеются обременения" in lot.extra["note"]
+    blob = f"{lot.title} {lot.description} {lot.extra}"
+    assert "Иванов" not in blob and "900101300123" not in blob and "XW7BF4FK10S123456" not in blob and "123ABC02" not in blob
+    assert v.adilet_vehicle({**item, "procurementClassifiers": [{"title": "Жилые помещения"}]}) is None
+
+    class FakeHttp:
+        def get(self, url, **kw):
+            data = ({"data": {"fuel_types": [{"id": 1, "name_ru": "Бензин"}], "gearbox_types": [{"id": 2, "name_ru": "механика"}],
+                              "drive_types": []}} if "get-filters" in url else
+                    {"data": {"data": [{"id": 5, "mortgage_type_id": 1, "name_ru": "Kia Rio", "year": "2019", "price": "5500000.00",
+                                        "city": {"name_ru": "Астана"}, "realisation_type_id": 3, "images": ["/storage/a.jpg"],
+                                        "credit_contract_number": "SECRET-1",
+                                        "mortgage_vehicle": {"mileage": 10, "volume": "1,6", "fuel_type_id": 1, "gearbox_type_id": 2}},
+                                       {"id": 6, "mortgage_type_id": 2, "name_ru": "Квартира"}]}})
+            return SimpleNamespace(json=lambda: data)
+
+    cars = list(v.FreedomAutoParser().fetch(FakeHttp(), {}))
+    assert len(cars) == 1 and cars[0].title == "Kia Rio, 2019 г." and cars[0].city == "Астана"
+    assert cars[0].extra["transmission"] == "МКПП" and "mileage_km" not in cars[0].extra  # «10 км» — заглушка
+    assert "SECRET" not in str(cars[0])
+
+
+def test_vehicles_kept_out_of_realty():
+    from types import SimpleNamespace
+
+    from torgi.bot import SearchFilter
+    from torgi.telegram import matches_channel
+
+    car = SimpleNamespace(category="vehicle", region="Алматы", price=5_000_000, price_per_m2=None, area_m2=None,
+                          origin="arrested", flags=[])
+    assert not SearchFilter().matches(car) and SearchFilter(categories=["vehicle"]).matches(car)
+    assert not matches_channel(car, None) and not matches_channel(car, {"region": "Алматы"})
+    assert matches_channel(car, {"category": ["vehicle"]})

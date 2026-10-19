@@ -16,6 +16,7 @@ from torgi.config import settings
 from torgi.db import get_session, init_db
 from torgi.models import Lot, ParseRun, User, utcnow
 from torgi.parsers import PARSERS
+from torgi.parsers.vehicles import CATEGORY as VEHICLE
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -138,7 +139,7 @@ def list_lots(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 24,
 ):
-    stmt = select(Lot)
+    stmt = select(Lot).where(Lot.category != VEHICLE)
     if not include_removed:
         stmt = stmt.where(Lot.status == "active")
     if q:
@@ -189,21 +190,23 @@ def get_lot(lot_id: int, session: SessionDep):
 
 @app.get("/api/meta")
 def meta(session: SessionDep):
-    """Справочники для фильтров + счётчики активных лотов."""
-    active = Lot.status == "active"
+    """Справочники для фильтров + счётчики активных лотов недвижимости (машины — отдельный раздел, свой счётчик)."""
+    active = (Lot.status == "active") & (Lot.category != VEHICLE)
 
     def counts(column):
         rows = session.execute(select(column, func.count()).where(active).group_by(column)).all()
         return {k: v for k, v in rows if k is not None}
 
     return {
-        "categories": [{"id": k, "title": v, "count": counts(Lot.category).get(k, 0)} for k, v in nz.CATEGORIES.items()],
+        "categories": [{"id": k, "title": v, "count": counts(Lot.category).get(k, 0)}
+                       for k, v in nz.CATEGORIES.items() if k != VEHICLE],
         "origins": [{"id": k, "title": v} for k, v in nz.ORIGINS.items()],
         "sale_types": [{"id": k, "title": v} for k, v in nz.SALE_TYPES.items()],
         "sources": [{"id": k, "title": p.title, "url": p.base_url, "count": counts(Lot.source).get(k, 0)}
-                    for k, p in PARSERS.items()],
+                    for k, p in PARSERS.items() if not k.endswith("_auto")],
         "regions": [{"id": r, "count": counts(Lot.region).get(r, 0)} for r in nz.REGIONS],
         "total": session.scalar(select(func.count()).where(active)),
+        "vehicles": session.scalar(select(func.count()).where(Lot.status == "active", Lot.category == VEHICLE)),
     }
 
 

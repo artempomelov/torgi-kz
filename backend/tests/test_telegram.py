@@ -64,7 +64,7 @@ def test_about_fits_limits_and_updates_only_changed():
             return True
 
     bot = FakeBot()
-    assert telegram.set_about(bot, 123_456) == ["@torgi_kz_almaty", "@torgi_kz_astana"]
+    assert telegram.set_about(bot, 123_456) == ["@torgi_kz_auto", "@torgi_kz_almaty", "@torgi_kz_astana"]
     assert not any(m == "setMyShortDescription" for m, _ in bot.calls)
 
 

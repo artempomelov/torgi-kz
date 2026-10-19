@@ -69,6 +69,9 @@ class SearchFilter:
     origins: list[str] = field(default_factory=list)
 
     def matches(self, lot: Lot) -> bool:
+        # машины — только по подписке именно на машины: «все объекты» значит всю недвижимость
+        if lot.category == "vehicle" and "vehicle" not in self.categories:
+            return False
         if self.categories and lot.category not in self.categories:
             return False
         if self.regions and lot.region not in self.regions:
@@ -162,13 +165,18 @@ def parse_code(code: str) -> SearchFilter | LotWatch | Lead | None:
     return f
 
 
+def lot_url(lot: Lot) -> str:
+    """Карточка на сайте: недвижимость — /lots/N/, машины — /avto/N/."""
+    return f"{settings.site_url}/{'avto' if lot.category == 'vehicle' else 'lots'}/{lot.id}/?utm_source=telegram&amp;utm_medium=bot"
+
+
 def _lot_line(lot: Lot) -> str:
-    title = CATEGORIES.get(lot.category, "Объект")
+    title = lot.title if lot.category == "vehicle" else CATEGORIES.get(lot.category, "Объект")
     if lot.area_m2:
         title += f", {lot.area_m2:g} м²".replace(".", ",")
     place = lot.city or lot.region or ""
     price = _money(lot.price) if lot.price else "цена не указана"
-    return (f'• <a href="{settings.site_url}/lots/{lot.id}/?utm_source=telegram&amp;utm_medium=bot">{html.escape(title)}</a> — {html.escape(place)}, '
+    return (f'• <a href="{lot_url(lot)}">{html.escape(title)}</a> — {html.escape(place)}, '
             f"<b>{price}</b>")
 
 
@@ -213,8 +221,9 @@ LEAD_TITLES = {"consult": "консультация по лоту", "check": "к
 # командой /info2 в ответ (Reply) на заявку или вопрос
 GENERAL_REPLY = (
     "Здравствуйте, спасибо за обращение!\n\n"
-    'На портале <a href="{site}/?{utm}">torgi.kz</a> собрана полная база недвижимости с торгов Казахстана — '
-    "{count} объектов: квартиры, дома, коммерция, земля и паркоместа. Арестованное имущество, госимущество "
+    'На портале <a href="{site}/?{utm}">torgi.kz</a> собрана полная база недвижимости и автотранспорта с торгов '
+    "Казахстана — {count} объектов: квартиры, дома, коммерция, земля, "
+    '<a href="{site}/avto/?{utm}">автомобили и спецтехника</a>. Арестованное имущество, госимущество '
     "и приватизация, имущество банкротов, залоги и имущество банков.\n\n"
     "Для удобства настройте в каталоге фильтры — город и район, тип объекта, цену, вид продажи — и нажмите "
     "«Сохранить поиск»: новые подходящие лоты будут приходить сюда, в Telegram. Самые выгодные предложения "
@@ -365,7 +374,7 @@ def _last_lot(session: Session, client_chat: int) -> int | None:
 
 def lot_info(lot: Lot) -> str:
     """Сводка по лоту для клиента (по команде администратора /info)."""
-    rows = [f"<b>{html.escape(CATEGORIES.get(lot.category, 'Объект'))}</b>"
+    rows = [f"<b>{html.escape(lot.title if lot.category == 'vehicle' else CATEGORIES.get(lot.category, 'Объект'))}</b>"
             + (f", {lot.area_m2:g} м²".replace(".", ",") if lot.area_m2 else "")]
     if lot.land_area_ha:
         rows.append(f"Участок: {lot.land_area_ha:g} га ({lot.land_area_ha * 10_000:g} м²)".replace(".", ","))
@@ -386,7 +395,7 @@ def lot_info(lot: Lot) -> str:
     rows.append(f"Вид продажи: {html.escape(ORIGINS.get(lot.origin, lot.origin))}")
     if lot.url:
         rows.append(f'<a href="{html.escape(lot.url)}">Страница лота у продавца</a>')
-    rows.append(f'<a href="{settings.site_url}/lots/{lot.id}/?utm_source=telegram&amp;utm_medium=bot">Карточка на torgi.kz</a>')
+    rows.append(f'<a href="{lot_url(lot)}">Карточка на torgi.kz</a>')
     return ("Здравствуйте! Вы оставляли заявку на сайте torgi.kz. Информация по лоту:\n\n" + "\n".join(rows)
             + channel_invite(lot))
 
@@ -403,14 +412,14 @@ def channel_invite(lot: Lot | None = None) -> str:
 _LEASE_RE = re.compile(r"Срок аренды,?\s*мес\.?:\s*(\d+)", re.I)
 _CLIENT_ID_RE = re.compile(r"· ID (\d+)")
 _USER_LINK_RE = re.compile(r"^tg://user\?id=(\d+)$")
-_LOT_LINK_RE = re.compile(r"/lots/(\d+)/")
+_LOT_LINK_RE = re.compile(r"/(?:lots|avto)/(\d+)/")
 _LOT_NUMBER_RE = re.compile(r"(?:лот\w*|№|#)\s*:?\s*(\d{1,9})\b|^\s*(\d{1,9})\s*$", re.I)
 
 
 def lots_in_text(session: Session, text: str) -> list[Lot]:
     """Лоты, о которых пишет клиент: ссылка torgi.kz/lots/N/, или «лот № N» / «#N» / просто число. Номер ищем
     и среди наших (как в ссылке), и среди номеров лотов у продавца — на сайте показывается номер продавца."""
-    if m := re.search(r"torgi\.kz/lots/(\d+)", text):
+    if m := re.search(r"torgi\.kz/(?:lots|avto)/(\d+)", text):
         lot = session.get(Lot, int(m.group(1)))
         return [lot] if lot else []
     numbers = {a or b for a, b in _LOT_NUMBER_RE.findall(text)}

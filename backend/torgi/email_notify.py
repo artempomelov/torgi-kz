@@ -43,7 +43,7 @@ def _lot_row(lot: Lot) -> str:
         title += f", {lot.area_m2:g} м²".replace(".", ",")
     place = lot.city or lot.region or ""
     price = _money(lot.price) if lot.price else "цена не указана"
-    url = f"{settings.site_url}/lots/{lot.id}/?utm_source=email&utm_medium=search"
+    url = f"{settings.site_url}/{'avto' if lot.category == 'vehicle' else 'lots'}/{lot.id}/?utm_source=email&utm_medium=search"
     img = (f'<img src="{html.escape(lot.images[0])}" width="96" height="72" '
            f'style="object-fit:cover;border-radius:6px;display:block" alt="">' if lot.images else "")
     return (f'<tr><td style="padding:8px 12px 8px 0;vertical-align:top">{img}</td>'

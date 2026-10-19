@@ -7,6 +7,7 @@
     lots.json         — активные лоты для каталога (короткий формат, грузится браузером)
     lots-full.json    — все лоты с деталями и историей цен (только для сборки страниц лотов)
     meta.json         — справочники и счётчики
+    cars.json         — машины с торгов (раздел /avto/)
 """
 
 import hashlib
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 from torgi import normalize as nz
 from torgi.api import LotFull, PricePoint, _drop_pct, _short, meta
 from torgi.models import Lot, utcnow
+from torgi.parsers.vehicles import CATEGORY as VEHICLE
 
 # Снятые лоты держим на сайте ещё 30 дней: ссылки из Telegram и поисковиков не ломаются
 REMOVED_KEEP_DAYS = 30
@@ -153,6 +155,29 @@ def _prepare(item: dict, gated: bool, private: dict | None = None, description: 
     return item
 
 
+CAR_FIELDS = ("vehicle_type", "brand", "model", "year", "mileage_km", "engine", "transmission", "body", "color", "drive",
+              "note")
+
+
+def car_item(lot: Lot) -> dict:
+    """Машина для раздела /avto/: общие поля лота + марка, модель, год и характеристики из extra."""
+    extra = lot.extra or {}
+    when = lot.auction_start or lot.auction_end  # у Halyk известен только конец онлайн-аукциона
+    return {
+        "id": lot.id, "source": lot.source.removesuffix("_auto"), "url": lot.url, "title": lot.title,
+        **{k: extra.get(k) for k in CAR_FIELDS},
+        "vehicle_type": extra.get("vehicle_type") or "other",
+        "price": lot.price, "min_price": lot.min_price, "deposit": lot.deposit,
+        "city": lot.city, "region": lot.region, "origin": lot.origin, "sale_type": lot.sale_type,
+        "auction_date": when.isoformat() if when else None,
+        "applications_deadline": lot.applications_deadline.isoformat() if lot.applications_deadline else None,
+        "listed_at": (lot.published_at or lot.first_seen_at).isoformat(),
+        "price_drop_pct": _drop_pct(lot),
+        "images": lot.images or [],
+        "description": lot.description,
+    }
+
+
 def _dump(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str), encoding="utf-8")
 
@@ -166,6 +191,10 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
         .options(selectinload(Lot.price_history))
         .order_by(Lot.first_seen_at.desc(), Lot.id.desc())
     ).all()
+    # машины — отдельный раздел /avto/ со своим файлом
+    vehicles = [lot for lot in lots if lot.category == VEHICLE and lot.status == "active"]
+    lots = [lot for lot in lots if lot.category != VEHICLE]
+    _dump(out_dir / "cars.json", {"generated_at": utcnow().isoformat(), "items": [car_item(lot) for lot in vehicles]})
 
     dups = find_duplicates(lots)
     short = [

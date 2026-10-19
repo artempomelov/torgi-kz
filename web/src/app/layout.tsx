@@ -14,12 +14,12 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic"] }
 export const metadata: Metadata = {
   metadataBase: new URL("https://torgi.kz"),
   title: {
-    default: "torgi.kz — все торги недвижимостью в Казахстане",
+    default: "torgi.kz — торги недвижимостью и автотранспортом в Казахстане",
     template: "%s — torgi.kz",
   },
   description:
-    "Полная база недвижимости с торгов Казахстана: квартиры, дома, коммерция, земля и паркоместа. " +
-    "Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков.",
+    "Полная база недвижимости и автотранспорта с торгов Казахстана: квартиры, дома, коммерция, земля, автомобили " +
+    "и спецтехника. Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков.",
   openGraph: { siteName: "torgi.kz", locale: "ru_KZ", type: "website", images: ["/og/default.png"] },
   twitter: { card: "summary_large_image" },
 };
@@ -30,6 +30,7 @@ const NAV = [
   { href: "/lots/?category=house", label: "Дома" },
   { href: "/lots/?category=commercial", label: "Коммерция" },
   { href: "/lots/?category=land", label: "Земля" },
+  { href: "/avto/", label: "Авто" },
   { href: "/lots/?with_auction_date=true&sort=deadline", label: "Ближайшие торги" },
   { href: "/lots/?view=map", label: "Карта" },
   { href: "/podborki/", label: "Подборки" },
@@ -77,7 +78,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-8 text-sm text-muted">
             <p className="flex items-center gap-2 font-semibold text-foreground">
               <LogoMark className="h-6 w-6" />
-              torgi.kz — агрегатор торгов недвижимостью в Казахстане
+              torgi.kz — агрегатор торгов недвижимостью и автотранспортом в Казахстане
             </p>
             <p>
               Сведения собираются из открытых источников: электронной торговой площадки Минюста РК, реестра
@@ -91,6 +92,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/podborki/kvartiry-astana/" className="hover:text-brand-ink">Квартиры с торгов в Астане</Link>
               <Link href="/podborki/zalogovoe-imushchestvo-bankov/" className="hover:text-brand-ink">Залоговое имущество банков</Link>
               <Link href="/podborki/gosimushchestvo-i-privatizaciya/" className="hover:text-brand-ink">Госимущество</Link>
+              <Link href="/avto/" className="hover:text-brand-ink">Автомобили с торгов</Link>
             </p>
             <p className="flex flex-wrap gap-x-5 gap-y-1">
               {FEATURES.telegramUrl && (
