@@ -37,7 +37,7 @@ export function LotCard({ lot }: { lot: Lot }) {
       href={`/lots/${lot.id}/`}
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand-ink/50 hover:shadow-card"
     >
-      <div className="relative aspect-[4/3] bg-background">
+      <div className="relative aspect-[4/3] overflow-hidden bg-background">
         <LotImage src={lot.image} category={lot.category} alt={lot.headline} className="h-full w-full object-cover" />
         <div className="absolute left-2 top-2 flex flex-wrap gap-1">
           <span className="rounded-md bg-surface/95 px-2 py-0.5 text-xs font-medium text-foreground">

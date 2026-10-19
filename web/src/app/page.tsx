@@ -7,7 +7,7 @@ import type { Lot } from "@/lib/api";
 import { getCars, getLots, getMeta, getTop, getUpcomingAuctions } from "@/lib/data";
 import { applyFilters, parseFilters } from "@/lib/filter";
 import { CATEGORY_PLURAL, plural } from "@/lib/format";
-import { pickShowcase } from "@/lib/insights";
+import { latestLots, pickShowcase } from "@/lib/insights";
 
 // Готовые подборки на главной: ссылка в каталог с фильтрами и число объектов в ней
 const QUICK = [
@@ -29,8 +29,7 @@ function quickCount(lots: Lot[], q: (typeof QUICK)[number]): number {
 export default function Home() {
   const meta = getMeta();
   const lots = getLots();
-  // lots.json уже отсортирован: новые первыми. В витрину — объекты с фото, жильё и коммерция
-  const latest = { items: pickShowcase(lots.slice(0, 300), 8) };
+  const latest = latestLots(lots, 10);
   const upcoming = getUpcomingAuctions(Infinity);
   // на главной — по два лучших из ТОПа квартир Алматы и Астаны (или первых разделов, какие есть)
   const byId = new Map(getLots().map((l) => [l.id, l]));
@@ -103,6 +102,20 @@ export default function Home() {
         </section>
       )}
 
+      {latest.length > 0 && (
+        <section className="mx-auto max-w-7xl px-4 pt-10">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="text-2xl font-bold">🆕 Новое</h2>
+            <Link href="/novoe/" className="text-sm font-medium text-brand-ink">По дням →</Link>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {latest.map((lot) => (
+              <LotCard key={lot.id} lot={lot} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {carPicks.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 pt-10">
           <div className="mb-4 flex items-baseline justify-between">
@@ -148,20 +161,6 @@ export default function Home() {
           </div>
         </section>
       )}
-
-      <section className="mx-auto max-w-7xl px-4 pt-10">
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-2xl font-bold">Новые объекты</h2>
-          <Link href="/lots/" className="text-sm font-medium text-brand-ink">
-            Весь каталог →
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {latest.items.map((lot) => (
-            <LotCard key={lot.id} lot={lot} />
-          ))}
-        </div>
-      </section>
 
       <section className="mx-auto max-w-7xl px-4 pt-12">
         <h2 className="mb-4 text-2xl font-bold">Источники</h2>

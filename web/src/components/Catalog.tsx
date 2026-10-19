@@ -48,7 +48,7 @@ function ParkingGroupCard({ group }: { group: ParkingGroup }) {
         : `/lots/?category=parking&q=${encodeURIComponent(group.base)}`}
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface transition hover:border-brand-ink/50 hover:shadow-card"
     >
-      <div className="relative aspect-[4/3] bg-background">
+      <div className="relative aspect-[4/3] overflow-hidden bg-background">
         <LotImage src={first.image} category="parking" alt={group.base} className="h-full w-full object-cover" />
         <span className="absolute left-2 top-2 rounded-md bg-surface/95 px-2 py-0.5 text-xs font-medium">
           {n} {plural(n, ["машино-место", "машино-места", "машино-мест"])}

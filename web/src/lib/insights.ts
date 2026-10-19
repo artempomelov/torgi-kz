@@ -1,6 +1,6 @@
 // Выборки по каталогу на этапе сборки: витрина главной, похожие объекты, сравнение цены с рынком.
 import type { Lot } from "./api";
-import { PPM_CATEGORIES } from "./filter";
+import { PPM_CATEGORIES, isLowInterest } from "./filter";
 
 const MAIN_CATEGORIES = new Set(["apartment", "house", "commercial"]);
 
@@ -21,6 +21,24 @@ export function pickShowcase(lots: Lot[], limit: number): Lot[] {
     .sort((a, b) => b.s - a.s || a.i - b.i)
     .slice(0, limit)
     .map((x) => x.lot);
+}
+
+/** «Новое»: последние лоты по дате появления на torgi.kz — с фото, без паркингов, копеечной земли и лотов без цены.
+ *  Из серии одного продавца (тот же тип и город) — не больше двух, чтобы партия участков не заняла весь раздел. */
+export function latestLots(lots: Lot[], limit = 10): Lot[] {
+  const series = new Map<string, number>();
+  const out: Lot[] = [];
+  const byDate = [...lots].sort((a, b) => Date.parse(b.first_seen_at) - Date.parse(a.first_seen_at) || b.id - a.id);
+  for (const lot of byDate) {
+    if (out.length === limit) break;
+    if (!lot.image || isLowInterest(lot)) continue;
+    const key = [lot.source, lot.category, lot.city ?? lot.region].join("|");
+    const n = series.get(key) ?? 0;
+    if (n >= 2) continue;
+    series.set(key, n + 1);
+    out.push(lot);
+  }
+  return out;
 }
 
 const place = (lot: Lot) => lot.city ?? lot.region;

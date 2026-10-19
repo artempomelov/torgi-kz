@@ -14,6 +14,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE}/`, lastModified: updated, changeFrequency: "daily", priority: 1 },
     { url: `${SITE}/lots/`, lastModified: updated, changeFrequency: "daily", priority: 0.9 },
     { url: `${SITE}/top/`, lastModified: updated, changeFrequency: "daily", priority: 0.9 },
+    { url: `${SITE}/novoe/`, lastModified: updated, changeFrequency: "daily", priority: 0.8 },
     { url: `${SITE}/avto/`, lastModified: updated, changeFrequency: "daily", priority: 0.9 },
     { url: `${SITE}/podborki/`, lastModified: updated, changeFrequency: "daily", priority: 0.8 },
     ...getCollections(lots).map((c) => ({
