@@ -134,17 +134,42 @@ if __name__ == "__main__":
     print("ok", OUT)
 
 
-def channel_avatar(label: str) -> Image.Image:
-    """Аватарка регионального/тематического канала: как вариант 5 + подпись под домиком."""
+def _car(d: ImageDraw.ImageDraw, cx: float, top: float, scale: float):
+    """Машина (вид сбоку) со стрелкой вниз — тот же знак «цена ниже рынка», что у домика; top — верх крыши."""
+    k, w = scale, round(40 * scale)
+    p = lambda x, y: (cx + x * k, top + y * k)  # noqa: E731
+    # кузов: от переднего бампера через капот, лобовое стекло, крышу и багажник к заднему бамперу
+    d.line([p(-200, 215), p(-200, 150), p(-150, 128), p(-95, 122), p(-55, 0), p(70, 0), p(115, 122), p(180, 135),
+            p(205, 165), p(205, 215)], fill=WHITE, width=w, joint="curve")
+    for x in (-200, 205):  # скруглённые концы бамперов
+        d.ellipse([p(x, 215)[0] - w / 2, p(x, 215)[1] - w / 2, p(x, 215)[0] + w / 2, p(x, 215)[1] + w / 2], fill=WHITE)
+    # днище между колёсами
+    for a, b in ((-200, -165), (-55, 75), (180, 205)):
+        d.line([p(a, 215), p(b, 215)], fill=WHITE, width=w)
+    for x in (-110, 128):  # колёса: белый обод, тёмная середина
+        r_out, r_in = 58 * k, 24 * k
+        cx_w, cy_w = p(x, 225)
+        d.ellipse([cx_w - r_out, cy_w - r_out, cx_w + r_out, cy_w + r_out], fill=WHITE)
+        d.ellipse([cx_w - r_in, cy_w - r_in, cx_w + r_in, cy_w + r_in], fill=INK)
+    # стрелка вниз в салоне
+    d.rectangle([*p(-22, 48), *p(22, 125)], fill="#5b82f0")
+    d.polygon([p(-66, 118), p(66, 118), p(0, 186)], fill="#5b82f0")
+
+
+def channel_avatar(label: str, icon: str = "house") -> Image.Image:
+    """Аватарка регионального/тематического канала: как вариант 5 + подпись под знаком (домик или машина)."""
     img, d = canvas(INK)
     _wordmark(d, 140, 88)
-    _house(d, S / 2, 210, 0.58)
+    if icon == "car":
+        _car(d, S / 2, 232, 0.62)
+    else:
+        _house(d, S / 2, 210, 0.58)
     f = ImageFont.truetype(str(BOLD), 74)
     centered(d, label, f, 470, WHITE)
     return img
 
 
-CHANNELS = {"almaty": "Алматы", "astana": "Астана", "biz": "Бизнес"}
+CHANNELS = {"almaty": "Алматы", "astana": "Астана", "biz": "Бизнес", "auto": "Авто"}
 
 
 def site_icons():
@@ -161,7 +186,7 @@ def site_icons():
 
 if __name__ == "__main__" and "--channels" in __import__("sys").argv:
     for key, label in CHANNELS.items():
-        channel_avatar(label).save(OUT / f"avatar-channel-{key}.png", optimize=True)
+        channel_avatar(label, "car" if key == "auto" else "house").save(OUT / f"avatar-channel-{key}.png", optimize=True)
     print("channels ok")
 
 if __name__ == "__main__" and "--site" in __import__("sys").argv:

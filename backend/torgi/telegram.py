@@ -407,7 +407,11 @@ def channels() -> list[tuple[str, dict | None, int]]:
 
 def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
                 limit: int, since_days: int, medians: dict, dry_run: bool) -> int:
-    if not dry_run and session.scalar(select(ChannelPost.id).where(ChannelPost.channel == channel).limit(1)) is None:
+    # канал машин: раздел новый — публикуем и уже собранные машины, понемногу (дневной лимит), за последние 60 дней
+    cars = "vehicle" in ((rule or {}).get("category") or [])
+    if cars:
+        since_days = max(since_days, 60)
+    if not cars and not dry_run and session.scalar(select(ChannelPost.id).where(ChannelPost.channel == channel).limit(1)) is None:
         # Первый запуск для канала: текущую базу не выгружаем, публикуем только новое
         lots = pending_lots(session, channel, 10**9, 10**4, rule)
         session.add_all(ChannelPost(lot_id=lot.id, channel=channel, message_id=None) for lot in lots)
