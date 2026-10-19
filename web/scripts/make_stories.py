@@ -32,6 +32,7 @@ MOSAICS = [
     ("kvartiry-astana", "ТОП недели · Астана", "{n} квартир в Астане", "ниже рынка до {best}%"),
     ("kommercheskaya", "ТОП недели · Бизнес", "{n} помещений для бизнеса", "ниже рынка до {best}%"),
     ("kvartiry-do-30-mln", "ТОП недели · до 30 млн", "Квартиры до 30 млн ₸", "{n} вариантов по Казахстану"),
+    ("kvartiry-regiony", "ТОП недели · регионы", "{n} квартир в регионах", "{cities} и другие города"),
 ]
 
 # лот и фото (номера в лоте): главное и ещё два; trim — доля кадра снизу, которую отрезаем (дата съёмки на фото)
@@ -43,9 +44,9 @@ POSTS += [{x["id"] for x in pick["lots"]} for pick in ig.PICKS]
 MAX_REPEATS = 2
 
 STORIES = {
-    "lot_of_day": {"id": 1272, "photos": [4, 11, 10], "city": "Алматы"},
+    "lot_of_day": {"id": 98, "photos": [10, 11, 12], "city": "Астана"},
     "countdown": {"id": 3812, "photos": [14, 12, 11], "title": "Квартира 130,7 м²"},
-    "second": "kvartiry-do-30-mln",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
+    "second": "kvartiry-regiony",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
 }
 
 
@@ -144,7 +145,7 @@ def story_numbers(meta: dict) -> Image.Image:
 def story_mosaic(items: list[tuple[dict, dict, Image.Image | None]], kicker: str, title: str, accent: str) -> Image.Image:
     """Мозаика 3×3 из раздела ТОПа: обложки с ценой и скидкой на каждой плитке, крупный заголовок под ней."""
     img, d = canvas(ig.INK)
-    gap, top_y = 6, 360
+    gap, top_y = 6, 345
     tile = (W - 2 * gap) // 3
     rows = max(1, min(3, len(items) // 3))  # только полные ряды — без пустых клеток
     items = items[:rows * 3]
@@ -161,10 +162,11 @@ def story_mosaic(items: list[tuple[dict, dict, Image.Image | None]], kicker: str
         chip = f"{REGION_CAP}%+" if top.get("discount_note") else f"−{top['discount_pct']}%"
         ig.pill(d, (x + 12, y + 12), chip, ig.font(ig.BLACK, 28), ig.GREEN, ig.WHITE, pad=(14, 6))
     header(d, kicker)
-    y = top_y + rows * (tile + gap) + 40
+    y = top_y + rows * (tile + gap) + 30
     d.text((60, y), title, font=ig.fit_font(d, title, ig.BLACK, 70, W - 120), fill=ig.WHITE)
-    d.text((60, y + 90), accent, font=ig.fit_font(d, accent, ig.BLACK, 70, W - 120), fill="#3ddc84")
-    portal_line(d, y=y + 200, dark=True)
+    d.text((60, y + 86), accent, font=ig.fit_font(d, accent, ig.BLACK, 70, W - 120), fill="#3ddc84")
+    # ниже строки о портале (≈1690–1780) — место под стикер «Ссылка», дальше Instagram закрывает кадр полем ответа
+    portal_line(d, y=y + 176, dark=True)
     return img
 
 
@@ -229,7 +231,8 @@ def main():
                  for x in chosen]
         best = max(REGION_CAP if x.get("discount_note") else x["discount_pct"] for _, x, _ in items)
         n = len(section["items"])
-        img = story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best))
+        cities = ", ".join(list(dict.fromkeys(lot["city"] for lot, _, _ in items if lot.get("city")))[:3])
+        img = story_mosaic(items, kicker, title.format(n=n), accent.format(n=n, best=best, cities=cities))
         img.save(OUT / "variants" / f"mozaika-{slug}.jpg", quality=92)
         if slug == STORIES["second"]:
             img.save(OUT / "01-mozaika.jpg", quality=92)
