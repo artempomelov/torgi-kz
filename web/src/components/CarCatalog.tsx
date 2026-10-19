@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/LotCard";
+import { TelegramCta } from "@/components/TelegramCta";
 import { LotImage } from "@/components/LotImage";
 import {
   CAR_PAGE_SIZE, CAR_SORTS, VEHICLE_TYPES, applyCarFilters, carName, carOptions, carSpecs, parseCarFilters, type Car,
@@ -229,6 +230,10 @@ export function CarCatalog({ cars }: { cars: Car[] }) {
               {page < pages && <Link href={hrefWith({ page: String(page + 1) })} className="rounded-lg border border-border bg-surface px-3 py-1.5">Вперёд →</Link>}
             </nav>
           )}
+
+          <div className="mt-8">
+            <TelegramCta cars compact />
+          </div>
         </div>
       </div>
 

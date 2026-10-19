@@ -155,7 +155,7 @@ export default async function CarPage({ params }: PageProps<"/avto/[id]">) {
             <ShareButtons url={`https://torgi.kz/avto/${car.id}/`} text={`${name} — ${formatPrice(car.price)}`} />
           </div>
 
-          <TelegramCta />
+          <TelegramCta cars />
 
           <p className="text-xs leading-5 text-muted">
             torgi.kz собирает данные из открытых источников и не является продавцом. Перед покупкой проверьте
