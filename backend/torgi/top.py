@@ -16,7 +16,7 @@ from typing import Callable
 
 from torgi import normalize as nz
 from torgi.market import MarketIndex, confidence
-from torgi.models import Lot
+from torgi.models import Lot, utcnow
 
 TOP_SIZE = 10
 MIN_DISCOUNT, MAX_DISCOUNT = 10, 45
@@ -100,7 +100,47 @@ def _estimate(x: dict, index: MarketIndex, district: str | None = None) -> dict 
     }
     if x.get("city") not in BIG_CITIES and discount > REGION_DISCOUNT_CAP:
         top["discount_note"] = f"более {REGION_DISCOUNT_CAP}%"
+    top["where"] = where_phrase(x.get("city") or x.get("region"), district if district and district in est.segment else None)
     return top
+
+
+BADGE_CATEGORIES = ("apartment", "house", "commercial")
+FINISHED_RE = re.compile(r"ремонт|чистов", re.I)
+
+
+def where_phrase(city: str | None, district: str | None) -> str:
+    """«в Бостандыкском районе», «в районе Есиль», «в г. Караганда»."""
+    if district:
+        if m := re.fullmatch(r"(.+?)(?:ий|ый|ой) район", district):
+            return f"в {m.group(1)}ом районе"
+        return f"в районе {district.removeprefix('район ')}"
+    return f"в г. {city}"
+
+
+def market_badge(x: dict, lot: Lot, index: MarketIndex) -> dict | None:
+    """Плашка «−N% к рынку» на карточке лота (решение владельца сайта от 20.10.2026): текущая цена против средней
+    цены м² похожих объектов в районе (вне районов — в городе). Те же предохранители, что у ТОПа: без недостроя,
+    черновой отделки, долей и аренды, с правдоподобной площадью, надёжной оценкой и скидкой 10–45%."""
+    if x["category"] not in BADGE_CATEGORIES or not x.get("price") or x.get("flags"):
+        return None
+    text = f"{lot.title or ''} {lot.description or ''} {' '.join(str(v) for v in (lot.extra or {}).values())}"
+    if nz.deal_flags(lot.title, lot.description) or PROBLEM_RE.search(text) or EXCLUDED_RE.search(f"{lot.address or ''} {text}"):
+        return None
+    # новостройки последних лет на торгах обычно без отделки (голый бетон) — плашка, только если ремонт назван
+    if (lot.year_built or 0) >= utcnow().year - 1 and not FINISHED_RE.search(text):
+        return None
+    lo, hi = AREA_RANGE[x["category"]]
+    if not x.get("area_m2") or not lo <= x["area_m2"] <= hi:
+        return None
+    city, district = x.get("city") or x.get("region"), x.get("district")
+    if city in BIG_CITIES and not district:
+        return None  # оценка по всему городу завышает скидку окраин
+    est = _estimate(x, index)
+    if est is None or est["confidence"] == "низкая" or not MIN_DISCOUNT <= est["discount_pct"] < MAX_DISCOUNT:
+        return None
+    capped = "discount_note" in est
+    return {"pct": REGION_DISCOUNT_CAP if capped else est["discount_pct"], "over": capped,
+            "where": where_phrase(city, district if district and district in est["segment"] else None)}
 
 
 def _auto_candidates(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> list[dict]:

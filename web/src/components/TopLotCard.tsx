@@ -2,26 +2,28 @@
 import type { Lot, TopItem } from "@/lib/api";
 import { formatPriceShort } from "@/lib/format";
 
-import { LotCard } from "./LotCard";
+import { LotCard, marketTone } from "./LotCard";
 
 export function TopLotCard({ lot, top, rank }: { lot: Lot; top: TopItem; rank: number }) {
+  const badge = { pct: top.discount_pct, over: !!top.discount_note };
   return (
     <div className="flex flex-col">
-      <div className="flex items-center gap-3 rounded-t-xl bg-success/10 px-3 py-2">
-        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-success text-sm font-bold text-white">
+      <div className="flex items-center gap-3 rounded-t-xl border border-b-0 border-border bg-surface px-3 py-2">
+        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand text-sm font-bold text-white">
           {rank}
         </span>
-        <div className="min-w-0 leading-tight">
-          <div className="text-sm font-bold text-success">
-            {top.discount_note ? `Скидка ${top.discount_note}` : `−${top.discount_pct}% к рынку`}
-          </div>
-          <div className="truncate text-xs text-muted" title={`Оценка по ${top.sample} объявлениям: ${top.segment}`}>
-            {top.discount_note ? "оценка рынка приблизительная" : `рынок ≈ ${formatPriceShort(top.estimate)}`}
-          </div>
+        <div className="flex min-w-0 items-center gap-2 leading-tight">
+          <span className={`flex-none rounded-md px-2 py-0.5 text-sm font-bold ${marketTone(badge)}`}>
+            {top.discount_note ? `более −30%` : `−${top.discount_pct}%`} к рынку
+          </span>
+          {!top.discount_note && (
+            <span className="truncate text-xs text-muted">рынок ≈ {formatPriceShort(top.estimate)}</span>
+          )}
         </div>
       </div>
       <div className="-mt-px flex-1 [&>a]:h-full [&>a]:rounded-t-none">
-        <LotCard lot={top.image ? { ...lot, image: top.image } : lot} />
+        {/* скидка уже в шапке — на фото плашку не дублируем */}
+        <LotCard lot={{ ...lot, image: top.image ?? lot.image, market: null }} />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { Lot } from "@/lib/api";
+import type { Lot, MarketBadge } from "@/lib/api";
 import {
   CATEGORY_LABELS,
   ORIGIN_LABELS,
@@ -29,6 +29,16 @@ export function Badge({ children, tone = "neutral" }: { children: React.ReactNod
   return <span className={`rounded-md px-2 py-0.5 text-xs font-medium ${tones[tone]}`}>{children}</span>;
 }
 
+/** «−25%» (вне Алматы и Астаны большая скидка — «более −30%») */
+export function marketPct(m: MarketBadge): string {
+  return `${m.over ? "более −" : "−"}${m.pct}%`;
+}
+
+/** Цвет плашки: до 15% — жёлтая, больше — красная (решение владельца сайта от 20.10.2026). */
+export function marketTone(m: Pick<MarketBadge, "pct" | "over">): string {
+  return m.pct <= 15 && !m.over ? "bg-[#facc15] text-[#0f1115]" : "bg-[#e11d48] text-white";
+}
+
 export function LotCard({ lot }: { lot: Lot }) {
   const isAuction = lot.sale_type === "auction" || lot.sale_type === "auction_down";
   const subtitle = lotSubtitle(lot);
@@ -43,6 +53,11 @@ export function LotCard({ lot }: { lot: Lot }) {
           <span className="rounded-md bg-surface/95 px-2 py-0.5 text-xs font-medium text-foreground">
             {CATEGORY_LABELS[lot.category] ?? lot.category}
           </span>
+          {lot.market && (
+            <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${marketTone(lot.market)}`}>
+              −{lot.market.pct}%{lot.market.over && "+"} к рынку
+            </span>
+          )}
           {lot.price_drop_pct ? (
             <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-white">
               −{lot.price_drop_pct}%

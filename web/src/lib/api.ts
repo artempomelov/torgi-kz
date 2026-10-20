@@ -34,7 +34,12 @@ export type Lot = {
   listed_at?: string | null; // когда объявление появилось у источника
   district?: string | null; // район из адреса — публичный ориентир
   group_key?: string | null; // здание для одинаковых паркингов
+  market?: MarketBadge | null; // плашка «−N% к рынку» (backend/torgi/top.py: market_badge)
 };
+
+/** Насколько текущая цена ниже средней цены м² похожих объектов: where — «в Бостандыкском районе», «в г. Актау»;
+ *  over — скидка больше pct (вне Алматы и Астаны показываем «более 30%»). */
+export type MarketBadge = { pct: number; over: boolean; where: string };
 
 export type LotDetailsData = {
   title?: string;
@@ -72,6 +77,7 @@ export type TopItem = {
   confidence: string;
   image?: string | null; // фото для карточки ТОПа — выбрано вручную вместо первого фото продавца
   discount_note?: string | null; // «более 30%» — вне Алматы и Астаны оценка грубее, точную скидку не показываем
+  where?: string; // «в Бостандыкском районе», «в г. Актау» — как у плашки MarketBadge
 };
 export type TopData = {
   market_updated_at?: string | null;

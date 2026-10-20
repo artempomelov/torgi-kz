@@ -118,3 +118,30 @@ def test_top_from_picks():
     assert "discount_note" not in almaty["items"][0]
     regions = next(s for s in data["sections"] if s["slug"] == "kvartiry-regiony")
     assert regions["items"][0]["id"] == 3 and regions["items"][0]["discount_note"] == "более 30%"
+
+
+def test_market_badge():
+    """Плашка «−N% к рынку»: район в предложном падеже, без района в Алматы нет, черновая отделка — нет,
+    в регионах больше 30% — «более 30%», выше рынка или подозрительно дёшево (≥45%) — нет."""
+    from torgi.models import Lot
+    from torgi.top import market_badge, where_phrase
+
+    assert where_phrase("Алматы", "Бостандыкский район") == "в Бостандыкском районе"
+    assert where_phrase("Астана", "район Есиль") == "в районе Есиль"
+    assert where_phrase("Караганда", "район имени Казыбек би") == "в районе имени Казыбек би"
+    assert where_phrase("Актау", None) == "в г. Актау"
+
+    seg = (900_000, 1_000_000, 1_100_000, 50)
+    index = market.MarketIndex({("apartment", "Алматы", "Бостандыкский район", None): seg,
+                                ("apartment", "Алматы", None, None): seg, ("apartment", "Актау", None, None): seg})
+
+    def badge(price, city="Алматы", district="Бостандыкский район", extra=None):
+        x = {"id": 1, "category": "apartment", "city": city, "district": district, "rooms": None, "area_m2": 50,
+             "price": price, "flags": []}
+        return market_badge(x, Lot(title="Квартира", description="", extra=extra or {}), index)
+
+    assert badge(40_000_000) == {"pct": 20, "over": False, "where": "в Бостандыкском районе"}
+    assert badge(40_000_000, district=None) is None
+    assert badge(40_000_000, extra={"Состояние": "черновая отделка"}) is None
+    assert badge(48_000_000) is None and badge(55_000_000) is None and badge(20_000_000) is None
+    assert badge(32_000_000, city="Актау", district=None) == {"pct": 30, "over": True, "where": "в г. Актау"}

@@ -103,6 +103,10 @@ def discount_text(top: dict) -> str:
     return f"скидка {top['discount_note']}" if top.get("discount_note") else f"−{top['discount_pct']}% к рынку"
 
 
+def discount_colors(top: dict) -> tuple[str, str]:
+    return ig.discount_colors(top["discount_pct"], bool(top.get("discount_note")))
+
+
 # --- истории ---------------------------------------------------------------------------------------------
 
 def story_lot_of_day(lot: dict, top: dict, spec: dict) -> Image.Image:
@@ -119,7 +123,7 @@ def story_lot_of_day(lot: dict, top: dict, spec: dict) -> Image.Image:
     d.text((60, 1405), place, font=ig.fit_font(d, place, ig.REG, 36, W - 120), fill=ig.MUTED)
     d.text((60, 1450), ig.mln(lot["price"]), font=ig.font(ig.BLACK, 96), fill=ig.INK)
     x = ig.pill(d, (60 + d.textlength(ig.mln(lot["price"]), font=ig.font(ig.BLACK, 96)) + 30, 1478),
-                discount_text(top), ig.font(ig.BLACK, 36), ig.GREEN, ig.WHITE, pad=(22, 10))
+                discount_text(top), ig.font(ig.BLACK, 36), *discount_colors(top), pad=(22, 10))
     portal_line(d)
     return img
 
@@ -163,7 +167,7 @@ def story_mosaic(items: list[tuple[dict, dict, Image.Image | None]], kicker: str
         d.text((x + 16, y + tile - 16), ig.mln(lot["price"]).replace(" ₸", ""), font=ig.font(ig.BLACK, 34),
                fill=ig.WHITE, anchor="ls")
         chip = f"{REGION_CAP}%+" if top.get("discount_note") else f"−{top['discount_pct']}%"
-        ig.pill(d, (x + 12, y + 12), chip, ig.font(ig.BLACK, 28), ig.GREEN, ig.WHITE, pad=(14, 6))
+        ig.pill(d, (x + 12, y + 12), chip, ig.font(ig.BLACK, 28), *discount_colors(top), pad=(14, 6))
     header(d, kicker)
     y = top_y + rows * (tile + gap) + 30
     d.text((60, y), title, font=ig.fit_font(d, title, ig.BLACK, 70, W - 120), fill=ig.WHITE)
@@ -224,7 +228,7 @@ def story_countdown(lot: dict, top: dict, spec: dict, today: date) -> Image.Imag
     sub = f"{spec['title']} · {lot_place(lot)}"
     d.text((60, 1330), sub, font=ig.fit_font(d, sub, ig.REG, 36, W - 120), fill="#b8c2d6")
     d.text((60, 1390), f"Стартовая цена {ig.mln(lot['price'])}", font=ig.font(ig.BOLD, 48), fill=ig.WHITE)
-    ig.pill(d, (60, 1470), discount_text(top), ig.font(ig.BLACK, 40), ig.GREEN, ig.WHITE, pad=(26, 12))
+    ig.pill(d, (60, 1470), discount_text(top), ig.font(ig.BLACK, 40), *discount_colors(top), pad=(26, 12))
     portal_line(d, dark=True)
     return img
 

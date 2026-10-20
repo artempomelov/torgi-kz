@@ -36,6 +36,12 @@ BLACK = FONTS / "seguibl.ttf" if (FONTS / "seguibl.ttf").exists() else BOLD
 
 INK, COBALT, WHITE, SOFT, MUTED = "#0f1115", "#2450d6", "#ffffff", "#e8eefc", "#5b6b73"
 GREEN, LIGHT = "#1f9d55", "#f4f6fa"
+YELLOW, RED = "#facc15", "#e11d48"
+
+
+def discount_colors(pct: int, capped: bool = False) -> tuple[str, str]:
+    """Плашка скидки к рынку — как на сайте: до 15% жёлтая, больше — красная (фон, текст)."""
+    return (YELLOW, INK) if pct <= 15 and not capped else (RED, WHITE)
 W, H = 1080, 1350
 
 ORIGIN = {
@@ -218,8 +224,9 @@ def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Im
             pill(d, (x + 18, y + cell_h - 52), label, font(BOLD, 24), INK, WHITE, pad=(14, 6))
     d.ellipse([36, 36, 126, 126], fill=GREEN)
     d.text((81, 81), str(rank), font=font(BLACK, 52), fill=WHITE, anchor="mm")
+    # плашка скидки — в левом верхнем углу (фото коллажа равнозначные), рядом с номером
     badge, bf = (f"скидка {note}" if note else f"−{discount}% к рынку"), font(BLACK, 40)
-    pill(d, (W - 84 - d.textlength(badge, font=bf), grid_h - 96), badge, bf, GREEN, WHITE)
+    pill(d, (144, 49), badge, bf, *discount_colors(discount, bool(note)))
 
     y = grid_h + 34
     d.text((64, y), title, font=fit_font(d, title, BOLD, 44, W - 128), fill=INK)

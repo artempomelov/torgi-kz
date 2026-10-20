@@ -219,14 +219,19 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
         data["duplicate_of"] = dups.get(lot.id)
         full.append(data)
 
-    # раздел «ТОП»: оценка по рынку (сводные цены м² — market-index.json из `market index`)
+    # раздел «ТОП» и плашки «−N% к рынку»: оценка по рынку (сводные цены м² — market-index.json из `market index`)
     top: dict = {"sections": []}
     if market_index and market_index.exists():
         from torgi.market import MarketIndex  # market импортирует export — избегаем цикла
         from torgi.top import build as build_top
-        from torgi.top import load_picks
+        from torgi.top import load_picks, market_badge
 
-        top = build_top(short, {lot.id: lot for lot in lots}, MarketIndex.from_json(market_index), load_picks())
+        index = MarketIndex.from_json(market_index)
+        by_id = {lot.id: lot for lot in lots}
+        top = build_top(short, by_id, index, load_picks())
+        badges = {x["id"]: badge for x in short if (badge := market_badge(x, by_id[x["id"]], index))}
+        for item in (*short, *full):
+            item["market"] = badges.get(item["id"])
     _dump(out_dir / "top.json", top)
 
     _dump(out_dir / "lots.json", short)

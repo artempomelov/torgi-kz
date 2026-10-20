@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { HowToBuy } from "@/components/HowToBuy";
-import { Badge, LotCard } from "@/components/LotCard";
+import { Badge, LotCard, marketPct, marketTone } from "@/components/LotCard";
 import { LotDetails } from "@/components/LotDetails";
 import { LotImage } from "@/components/LotImage";
 import { DescendingAuction, PriceAlerts } from "@/components/LotPricing";
@@ -175,17 +175,21 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
               </div>
             ) : null}
             {top && (
-              <Link href={`/top/#${top.slug}`} className="mt-3 block rounded-lg bg-success/10 p-3 text-sm text-success hover:bg-success/15">
-                🔥 <b>#{top.rank} в «{top.section}»</b> —{" "}
-                {top.discount_note ? (
-                  <>ниже рынка <b>{top.discount_note}</b>. Оценка приблизительная: по {top.sample} объявлениям ({top.segment}).</>
-                ) : (
-                  <>ниже рынка на <b>{top.discount_pct}%</b>. Оценка torgi.kz ≈ {formatPrice(top.estimate)} по {top.sample}{" "}
-                    объявлениям ({top.segment}).</>
-                )}
+              <Link href={`/top/#${top.slug}`} className="mt-3 block rounded-lg bg-background p-3 text-sm text-foreground hover:bg-surface-2">
+                <span className={`mr-2 inline-block rounded-md px-2 py-0.5 font-bold ${marketTone({ pct: top.discount_pct, over: !!top.discount_note })}`}>
+                  {top.discount_note ? "более −30%" : `−${top.discount_pct}%`}
+                </span>
+                относительно средней цены м² {top.where ?? ""}
+                <span className="mt-1 block text-xs text-muted">🔥 #{top.rank} в «{top.section}»</span>
               </Link>
             )}
-            {!top && market && (
+            {!top && lot.market && (
+              <div className="mt-3 rounded-lg bg-background p-3 text-sm text-foreground">
+                <span className={`mr-2 inline-block rounded-md px-2 py-0.5 font-bold ${marketTone(lot.market)}`}>{marketPct(lot.market)}</span>
+                относительно средней цены м² {lot.market.where}
+              </div>
+            )}
+            {!top && !lot.market && market && (
               <div className={`mt-3 rounded-lg p-3 text-sm ${market.diffPct <= -10 ? "bg-success/10 text-success" : "bg-background text-muted"}`}>
                 {market.diffPct <= -3
                   ? <>Цена за м² на <b>{-market.diffPct}%</b> ниже</>
