@@ -33,7 +33,9 @@ def test_benefits_and_channel_rules():
     text = format_post(lot, {("apartment", "Астана"): 400_000}, footer="FOOTER").replace("\xa0", " ")
     assert "📉 <b>Цена снижена на 20%</b> — выгода 2 000 000 ₸" in text
     assert "цена может опуститься до 4 000 000 ₸ (−50%)" in text
-    assert "🔥 За м² на 50% дешевле медианы по городу" in text
+    assert "🔥 Цена на 50% ниже средней цены м² на торгах в г. Астана" in text
+    badge = {"pct": 34, "over": False, "where": "в районе Сарыарка"}
+    assert "🔥 Цена на 34% ниже средней цены м² в районе Сарыарка" in format_post(lot, badge=badge)
     assert text.endswith("FOOTER")
     assert matches_channel(lot, {"region": "Астана"}) and not matches_channel(lot, {"region": ["Алматы"]})
     assert matches_channel(lot, {"category": ["apartment", "house"]}) and not matches_channel(lot, {"category": "land"})
@@ -46,7 +48,7 @@ def test_about_fits_limits_and_updates_only_changed():
     assert all(len(text) <= 255 for text in about.values())
     assert len(telegram.BOT_SHORT_ABOUT) <= 120
     assert all(telegram.INSTAGRAM in text and "torgi.kz ·" in text for text in about.values())
-    assert "более 123 400 объектов" in about["@torgi_kz_news"] and "@torgi_kz_news" in about["@torgi_kz_biz"]
+    assert "Более 123 400 объектов" in about["@torgi_kz_news"] and "@torgi_kz_news" in about["@torgi_kz_biz"]
 
     class FakeBot:
         def __init__(self):

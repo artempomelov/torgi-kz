@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AiBadge } from "@/components/AiBadge";
 import { CarCard } from "@/components/CarCatalog";
 import { LotCard } from "@/components/LotCard";
 import { TopLotCard } from "@/components/TopLotCard";
@@ -51,8 +52,11 @@ export default function Home() {
       <section className="hero-bg border-b border-border">
         <div className="mx-auto max-w-7xl px-4 py-12 md:py-16">
           <h1 className="max-w-3xl text-3xl font-bold leading-tight text-foreground md:text-5xl">
-            Все торги недвижимостью и автотранспортом Казахстана в одном месте
+            Недвижимость и автотранспорт с торгов Казахстана
           </h1>
+          <div className="mt-4">
+            <AiBadge />
+          </div>
           <p className="mt-4 max-w-2xl text-base text-muted md:text-lg">
             Полная база: {total.toLocaleString("ru-RU")} {plural(total, ["объект", "объекта", "объектов"])} —
             квартиры, дома, коммерция, земля, автомобили и спецтехника. Арестованное имущество, госимущество

@@ -14,12 +14,13 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin", "cyrillic"] }
 export const metadata: Metadata = {
   metadataBase: new URL("https://torgi.kz"),
   title: {
-    default: "torgi.kz — торги недвижимостью и автотранспортом в Казахстане",
+    default: "torgi.kz — недвижимость и автотранспорт с торгов Казахстана",
     template: "%s — torgi.kz",
   },
   description:
-    "Полная база недвижимости и автотранспорта с торгов Казахстана: квартиры, дома, коммерция, земля, автомобили " +
-    "и спецтехника. Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков.",
+    "Недвижимость и автотранспорт с торгов Казахстана. Первый агрегатор торгов с использованием AI: квартиры, дома, " +
+    "коммерция, земля, автомобили и спецтехника. Арестованное имущество, госимущество и приватизация, имущество " +
+    "банкротов, залоги и имущество банков.",
   openGraph: { siteName: "torgi.kz", locale: "ru_KZ", type: "website", images: ["/og/default.png"] },
   twitter: { card: "summary_large_image" },
 };
@@ -79,7 +80,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="mx-auto max-w-7xl space-y-3 px-4 py-8 text-sm text-muted">
             <p className="flex items-center gap-2 font-semibold text-foreground">
               <LogoMark className="h-6 w-6" />
-              torgi.kz — агрегатор торгов недвижимостью и автотранспортом в Казахстане
+              torgi.kz — недвижимость и автотранспорт с торгов Казахстана · первый агрегатор торгов с использованием AI
             </p>
             <p>
               Сведения собираются из открытых источников: электронной торговой площадки Минюста РК, реестра

@@ -74,7 +74,9 @@ def market_medians(session: Session) -> dict[tuple[str, str], float]:
     return {k: sorted(v)[len(v) // 2] for k, v in values.items() if len(v) >= 5}
 
 
-def benefit_lines(lot: Lot, medians: dict | None = None) -> list[str]:
+def benefit_lines(lot: Lot, medians: dict | None = None, badge: dict | None = None) -> list[str]:
+    """Выгода: снижение цены, нижняя цена аукциона и «Цена на N% ниже средней цены м² …» (формулировка владельца
+    сайта от 20.10.2026; badge — плашка сайта «−N% к рынку», иначе сравнение с лотами на торгах в том же городе)."""
     lines = []
     prices = [p.price for p in real_price_history(lot.price_history)]
     if lot.price and prices and prices[0] > lot.price:
@@ -84,8 +86,12 @@ def benefit_lines(lot: Lot, medians: dict | None = None) -> list[str]:
         lines.append(f"⬇️ Аукцион на понижение: цена может опуститься до {_money(lot.min_price)} "
                      f"(−{(1 - lot.min_price / lot.price) * 100:.0f}%)")
     median = (medians or {}).get((lot.category, lot.city or lot.region or ""))
-    if median and lot.price_per_m2 and lot.price_per_m2 < median * 0.9:
-        lines.append(f"🔥 За м² на {(1 - lot.price_per_m2 / median) * 100:.0f}% дешевле медианы по городу")
+    if badge:
+        how = f"более чем на {badge['pct']}%" if badge.get("over") else f"на {badge['pct']}%"
+        lines.append(f"🔥 Цена {how} ниже средней цены м² {html.escape(badge['where'])}")
+    elif median and lot.price_per_m2 and lot.price_per_m2 < median * 0.9:
+        place = html.escape(lot.city or lot.region or "")
+        lines.append(f"🔥 Цена на {(1 - lot.price_per_m2 / median) * 100:.0f}% ниже средней цены м² на торгах в г. {place}")
     return lines
 
 
@@ -125,7 +131,8 @@ def format_vehicle_post(lot: Lot, footer: str = "", channel: str | None = None) 
     return "\n".join(lines)[:CAPTION_LIMIT]
 
 
-def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel: str | None = None) -> str:
+def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel: str | None = None,
+                badge: dict | None = None) -> str:
     if lot.category == "vehicle":
         return format_vehicle_post(lot, footer, channel)
     esc = html.escape
@@ -143,7 +150,7 @@ def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel
     if lot.price_per_m2:
         price += f" ({_money(lot.price_per_m2)}/м²)"
     lines.append(price)
-    lines += benefit_lines(lot, medians)
+    lines += benefit_lines(lot, medians, badge)
     # точный адрес — только на сайте после входа; в канале — город и район
     area = lot_district(lot.address, lot.city or lot.region, lot.title, lot.description)
     place = ", ".join(p for p in (lot.city or lot.region, area) if p)
@@ -345,6 +352,7 @@ def refresh(session: Session) -> int:
     rules = {name: rule for name, rule, _ in channels()}
     hub = (settings.telegram_channel or "").lstrip("@")
     medians = market_medians(session)
+    badges = load_badges(Path(settings.telegram_badges))
     posts = session.scalars(select(ChannelPost).where(
         ChannelPost.channel.in_(list(rules)), ChannelPost.message_id.is_not(None))).all()
     edited = 0
@@ -353,7 +361,7 @@ def refresh(session: Session) -> int:
         if lot is None:
             continue
         footer = MAIN_FOOTER if rules.get(post.channel) is None else HUB_FOOTER.format(hub=hub)
-        text = format_post(lot, medians, footer, post.channel)
+        text = format_post(lot, medians, footer, post.channel, badges.get(lot.id))
         common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
         for method, extra in (("editMessageCaption", {"caption": text}),
                               ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
@@ -374,11 +382,14 @@ def refresh(session: Session) -> int:
 # другой текст. Лимиты Telegram: описание канала — 255 символов, короткое описание бота — 120.
 # Коротко и одинаково на всех площадках (сайт, Telegram, Instagram); ссылки — на другие площадки, не на себя.
 INSTAGRAM = "instagram.com/torgi.kz"
-KINDS = "Арестованное имущество, госимущество и приватизация, имущество банкротов, залоги и имущество банков."
+KINDS = "Арест, госимущество, банкроты, залоги банков."
 LINKS = f"torgi.kz · {INSTAGRAM}"
 HUB_LINE = "Все торги Казахстана → @torgi_kz_news"
 AUTO_CHANNEL = "@torgi_kz_auto"
-BOT_SHORT_ABOUT = f"Недвижимость и автотранспорт с торгов — новые лоты по вашему поиску\n{LINKS}"
+# первые две строки — как на сайте и в Instagram (решение владельца от 20.10.2026)
+HEADLINE = "Недвижимость и автотранспорт с торгов Казахстана"
+AI_LINE = "✨ Первый агрегатор торгов с использованием AI"
+BOT_SHORT_ABOUT = f"{HEADLINE}\n{AI_LINE}\ntorgi.kz"
 
 
 def total_phrase(total: int | None) -> str:
@@ -389,15 +400,16 @@ def total_phrase(total: int | None) -> str:
 def channel_about(total: int | None = None) -> dict[str, str]:
     count = f" — {total_phrase(total)} объектов" if total_phrase(total) else ""
     return {
-        "@torgi_kz_news": f"Полная база недвижимости и автотранспорта с торгов Казахстана{count}: квартиры, дома, "
-                          "коммерция, земля, автомобили. Арестованное имущество, госимущество, банкроты, залоги банков."
-                          f"\nАвто → {AUTO_CHANNEL}\n{LINKS}",
-        AUTO_CHANNEL: "Автомобили и спецтехника с торгов Казахстана: марка, год, цена и фото. Арестованное имущество, "
-                      f"госимущество, залоги и имущество банков.\n{HUB_LINE}\n{LINKS}",
-        "@torgi_kz_almaty": f"Недвижимость Алматы с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{HUB_LINE}\n{LINKS}",
-        "@torgi_kz_astana": f"Недвижимость Астаны с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{HUB_LINE}\n{LINKS}",
-        "@torgi_kz_biz": "Коммерческая недвижимость с торгов Казахстана: офисы, магазины, склады и здания. "
-                         f"{KINDS}\n{HUB_LINE}\n{LINKS}",
+        "@torgi_kz_news": f"{HEADLINE}\n{AI_LINE}\n{count.removeprefix(' — ').capitalize() or 'Полная база'}: жильё, "
+                          f"коммерция, земля, авто. {KINDS}\nАвто → {AUTO_CHANNEL}\n{LINKS}",
+        AUTO_CHANNEL: f"Автомобили и спецтехника с торгов Казахстана: марка, год, цена и фото.\n{AI_LINE}\n"
+                      f"{HUB_LINE}\n{LINKS}",
+        "@torgi_kz_almaty": f"Недвижимость Алматы с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{AI_LINE}\n"
+                            f"{HUB_LINE}\n{LINKS}",
+        "@torgi_kz_astana": f"Недвижимость Астаны с торгов: квартиры, дома, коммерция и земля. {KINDS}\n{AI_LINE}\n"
+                            f"{HUB_LINE}\n{LINKS}",
+        "@torgi_kz_biz": f"Коммерческая недвижимость с торгов Казахстана: офисы, магазины, склады и здания. {KINDS}\n"
+                         f"{AI_LINE}\n{HUB_LINE}\n{LINKS}",
     }
 
 
@@ -453,8 +465,8 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
     hub = (settings.telegram_channel or "").lstrip("@")
     footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
     for i, lot in enumerate(lots):
-        text = format_post(lot, medians, footer, channel)
         badge = (badges or {}).get(lot.id)
+        text = format_post(lot, medians, footer, channel, badge)
         if dry_run:
             print(f"--- {channel}: лот {lot.id} ({lot.source}){' · плашка ' + badge_label(badge) if badge else ''}\n{text}\n")
             continue
