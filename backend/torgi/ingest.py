@@ -59,7 +59,8 @@ def apply(session: Session, source: str, parsed: ParsedLot, existing: Lot | None
         lot.updated_at = now
         stats.updated += 1
 
-    lot.address = nz.clean_address(lot.address)
+    lot.title, lot.description = nz.scrub_personal(lot.title), nz.scrub_personal(lot.description)
+    lot.address = nz.clean_address(nz.scrub_personal(lot.address))
     lot.city, lot.region = nz.reconcile_place(lot.city, lot.region, lot.address, lot.title)
     lot.cadastral = nz.valid_cadastral(lot.cadastral)
     deal = nz.deal_flags(lot.title, lot.description)
@@ -81,6 +82,12 @@ def run_source(session: Session, source: str, http: HttpClient | None = None, fu
     session.commit()
 
     existing = {lot.source_id: lot for lot in session.scalars(select(Lot).where(Lot.source == source))}
+    # ФИО и ИИН — и из лотов, сохранённых раньше (в том числе снятых с торгов): база публикуется в релизе
+    for lot in existing.values():
+        for field in ("title", "address", "description"):
+            if (value := getattr(lot, field)) and (clean := nz.scrub_personal(value)) != value:
+                setattr(lot, field, clean)
+    session.commit()
     known = {sid: lot.price for sid, lot in existing.items() if lot.status == "active"}
     stats = Stats()
     seen: set[str] = set()

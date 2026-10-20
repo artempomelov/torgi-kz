@@ -133,6 +133,11 @@ def group_key(item: dict) -> str | None:
 
 
 def _prepare(item: dict, gated: bool, private: dict | None = None, description: str | None = None) -> dict:
+    # ФИО владельцев и ИИН из лотов ЧСИ — не публикуем (и у лотов, сохранённых до очистки в ingest)
+    for field in ("address", "title", "description"):
+        if item.get(field):
+            item[field] = nz.scrub_personal(item[field])
+    description = nz.scrub_personal(description)
     for field in ("address", "title"):
         if item.get(field):
             item[field] = nz.clean_address(item[field])

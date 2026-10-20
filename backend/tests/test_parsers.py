@@ -346,3 +346,14 @@ def test_vehicle_description_without_plates_and_vin():
             "вин/кузова/шасси XWBUA7659PA532309, находящееся в залоге банка, пробег 42 491 км")
     assert scrub_ids(text) == "Марка: Chevrolet, Модель: Tracker, Год выпуска: 2023, находящееся в залоге банка, пробег 42 491 км"
     assert scrub_ids("Toyota Camry, VIN JTNB11HK103456789, винтажный салон") == "Toyota Camry, винтажный салон"
+
+
+def test_no_owner_names_and_iin_in_lots():
+    from torgi.normalize import scrub_personal
+
+    assert scrub_personal("г. Павлодар, ул. Ломова, д.36, кв.52, принадлежащее на праве собственности "
+                          "Дукембаеву Тынырбергену Токеновичу") == "г. Павлодар, ул. Ломова, д.36, кв.52"
+    assert scrub_personal("Алматы, мкр. Таусамалы, дом 43, принадлежащее Секен Асхату ИИН 880601300663, "
+                          "площадь 106 м²") == "Алматы, мкр. Таусамалы, дом 43, площадь 106 м²"
+    assert scrub_personal("Должник ИИН: 880601300663, квартира") == "Должник, квартира"
+    assert scrub_personal("Квартира, 2-комн., 54 м²") == "Квартира, 2-комн., 54 м²"
