@@ -71,8 +71,10 @@ def main():
     rows.sort(key=lambda r: -r["discount"])
     lo, hi = min(r["discount"] for r in rows), max(r["discount"] for r in rows)
     n = len(rows)
-    slides = [mi.mosaic_cover("ТОП недели · Авто", f"{n} машин с торгов", f"ниже рынка на {lo}–{hi}%",
-                              "Залоги и имущество банков, 2023–2025 годы", [r["photos"][0][0] for r in rows])]
+    # обложка — как у самого охватного поста «ТОП-5 квартир Алматы ниже рынка»: тёмный фон и знак раздела
+    slides = [mi.cover_slide(f"ТОП-{n} машин с торгов ниже рынка",
+                             f"Залоги и имущество банков: цены на {lo}–{hi}% ниже объявлений о продаже таких же машин",
+                             "ТОП недели · Авто", icon="car")]
     slides += [mi.collage_slide(r["car"], r["title"], r["place"], r["photos"], r["market"], r["discount"], i, link=LINK)
                for i, r in enumerate(rows, 1)]
     slides.append(mi.cta_slide(f"Ещё {len(cars)} машин с торгов", [

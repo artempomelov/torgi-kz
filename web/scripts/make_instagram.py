@@ -113,6 +113,28 @@ def house(d: ImageDraw.ImageDraw, cx: int, top: int, scale: float, color: str, a
                   fill=arrow)
 
 
+def car(d: ImageDraw.ImageDraw, cx: int, top: int, scale: float, color: str, arrow: str = COBALT):
+    """Машина со стрелкой вниз — знак раздела «Авто» (как на аватарке @torgi_kz_auto); top — верх крыши."""
+    k, w = scale, round(40 * scale)
+
+    def p(x, y):
+        return cx + x * k, top + y * k
+
+    d.line([p(-200, 215), p(-200, 150), p(-150, 128), p(-95, 122), p(-55, 0), p(70, 0), p(115, 122), p(180, 135),
+            p(205, 165), p(205, 215)], fill=color, width=w, joint="curve")
+    for x in (-200, 205):  # скруглённые концы бамперов
+        bx, by = p(x, 215)
+        d.ellipse([bx - w / 2, by - w / 2, bx + w / 2, by + w / 2], fill=color)
+    for a, b in ((-200, -165), (-55, 75), (180, 205)):  # днище между колёсами
+        d.line([p(a, 215), p(b, 215)], fill=color, width=w)
+    for x in (-110, 128):  # колёса: обод цвета кузова, середина — цвета фона
+        wx, wy = p(x, 225)
+        d.ellipse([wx - 58 * k, wy - 58 * k, wx + 58 * k, wy + 58 * k], fill=color)
+        d.ellipse([wx - 24 * k, wy - 24 * k, wx + 24 * k, wy + 24 * k], fill=INK)
+    d.rectangle([*p(-22, 48), *p(22, 125)], fill=arrow)
+    d.polygon([p(-66, 118), p(66, 118), p(0, 186)], fill=arrow)
+
+
 def pill(d, xy, text, f, bg, fg, pad=(26, 12)):
     x, y = xy
     tw = d.textlength(text, font=f)
@@ -141,11 +163,14 @@ def fetch_photo(url: str | None) -> Image.Image | None:
 
 # --- слайды -----------------------------------------------------------------------------------------
 
-def cover_slide(title: str, subtitle: str, kicker: str) -> Image.Image:
+def cover_slide(title: str, subtitle: str, kicker: str, icon: str = "house") -> Image.Image:
     img = Image.new("RGB", (W, H), INK)
     d = ImageDraw.Draw(img)
     logo(d, 80, 80)
-    house(d, W // 2, 210, 0.95, WHITE)
+    if icon == "car":
+        car(d, W // 2, 250, 1.05, WHITE)
+    else:
+        house(d, W // 2, 210, 0.95, WHITE)
     y = 640
     pill(d, (80, y), kicker, font(BOLD, 34), COBALT, WHITE)
     y = text_block(d, (80, y + 95), title, font(BLACK, 84), WHITE, W - 160, 1.1)
