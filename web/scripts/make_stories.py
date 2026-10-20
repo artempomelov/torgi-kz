@@ -33,6 +33,7 @@ MOSAICS = [
     ("kommercheskaya", "ТОП недели · Бизнес", "{n} помещений для бизнеса", "ниже рынка до {best}%"),
     ("kvartiry-do-30-mln", "ТОП недели · до 30 млн", "Квартиры до 30 млн ₸", "{n} вариантов по Казахстану"),
     ("kvartiry-regiony", "ТОП недели · регионы", "{n} квартир в регионах", "{cities} и другие города"),
+    ("doma", "ТОП недели · дома", "{n} домов с торгов", "ниже рынка до {best}%"),
 ]
 
 # лот и фото (номера в лоте): главное и ещё два; trim — доля кадра снизу, которую отрезаем (дата съёмки на фото)
@@ -44,9 +45,11 @@ POSTS += [{x["id"] for x in pick["lots"]} for pick in ig.PICKS]
 MAX_REPEATS = 2
 
 STORIES = {
-    "lot_of_day": {"id": 98, "photos": [10, 11, 12], "city": "Астана"},
-    "countdown": {"id": 3812, "photos": [14, 12, 11], "title": "Квартира 130,7 м²"},
-    "second": "kvartiry-regiony",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
+    "lot_of_day": {"id": 1697, "photos": [2, 1, 4], "city": "Астана"},
+    "countdown": None,  # {"id": …, "photos": […], "title": …} — когда есть презентабельный лот с торгами через 3–10 дней
+    "second": "doma",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
+    # третья (если нет «До торгов») — раздел «Авто»: машина и фото без госномера; не те, что в карусели ТОПа машин
+    "cars": [(4890, 2), (4871, 3), (4861, 1), (4899, 1), (4919, 1), (4903, 0)],
 }
 
 
@@ -170,6 +173,36 @@ def story_mosaic(items: list[tuple[dict, dict, Image.Image | None]], kicker: str
     return img
 
 
+def story_cars(cars: list[tuple[dict, Image.Image | None]], total: int) -> Image.Image:
+    """Раздел «Авто»: машины с ценой и годом на плитках, заголовок «Машины с торгов»."""
+    img, d = canvas(ig.INK)
+    gap, top_y = 6, 345
+    tile = (W - 2 * gap) // 3
+    rows = max(1, min(3, len(cars) // 3))
+    cars = cars[:rows * 3]
+    top_y += (3 - rows) * (tile + gap) // 2
+    for k, (car, photo) in enumerate(cars):
+        x, y = (k % 3) * (tile + gap), top_y + (k // 3) * (tile + gap)
+        paste(img, photo, (x, y, x + tile, y + tile))
+        shade = Image.linear_gradient("L").resize((tile, 150)).point(lambda v: int(v * 0.8))
+        img.paste(Image.new("RGB", (tile, 150), "#000000"), (x, y + tile - 150), shade)
+        d = ImageDraw.Draw(img)
+        name = " ".join(str(v) for v in (car.get("brand"), car.get("model")) if v)
+        d.text((x + 16, y + tile - 58), name, font=ig.fit_font(d, name, ig.BOLD, 28, tile - 32), fill=ig.WHITE, anchor="ls")
+        d.text((x + 16, y + tile - 16), ig.mln(car["price"]).replace(" ₸", ""), font=ig.font(ig.BLACK, 34),
+               fill=ig.WHITE, anchor="ls")
+        ig.pill(d, (x + 12, y + 12), str(car["year"]), ig.font(ig.BLACK, 28), ig.GREEN, ig.WHITE, pad=(14, 6))
+    header(d, "Новое на torgi.kz")
+    y = top_y + rows * (tile + gap) + 30
+    d.text((60, y), "Машины с торгов", font=ig.font(ig.BLACK, 70), fill=ig.WHITE)
+    accent = f"{total} автомобилей"
+    d.text((60, y + 86), accent, font=ig.fit_font(d, accent, ig.BLACK, 70, W - 120), fill="#3ddc84")
+    sub = "Залоги банков и арестованное имущество"
+    d.text((60, y + 180), sub, font=ig.fit_font(d, sub, ig.REG, 38, W - 120), fill="#b8c2d6")
+    portal_line(d, y=y + 250, dark=True)
+    return img
+
+
 def story_countdown(lot: dict, top: dict, spec: dict, today: date) -> Image.Image | None:
     start = lot.get("auction_start")
     if not start:
@@ -210,10 +243,15 @@ def main():
     story_lot_of_day(full[s["id"]], tops[s["id"]], s).save(OUT / "02-lot-dnya.jpg", quality=92)
     notes.append(f"2. `02-lot-dnya.jpg` — стикер «Ссылка»: {SITE}/lots/{s['id']}/?{UTM}")
     s = STORIES["countdown"]
-    img = story_countdown(full[s["id"]], tops[s["id"]], s, today)
+    img = story_countdown(full[s["id"]], tops[s["id"]], s, today) if s else None
     if img:
         img.save(OUT / "03-do-torgov.jpg", quality=92)
         notes.append(f"3. `03-do-torgov.jpg` — стикер «Ссылка»: {SITE}/lots/{s['id']}/?{UTM} · дни — на {today:%d.%m}")
+    elif STORIES.get("cars"):
+        cars = {c["id"]: c for c in json.loads((ig.DATA / "cars.json").read_text(encoding="utf-8"))["items"]}
+        chosen = [(cars[i], ig.fetch_photo(cars[i]["images"][k])) for i, k in STORIES["cars"] if i in cars]
+        story_cars(chosen, len(cars)).save(OUT / "03-avto.jpg", quality=92)
+        notes.append(f"3. `03-avto.jpg` — стикер «Ссылка»: {SITE}/avto/?{UTM}")
 
     # вторая история — мозаика раздела ТОПа без лотов из постов; остальные разделы — варианты на замену
     story_numbers(meta).save(OUT / "variants" / "cifry.jpg", quality=92)
