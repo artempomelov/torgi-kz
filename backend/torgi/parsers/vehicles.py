@@ -47,6 +47,18 @@ _LADA_MODELS = [(r"^219[0-9]", "Granta"), (r"^217[0-3]", "Priora"), (r"^111[7-9]
 _STOP = re.compile(r"\s*(?:\n|,|;|\(|«|»|\"|/|\.\s|г\.в|г/в|года|год|(?<!\d)(?:19|20)\d{2}(?!\d)|\b\d\.\d\b|turbo|4wd|awd|"
                    r"р/н|рег\.|гос\.|госномер|грнз|vin|цвет|\d{3}\s?[A-ZА-Я]{2,3}\s?\d{2}\b).*", re.I | re.S)
 
+# госномер и VIN в описании банка («гос номер 461APD09, вин/кузова/шасси XWBUA…») — на сайт не выкладываем
+_ID_RE = re.compile(r"(?i:гос\.?\s*номер\w*|госномер\w*|г/н|грнз|\bvin\b|\bвин\b)[^,;\n]*"
+                    r"|\b[A-HJ-NPR-Z0-9]{17}\b|\b\d{3}\s?[A-Z]{2,3}\s?\d{2}\b")
+
+
+def scrub_ids(text: str | None) -> str | None:
+    """Описание без госномеров и VIN."""
+    if not text:
+        return text
+    text = re.sub(r"\s*,(?:\s*,)+", ",", _ID_RE.sub("", text))
+    return re.sub(r"[ \t]{2,}", " ", text).strip(" ,")
+
 
 def find_brand(*texts: str | None) -> tuple[str | None, str | None]:
     """(марка, модель) из первого текста, где встретилась марка."""
@@ -181,7 +193,7 @@ class FreedomAutoParser(Parser):
                 origin=freedom.ORIGINS.get(item.get("realisation_type_id"), "bank_pledge"),
                 category=CATEGORY,
                 sale_type="direct",
-                description=nz.clean_text(item.get("additional_data_ru")),
+                description=scrub_ids(nz.clean_text(item.get("additional_data_ru"))),
                 region=nz.normalize_region(city_name, city=city),
                 city=city,
                 price=_price(item.get("price")),
@@ -209,7 +221,7 @@ _HALYK_KIND = {"легковая": "car", "грузовая": "truck"}
 def halyk_vehicle(lot: ParsedLot) -> ParsedLot:
     """Лот недвижимости из halyk.parse_detail → лот автотранспорта (марка и модель — из полей или текста)."""
     e = lot.extra
-    desc = re.sub(r"К моменту принятия.*?недвижимости\.\s*", "", lot.description or "", flags=re.S)
+    desc = scrub_ids(re.sub(r"К моменту принятия.*?недвижимости\.\s*", "", lot.description or "", flags=re.S))
     if m := re.search(r"Марка:\s*([^,]+),\s*Модель:\s*([^,]+)", desc):
         brand = find_brand(m.group(1))[0]
         model = clean_model(brand or "", m.group(2))

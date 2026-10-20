@@ -23,6 +23,7 @@ from torgi import normalize as nz
 from torgi.api import LotFull, PricePoint, _drop_pct, _short, meta
 from torgi.models import Lot, utcnow
 from torgi.parsers.vehicles import CATEGORY as VEHICLE
+from torgi.parsers.vehicles import scrub_ids
 
 # Снятые лоты держим на сайте ещё 30 дней: ссылки из Telegram и поисковиков не ломаются
 REMOVED_KEEP_DAYS = 30
@@ -174,7 +175,7 @@ def car_item(lot: Lot) -> dict:
         "listed_at": (lot.published_at or lot.first_seen_at).isoformat(),
         "price_drop_pct": _drop_pct(lot),
         "images": lot.images or [],
-        "description": lot.description,
+        "description": scrub_ids(lot.description),  # и у уже сохранённых описаний
     }
 
 

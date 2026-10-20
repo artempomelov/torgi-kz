@@ -337,3 +337,12 @@ def test_vehicles_kept_out_of_realty():
     assert not SearchFilter().matches(car) and SearchFilter(categories=["vehicle"]).matches(car)
     assert not matches_channel(car, None) and not matches_channel(car, {"region": "Алматы"})
     assert matches_channel(car, {"category": ["vehicle"]})
+
+
+def test_vehicle_description_without_plates_and_vin():
+    from torgi.parsers.vehicles import scrub_ids
+
+    text = ("Марка: Chevrolet, Модель: Tracker, Год выпуска: 2023, гос номер 461APD09, "
+            "вин/кузова/шасси XWBUA7659PA532309, находящееся в залоге банка, пробег 42 491 км")
+    assert scrub_ids(text) == "Марка: Chevrolet, Модель: Tracker, Год выпуска: 2023, находящееся в залоге банка, пробег 42 491 км"
+    assert scrub_ids("Toyota Camry, VIN JTNB11HK103456789, винтажный салон") == "Toyota Camry, винтажный салон"

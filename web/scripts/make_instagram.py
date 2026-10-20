@@ -175,7 +175,8 @@ def mosaic_cover(kicker: str, title: str, accent: str, subtitle: str, photos: li
 
 
 def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Image | None, str]],
-                  estimate: float, discount: int, rank: int, note: str | None = None) -> Image.Image:
+                  estimate: float, discount: int, rank: int, note: str | None = None,
+                  link: str = "torgi.kz/top") -> Image.Image:
     """Объект подборки: коллаж 2×2 (по умолчанию комната, кухня, санузел, дом) и белая плашка с ценой.
     note — «более 30%» вместо точной скидки (вне Алматы и Астаны оценка грубее, как в ТОПе на сайте)."""
     img = Image.new("RGB", (W, H), WHITE)
@@ -209,7 +210,7 @@ def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Im
         tags.append(SALE[lot["sale_type"]])
     pill(d, (64, y + 128), " · ".join(tags), font(BOLD, 28), LIGHT, COBALT)
     d.text((64, H - 50), "оценка torgi.kz по объявлениям", font=font(REG, 24), fill=MUTED, anchor="ls")
-    d.text((W - 64, H - 50), "torgi.kz/top", font=font(BOLD, 30), fill=COBALT, anchor="rs")
+    d.text((W - 64, H - 50), link, font=font(BOLD, 30), fill=COBALT, anchor="rs")
     return img
 
 
