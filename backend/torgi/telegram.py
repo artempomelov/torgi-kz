@@ -361,7 +361,19 @@ def refresh(session: Session) -> int:
         if lot is None:
             continue
         footer = MAIN_FOOTER if rules.get(post.channel) is None else HUB_FOOTER.format(hub=hub)
-        text = format_post(lot, medians, footer, post.channel, badges.get(lot.id))
+        badge = badges.get(lot.id)
+        text = format_post(lot, medians, footer, post.channel, badge)
+        # плашка «−N% к рынку» — и в старых постах: заменяем главное фото (подпись передаём вместе с ним)
+        main = badged_photo(lot.images[0], badge, bot.client) if badge and lot.images else None
+        if main:
+            try:
+                bot.call_files("editMessageMedia", {"main": main}, chat_id=post.channel, message_id=post.message_id,
+                               media={"type": "photo", "media": "attach://main", "caption": text, "parse_mode": "HTML"})
+                edited += 1
+                time.sleep(1)
+                continue
+            except RuntimeError as exc:  # пост без фото (ушёл текстом) — правим только текст
+                log.warning("пост %s/%s: фото не заменено (%s)", post.channel, post.message_id, exc)
         common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
         for method, extra in (("editMessageCaption", {"caption": text}),
                               ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
