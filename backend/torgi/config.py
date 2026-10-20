@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Региональные/тематические каналы: JSON {"@канал": {"region": "Алматы"} | {"category": ["commercial"]}, ...}
     telegram_channels: str = ""
     telegram_channel_daily_limit: int = 10  # постов в день в каждый дополнительный канал
+    # выгрузка сайта: плашка «−N% к рынку» на главном фото поста берётся из её поля market (torgi/badge.py)
+    telegram_badges: str = "../web/data/lots.json"
     telegram_admins: str = ""  # username администраторов через запятую — им приходят заявки и вопросы
     telegram_hours: tuple[int, int] = (9, 21)  # публикуем с 9:00 до 21:00 по Алматы
 

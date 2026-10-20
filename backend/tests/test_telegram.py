@@ -117,3 +117,27 @@ def test_main_channel_mix():
         # квартиры кончились — коммерции не больше её доли, остальные слоты пустуют
         assert 1 <= cats.count("commercial") <= 2 and len(picked) < 10
         assert all(x in shops for x in picked if x.category == "commercial")
+
+
+def test_market_badge_on_photo(tmp_path):
+    """Плашка «−N% к рынку» на главном фото: из выгрузки сайта, цвет как на сайте, рисуется в левом верхнем углу."""
+    import json
+
+    import pytest
+    from PIL import Image
+
+    from torgi import badge
+
+    path = tmp_path / "lots.json"
+    path.write_text(json.dumps([{"id": 1, "market": {"pct": 14, "over": False, "where": "в г. Актау"}},
+                                {"id": 2, "market": None}]), encoding="utf-8")
+    badges = badge.load_badges(path)
+    assert badges == {1: {"pct": 14, "over": False, "where": "в г. Актау"}}
+    assert badge.load_badges(tmp_path / "нет.json") == {}
+    assert badge.label(badges[1]) == "−14% к рынку" and badge.colors(badges[1])[0] == badge.YELLOW
+    assert badge.label({"pct": 30, "over": True}) == "более −30% к рынку"
+    assert badge.colors({"pct": 16, "over": False})[0] == badge.RED
+    if badge._font(20) is None:
+        pytest.skip("нет шрифта")
+    img = badge.draw(Image.new("RGB", (800, 600), "white"), {"pct": 34, "over": False})
+    assert img.getpixel((40, 40)) == (225, 29, 72)  # красная плашка у левого верхнего угла

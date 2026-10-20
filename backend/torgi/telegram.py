@@ -11,11 +11,14 @@ import logging
 import re
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import httpx
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from torgi.badge import badged_photo, load_badges
+from torgi.badge import label as badge_label
 from torgi.config import settings
 from torgi.export import lot_district
 from torgi.models import ChannelPost, Lot, utcnow
@@ -293,17 +296,39 @@ class TelegramBot:
             time.sleep(retry + 1)
         raise RuntimeError(f"Telegram {method}: превышен лимит повторов")
 
-    def post_lot(self, channel: str, lot: Lot, text: str) -> int:
+    def call_files(self, method: str, files: dict[str, bytes], **params) -> dict:
+        """Как call, но с загрузкой файлов (multipart): фото с плашкой отправляем файлом, а не ссылкой."""
+        data = {k: json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else v for k, v in params.items()}
+        for _ in range(3):
+            upload = {name: (f"{name}.jpg", content, "image/jpeg") for name, content in files.items()}
+            res = self.client.post(f"{self.base}/{method}", data=data, files=upload, timeout=60).json()
+            if res.get("ok"):
+                return res["result"]
+            retry = (res.get("parameters") or {}).get("retry_after")
+            if not retry:
+                raise RuntimeError(f"Telegram {method}: {res.get('description')}")
+            time.sleep(retry + 1)
+        raise RuntimeError(f"Telegram {method}: превышен лимит повторов")
+
+    def post_lot(self, channel: str, lot: Lot, text: str, badge: dict | None = None) -> int:
+        # главное фото — с плашкой «−N% к рынку», как на карточке сайта (остальные фото альбома — как есть)
+        main = badged_photo(lot.images[0], badge, self.client) if badge and lot.images else None
         if len(lot.images) >= 2:
             # альбом из 3–5 фото, подпись — у первого
             media = [{"type": "photo", "media": url} for url in lot.images[:5]]
             media[0].update(caption=text, parse_mode="HTML")
             try:
+                if main:
+                    media[0]["media"] = "attach://main"
+                    return self.call_files("sendMediaGroup", {"main": main}, chat_id=channel, media=media)[0]["message_id"]
                 return self.call("sendMediaGroup", chat_id=channel, media=media)[0]["message_id"]
             except RuntimeError as exc:
                 log.warning("лот %s: альбом не отправился (%s), пробуем одно фото", lot.id, exc)
         if lot.images:
             try:
+                if main:
+                    return self.call_files("sendPhoto", {"photo": main}, chat_id=channel, caption=text,
+                                           parse_mode="HTML")["message_id"]
                 return self.call("sendPhoto", chat_id=channel, photo=lot.images[0], caption=text,
                                  parse_mode="HTML")["message_id"]
             except RuntimeError as exc:  # фото недоступно для Telegram — публикуем текстом
@@ -406,7 +431,7 @@ def channels() -> list[tuple[str, dict | None, int]]:
 
 
 def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
-                limit: int, since_days: int, medians: dict, dry_run: bool) -> int:
+                limit: int, since_days: int, medians: dict, dry_run: bool, badges: dict | None = None) -> int:
     # канал машин: раздел новый — публикуем и уже собранные машины, понемногу (дневной лимит), за последние 60 дней
     cars = "vehicle" in ((rule or {}).get("category") or [])
     if cars:
@@ -429,12 +454,13 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
     footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
     for i, lot in enumerate(lots):
         text = format_post(lot, medians, footer, channel)
+        badge = (badges or {}).get(lot.id)
         if dry_run:
-            print(f"--- {channel}: лот {lot.id} ({lot.source})\n{text}\n")
+            print(f"--- {channel}: лот {lot.id} ({lot.source}){' · плашка ' + badge_label(badge) if badge else ''}\n{text}\n")
             continue
         if i:
             time.sleep(settings.telegram_post_delay)
-        message_id = bot.post_lot(channel, lot, text)
+        message_id = bot.post_lot(channel, lot, text, badge)
         # квартира из основного канала могла быть помечена без публикации при первом запуске — обновляем отметку
         post = session.scalar(select(ChannelPost).where(ChannelPost.lot_id == lot.id, ChannelPost.channel == channel))
         if post:
@@ -465,10 +491,11 @@ def run(session: Session, limit: int = 5, since_days: int = 3, dry_run: bool = F
             return 0
     bot = None if dry_run else TelegramBot(settings.telegram_bot_token)
     medians = market_medians(session)
+    badges = load_badges(Path(settings.telegram_badges))
     total = 0
     for channel, rule, daily in targets:
         try:
-            total += run_channel(session, bot, channel, rule, daily, limit, since_days, medians, dry_run)
+            total += run_channel(session, bot, channel, rule, daily, limit, since_days, medians, dry_run, badges)
         except RuntimeError:
             log.exception("канал %s: ошибка публикации", channel)
     return total
