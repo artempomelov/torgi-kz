@@ -446,12 +446,19 @@ def set_about(bot: TelegramBot, total: int | None = None) -> list[str]:
 def channels() -> list[tuple[str, dict | None, int]]:
     """Основной канал (все лоты) и дополнительные — региональные и тематические."""
     out: list[tuple[str, dict | None, int]] = []
+    daily = settings.telegram_batch * len(settings.telegram_slots)
     if settings.telegram_channel:
-        out.append((settings.telegram_channel, None, settings.telegram_daily_limit))
+        out.append((settings.telegram_channel, None, daily))
     if settings.telegram_channels.strip():
         for name, rule in json.loads(settings.telegram_channels).items():
-            out.append((name, rule or None, settings.telegram_channel_daily_limit))
+            out.append((name, rule or None, daily))
     return out
+
+
+def slot_quota(now: datetime | None = None) -> int:
+    """Сколько постов в канал положено к этому часу: по telegram_batch за каждый наступивший выпуск."""
+    hour = (now or utcnow()).astimezone(KZ_TZ).hour
+    return settings.telegram_batch * sum(1 for slot in settings.telegram_slots if hour >= slot)
 
 
 def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
@@ -468,9 +475,11 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
         log.info("канал %s: первый запуск — %d текущих лотов помечены опубликованными", channel, len(lots))
         return 0
     if not dry_run:
-        limit = min(limit, daily - posted_today(session, channel))
+        # выпуск: не больше telegram_batch постов за запуск и не больше положенного к этому часу
+        limit = min(limit, settings.telegram_batch, slot_quota() - posted_today(session, channel), daily)
         if limit <= 0:
-            log.info("канал %s: дневной лимит (%s) исчерпан", channel, daily)
+            log.info("канал %s: выпуск уже был, следующий — по расписанию %s", channel,
+                     ", ".join(f"{h}:00" for h in settings.telegram_slots))
             return 0
     main = rule is None and channel == settings.telegram_channel
     lots = mixed_lots(session, channel, limit, since_days) if main else pending_lots(session, channel, limit, since_days, rule)
@@ -497,7 +506,7 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
 
 
 def run(session: Session, limit: int = 5, since_days: int = 3, dry_run: bool = False, mark_all: bool = False) -> int:
-    targets = channels() or [("dry-run", None, settings.telegram_daily_limit)]
+    targets = channels() or [("dry-run", None, settings.telegram_batch * len(settings.telegram_slots))]
     if mark_all:
         for channel, rule, _ in targets:
             lots = pending_lots(session, channel, 10**9, 10**4, rule)

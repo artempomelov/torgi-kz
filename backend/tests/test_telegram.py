@@ -143,3 +143,13 @@ def test_market_badge_on_photo(tmp_path):
         pytest.skip("нет шрифта")
     img = badge.draw(Image.new("RGB", (800, 600), "white"), {"pct": 34, "over": False})
     assert img.getpixel((40, 40)) == (225, 29, 72)  # красная плашка у левого верхнего угла
+
+
+def test_three_batches_a_day():
+    """По 3 поста в канал в 10:00, 14:00 и 19:00 по Алматы (UTC+5)."""
+    from torgi.telegram import slot_quota
+
+    def at(hour):
+        return datetime(2026, 10, 21, hour - 5, 15, tzinfo=timezone.utc)
+
+    assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 3, 3, 6, 6, 9, 9]
