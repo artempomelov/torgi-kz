@@ -25,10 +25,10 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_channel: str | None = None  # "@имя_канала" или числовой id
     telegram_post_delay: float = 4.0  # секунд между постами (лимит Telegram ~20 сообщений/мин в канал)
-    # Выпуски (решение владельца от 20.10.2026): в каждый канал по telegram_batch постов в часы telegram_slots
-    # по Алматы — 3 × 3 = 9 постов в день; пропущенный выпуск догоняется следующим запуском (не больше одного выпуска)
+    # Выпуски (решение владельца от 21.10.2026): в каждый канал по telegram_batch постов в часы telegram_slots
+    # по Алматы — 3 × 2 = 6 постов в день; пропущенный выпуск догоняется следующим запуском (не больше одного выпуска)
     telegram_slots: tuple[int, ...] = (10, 14, 19)
-    telegram_batch: int = 3
+    telegram_batch: int = 2
     # Региональные/тематические каналы: JSON {"@канал": {"region": "Алматы"} | {"category": ["commercial"]}, ...}
     telegram_channels: str = ""
     # выгрузка сайта: плашка «−N% к рынку» на главном фото поста берётся из её поля market (torgi/badge.py)

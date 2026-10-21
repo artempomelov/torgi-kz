@@ -27,7 +27,6 @@ def main() -> None:
                    help=f"источники: {', '.join(PARSERS)} (по умолчанию все)")
     t = sub.add_parser("post", help="опубликовать новые лоты в Telegram-канал")
     t.add_argument("--limit", type=int, default=10)
-    t.add_argument("--since-days", type=int, default=3, help="брать лоты, появившиеся за N дней")
     t.add_argument("--dry-run", action="store_true", help="только показать посты")
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
     t.add_argument("--refresh", action="store_true", help="переписать опубликованные посты по текущему шаблону")
@@ -91,8 +90,7 @@ def main() -> None:
             if args.refresh:
                 telegram.refresh(session)
                 return
-            telegram.run(session, limit=args.limit, since_days=args.since_days, dry_run=args.dry_run,
-                         mark_all=args.mark_all)
+            telegram.run(session, limit=args.limit, dry_run=args.dry_run, mark_all=args.mark_all)
     elif args.cmd == "bot":
         from torgi import bot
 

@@ -233,28 +233,27 @@ def _presentable_car(lot: Lot) -> bool:
 
 
 # Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям (решение владельца
-# сайта от 21.10.2026): из 9 постов в день 6–7 квартир Алматы и Астаны, 1 машина, 1 коммерческое помещение
+# сайта от 21.10.2026): из 6 постов в день 4–5 квартир Алматы и Астаны, остальное — машина и коммерческое помещение
 # (по всему Казахстану) или квартира в регионах. Квартиры Алматы и Астаны дублируются с городскими каналами — так
 # и задумано. Дома, земля, паркоместа и промышленные объекты в основной канал не идут.
 MAIN_MIX = [
-    ("квартиры Алматы и Астаны", 7 / 9, lambda lot: lot.category == "apartment" and _big_city(lot)),
-    ("машина", 1 / 9, _presentable_car),
-    ("коммерция или квартира в регионах", 1 / 9,
+    ("квартиры Алматы и Астаны", 0.7, lambda lot: lot.category == "apartment" and _big_city(lot)),
+    ("машина", 0.15, _presentable_car),
+    ("коммерция или квартира в регионах", 0.15,
      lambda lot: lot.category == "commercial" or lot.category == "apartment" and not _big_city(lot)),
 ]
 
 
-def badged_lots(session: Session, channel: str, badges: dict[int, dict], cars: bool = False) -> list[Lot]:
-    """Кандидаты в канал: недвижимость — только с плашкой «−N% к рынку» (решение владельца сайта от 21.10.2026:
-    плашка обязательна во всех постах); cars — плюс машины, у них оценки рынка нет. С фото, без флагов качества,
-    ещё не опубликованные в канале (в том числе помеченные при первом запуске канала); новые — первыми."""
+def candidate_lots(session: Session, channel: str, badges: dict[int, dict]) -> list[Lot]:
+    """Кандидаты в канал: активные лоты с фото, без флагов качества, ещё не опубликованные в канале (в том числе
+    помеченные при первом запуске). Сначала — с плашкой «−N% к рынку», потом остальные (решение владельца сайта
+    от 21.10.2026: публикуем все, плашку — везде, где есть оценка); внутри — новые первыми."""
     published = select(ChannelPost.lot_id).where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None))
-    which = Lot.id.in_(list(badges))
-    if cars:
-        which = which | (Lot.category == VEHICLE)
-    stmt = (select(Lot).where(Lot.status == "active", Lot.price.is_not(None), Lot.id.not_in(published), which)
+    stmt = (select(Lot).where(Lot.status == "active", Lot.price.is_not(None), Lot.id.not_in(published))
             .order_by(Lot.first_seen_at.desc(), Lot.id.desc()))
-    return [lot for lot in session.scalars(stmt) if lot.images and not lot.flags]
+    lots = [lot for lot in session.scalars(stmt) if lot.images and not lot.flags]
+    lots.sort(key=lambda lot: lot.id not in badges)
+    return lots
 
 
 def _today(session: Session, channel: str) -> list[Lot]:
@@ -288,10 +287,10 @@ class _Buildings:
 
 
 def channel_lots(session: Session, channel: str, limit: int, rule: dict | None, badges: dict[int, dict]) -> list[Lot]:
-    """Лоты городского или тематического канала недвижимости: только с плашкой, по фильтру канала."""
+    """Лоты городского или тематического канала по его фильтру: сначала с плашкой, потом остальные."""
     buildings = _Buildings(_today(session, channel))
     picked: list[Lot] = []
-    for lot in badged_lots(session, channel, badges):
+    for lot in candidate_lots(session, channel, badges):
         if len(picked) >= limit:
             break
         if matches_channel(lot, rule) and buildings.take(lot):
@@ -301,8 +300,8 @@ def channel_lots(session: Session, channel: str, limit: int, rule: dict | None, 
 
 def mixed_lots(session: Session, channel: str, limit: int, badges: dict[int, dict]) -> list[Lot]:
     """Лоты основного канала по долям MAIN_MIX: в каждый слот — категория, сильнее всех отстающая от своей доли
-    среди сегодняшних постов. Нет подходящих лотов с плашкой — слот пустует: доли и плашки важнее количества постов."""
-    candidates = badged_lots(session, channel, badges, cars=True)
+    среди сегодняшних постов; внутри категории — сначала лоты с плашкой. Нет подходящих лотов — слот пустует."""
+    candidates = candidate_lots(session, channel, badges)
     queues = [[lot for lot in candidates if match(lot)] for _, _, match in MAIN_MIX]
     recent = _today(session, channel)
     counts = [sum(1 for lot in recent if match(lot)) for _, _, match in MAIN_MIX]
@@ -507,11 +506,9 @@ def slot_quota(now: datetime | None = None) -> int:
 
 
 def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
-                limit: int, since_days: int, medians: dict, dry_run: bool, badges: dict | None = None) -> int:
-    # канал машин: раздел новый — публикуем и уже собранные машины, понемногу (дневной лимит), за последние 60 дней
+                limit: int, medians: dict, dry_run: bool, badges: dict | None = None) -> int:
+    # канал машин открыт позже раздела — уже собранные машины в нём тоже публикуем
     cars = "vehicle" in ((rule or {}).get("category") or [])
-    if cars:
-        since_days = max(since_days, 60)
     if not cars and not dry_run and session.scalar(select(ChannelPost.id).where(ChannelPost.channel == channel).limit(1)) is None:
         # Первый запуск для канала: текущую базу не выгружаем, публикуем только новое
         lots = pending_lots(session, channel, 10**9, 10**4, rule)
@@ -528,8 +525,6 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
             return 0
     if rule is None and channel == settings.telegram_channel:
         lots = mixed_lots(session, channel, limit, badges or {})
-    elif cars:  # оценки рынка у машин нет — канал машин публикует новые машины как раньше
-        lots = pending_lots(session, channel, limit, since_days, rule)
     else:
         lots = channel_lots(session, channel, limit, rule, badges or {})
     hub = (settings.telegram_channel or "").lstrip("@")
@@ -554,7 +549,7 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
     return len(lots)
 
 
-def run(session: Session, limit: int = 5, since_days: int = 3, dry_run: bool = False, mark_all: bool = False) -> int:
+def run(session: Session, limit: int = 5, dry_run: bool = False, mark_all: bool = False) -> int:
     targets = channels() or [("dry-run", None, settings.telegram_batch * len(settings.telegram_slots))]
     if mark_all:
         for channel, rule, _ in targets:
@@ -577,7 +572,7 @@ def run(session: Session, limit: int = 5, since_days: int = 3, dry_run: bool = F
     total = 0
     for channel, rule, daily in targets:
         try:
-            total += run_channel(session, bot, channel, rule, daily, limit, since_days, medians, dry_run, badges)
+            total += run_channel(session, bot, channel, rule, daily, limit, medians, dry_run, badges)
         except RuntimeError:
             log.exception("канал %s: ошибка публикации", channel)
     return total

@@ -71,9 +71,9 @@ def test_about_fits_limits_and_updates_only_changed():
 
 
 def test_main_channel_mix():
-    """Основной канал: из 9 постов 7 квартир Алматы и Астаны (в том числе ещё не опубликованных старых), 1 машина,
-    1 коммерция или квартира в регионах; недвижимость — только с плашкой «−N% к рынку»; дома, земля не идут;
-    нет квартир — слоты пустуют. Городской канал — тоже только лоты с плашкой."""
+    """Основной канал: из 6 постов 4 квартиры Алматы и Астаны, 1 машина, 1 коммерция или квартира в регионах;
+    дома и земля не идут; внутри категории — сначала лоты с плашкой «−N% к рынку». Городской канал — тоже сначала
+    с плашкой, потом остальные; ещё не опубликованные старые лоты — тоже кандидаты."""
     from datetime import timedelta
 
     from sqlalchemy import select
@@ -102,7 +102,7 @@ def test_main_channel_mix():
         old_flat = lot(10, "apartment", days=30)  # старая, помечена при первом запуске, но не опубликована
         twins = [lot(60 + i, "apartment", "Астана", address=f"Астана, ул. Шамши Калдаякова, д. 11, кв. {i}")
                  for i in range(2)]  # серия банка в одном доме — в день берём одну
-        plain = lot(13, "apartment")  # без оценки рынка — без плашки, в каналы не идёт
+        plain = lot(13, "apartment")  # без оценки рынка — без плашки, идёт после лотов с плашкой
         regional = lot(11, "apartment", "Караганда")
         house = lot(12, "house")
         shops = [lot(20 + i, "commercial") for i in range(5)]
@@ -117,22 +117,22 @@ def test_main_channel_mix():
         session.add(ChannelPost(lot_id=land[0].id, channel=ch, message_id=1))
         session.commit()
         badge = {"pct": 20, "over": False, "where": "в г. Алматы"}
-        badges = {x.id: badge for x in (*flats, old_flat, *twins, regional, house, shops[0], *land)}
+        badges = {x.id: badge for x in (*flats, old_flat, *twins, regional, house, shops[0])}
 
-        picked = telegram.mixed_lots(session, ch, 9, badges)
+        picked = telegram.mixed_lots(session, ch, 6, badges)
         cats = [x.category for x in picked]
-        assert old_flat in picked and set(flats) <= set(picked) and len(set(twins) & set(picked)) == 1
-        assert plain not in picked and house not in picked and "land" not in cats
-        assert sum(1 for x in picked if x.category == "apartment" and x.region in ("Алматы", "Астана")) == 5
+        city_flats = [x for x in picked if x.category == "apartment" and x.region in ("Алматы", "Астана")]
+        assert len(city_flats) == 4 and all(x.id in badges for x in city_flats) and len(set(twins) & set(picked)) == 1
+        assert house not in picked and "land" not in cats
         assert cats.count("vehicle") == 1 and picked[cats.index("vehicle")] == cars[1]  # свежая машина без обременений
-        # 5 квартир Алматы и Астаны, машина и одна коммерция с плашкой или квартира в регионах; квартиры кончились —
-        # остальные слоты пустуют
-        assert len(set(picked) & {regional, shops[0]}) == 1 and len(picked) == 7
-        assert not set(shops[1:]) & set(picked)
+        assert shops[0] in picked and len(picked) == 6  # коммерция с плашкой — раньше коммерции без неё
+        assert old_flat in telegram.candidate_lots(session, ch, badges)  # помечена при первом запуске, не опубликована
 
-        in_city = telegram.channel_lots(session, city, 9, {"region": "Алматы"}, badges)
-        assert plain not in in_city and not set(cars) & set(in_city) and house in in_city
-        assert all(x.region == "Алматы" and x.id in badges for x in in_city)
+        in_city = telegram.channel_lots(session, city, 50, {"region": "Алматы"}, badges)
+        assert plain in in_city and not set(cars) & set(in_city) and all(x.region == "Алматы" for x in in_city)
+        first_plain = next(i for i, x in enumerate(in_city) if x.id not in badges)
+        assert all(x.id in badges for x in in_city[:first_plain]) and house in in_city[:first_plain]
+        assert not any(x.id in badges for x in in_city[first_plain:])
 
 
 def test_market_badge_on_photo(tmp_path):
@@ -160,10 +160,10 @@ def test_market_badge_on_photo(tmp_path):
 
 
 def test_three_batches_a_day():
-    """По 3 поста в канал в 10:00, 14:00 и 19:00 по Алматы (UTC+5)."""
+    """По 2 поста в канал в 10:00, 14:00 и 19:00 по Алматы (UTC+5)."""
     from torgi.telegram import slot_quota
 
     def at(hour):
         return datetime(2026, 10, 21, hour - 5, 15, tzinfo=timezone.utc)
 
-    assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 3, 3, 6, 6, 9, 9]
+    assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 2, 2, 4, 4, 6, 6]
