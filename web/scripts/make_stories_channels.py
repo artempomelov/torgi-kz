@@ -19,16 +19,17 @@ import make_stories as st  # noqa: E402
 
 OUT = st.OUT.parent / "stories-channels"
 UTM = "utm_source=instagram&utm_medium=stories"
+HUB = "torgi_kz_news"
 # другое фото лота вместо выбранного для ТОПа — на том в кадре человек
 PHOTO = {1454: 4}
 
 CHANNELS = [
-    {"file": "01-kanal-almaty.jpg", "handle": "torgi_kz_almaty", "kicker": "Telegram · Алматы",
-     "title": "Квартиры Алматы с торгов", "top": "kvartiry-almaty"},
-    {"file": "02-kanal-astana.jpg", "handle": "torgi_kz_astana", "kicker": "Telegram · Астана",
-     "title": "Квартиры Астаны с торгов", "top": "kvartiry-astana"},
-    {"file": "03-kanal-avto.jpg", "handle": "torgi_kz_auto", "kicker": "Telegram · Авто",
-     "title": "Машины с торгов", "cars": True},
+    {"file": "01-kanal-almaty.jpg", "handle": "torgi_kz_almaty", "kicker": "ТОП · Алматы",
+     "title": "Квартиры Алматы с торгов", "label": "Алматы", "top": "kvartiry-almaty"},
+    {"file": "02-kanal-astana.jpg", "handle": "torgi_kz_astana", "kicker": "ТОП · Астана",
+     "title": "Квартиры Астаны с торгов", "label": "Астана", "top": "kvartiry-astana"},
+    {"file": "03-kanal-avto.jpg", "handle": "torgi_kz_auto", "kicker": "ТОП · Авто",
+     "title": "Машины с торгов", "label": "Авто", "cars": True},
 ]
 
 
@@ -36,7 +37,7 @@ def tile_grid(img: Image.Image, tiles: list[tuple[Image.Image | None, str, tuple
     """Сетка 2×3: фото, цена внизу слева, плашка (текст, фон, цвет) — в левом верхнем углу. Возвращает низ сетки."""
     gap, cols = 6, 2
     tw = (st.W - gap) // cols
-    th = 340
+    th = 290
     for k, (photo, price, chip) in enumerate(tiles[:6]):
         x, y = (k % cols) * (tw + gap), top_y + (k // cols) * (th + gap)
         st.paste(img, photo, (x, y, x + tw, y + th))
@@ -57,9 +58,16 @@ def story(spec: dict, tiles: list) -> Image.Image:
     st.header(d, spec["kicker"])
     y = bottom + 24
     d.text((60, y), spec["title"], font=ig.fit_font(d, spec["title"], ig.BLACK, 68, st.W - 120), fill=ig.WHITE)
-    d.text((60, y + 84), "каждый день в Telegram", font=ig.font(ig.BLACK, 64), fill="#3ddc84")
-    d.text((60, y + 176), f"@{spec['handle']}", font=ig.font(ig.BOLD, 52), fill="#8aa6ff")
-    d.text((60, y + 250), "Подписывайтесь — ссылка ниже", font=ig.font(ig.REG, 40), fill="#b8c2d6")
+    # в Instagram — ссылки только на сайт и основной канал (решение владельца сайта от 21.10.2026);
+    # машины в основной канал не публикуются — их сторис ведёт на сайт
+    accent, label, target, hint = (("все машины — на torgi.kz", "Смотреть все →", "torgi.kz/avto", "Ссылка ниже")
+                                   if spec.get("cars") else
+                                   ("каждый день в Telegram", "Новые лоты →", f"@{HUB}", "Подписывайтесь — ссылка ниже"))
+    d.text((60, y + 84), accent, font=ig.font(ig.BLACK, 64), fill="#3ddc84")
+    hf = ig.font(ig.BOLD, 50)
+    d.text((60, y + 176), label, font=hf, fill=ig.WHITE)
+    d.text((60 + d.textlength(f"{label} ", font=hf), y + 176), target, font=hf, fill="#8aa6ff")
+    d.text((60, y + 256), hint, font=ig.font(ig.REG, 38), fill="#b8c2d6")
     return img
 
 
@@ -98,7 +106,8 @@ def main():
                 chip = f"−{st.REGION_CAP}%+" if capped else f"−{x['discount_pct']}% к рынку"
                 tiles.append((photo, ig.mln(lot["price"]).replace(" ₸", ""), (chip, bg, fg)))
         story(spec, tiles[:6]).save(OUT / spec["file"], quality=92)
-        notes.append(f"{n}. `{spec['file']}` — стикер «Ссылка»: https://t.me/{spec['handle']} (текст «Подписаться»)")
+        link = f"https://torgi.kz/avto/?{UTM}" if spec.get("cars") else f"https://t.me/{HUB}"
+        notes.append(f"{n}. `{spec['file']}` — стикер «Ссылка»: {link}")
     (OUT / "stories.md").write_text("\n".join(notes) + "\n", encoding="utf-8")
     print(OUT)
 
