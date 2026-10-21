@@ -401,16 +401,9 @@ def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
     ]))
     save_post(pick["folder"], slides)
 
-    lines = "\n".join(f"{i}. {r['title']} — {r['place']} — {mln(r['lot']['price'])} "
-                      + (f"(ниже рынка {r['note']})" if r["note"] else f"(рынок ≈ {mln(r['estimate'])}, −{r['discount']}%)")
-                      for i, r in enumerate(rows, 1))
-    commercial = all(r["lot"]["category"] == "commercial" for r in rows)
-    method = ("Как считаем: сравниваем цену за м² с объявлениями о продаже коммерческой недвижимости в том же городе. "
-              "Для коммерции оценка приблизительная — назначение и состояние помещений разные."
-              if commercial else
-              "Как считаем: сравниваем цену лота с объявлениями о продаже похожих квартир в том же городе и районе. "
-              "Это ориентир, а не отчёт об оценке — перед покупкой проверяйте документы и состояние объекта.")
-    return (f"{pick['headline']} — ниже рынка до {hi}% 🔥\n\n{lines}\n\n{method}\n\n"
+    # подпись только привлекает: без списка лотов и «Как считаем» — детали на слайдах и на сайте
+    # (решение владельца сайта от 21.10.2026)
+    return (f"{pick['headline']} — ниже рынка до {hi}% 🔥\n\n"
             f"Сохраните, чтобы не потерять 📌 Карточки лотов и фото — по ссылке в шапке профиля.\n{TG_LINE}\n\n"
             f"{HASHTAGS[pick['hashtags']]} {HASHTAGS['common']}")
 
