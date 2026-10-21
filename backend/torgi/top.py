@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Callable
 
 from torgi import normalize as nz
-from torgi.market import MarketIndex, confidence
+from torgi.market import SHELL, MarketIndex, confidence
 from torgi.models import Lot, utcnow
 
 TOP_SIZE = 10
@@ -82,10 +82,12 @@ def load_picks(path: Path = PICKS_FILE) -> dict[str, list[dict]]:
     return json.loads(path.read_text(encoding="utf-8"))["sections"] if path.exists() else {}
 
 
-def _estimate(x: dict, index: MarketIndex, district: str | None = None) -> dict | None:
-    """Оценка лота для ТОПа; вне Алматы и Астаны большую скидку показываем как «более 30%»."""
+def _estimate(x: dict, index: MarketIndex, district: str | None = None, shell: bool = False) -> dict | None:
+    """Оценка лота для ТОПа; вне Алматы и Астаны большую скидку показываем как «более 30%».
+    shell — черновая отделка: сравниваем только с черновыми объявлениями."""
     district = district or x.get("district")
-    est = index.estimate(x["category"], x.get("city") or x.get("region"), district, x.get("rooms"), x.get("area_m2"))
+    category = x["category"] + SHELL if shell else x["category"]
+    est = index.estimate(category, x.get("city") or x.get("region"), district, x.get("rooms"), x.get("area_m2"))
     if est is None:
         return None
     discount = round((1 - x["price"] / est.value) * 100)
@@ -105,7 +107,13 @@ def _estimate(x: dict, index: MarketIndex, district: str | None = None) -> dict 
 
 
 BADGE_CATEGORIES = ("apartment", "house", "commercial")
-FINISHED_RE = re.compile(r"ремонт|чистов", re.I)
+FINISHED_RE = re.compile(r"ремонт|(?<!пред)чистов", re.I)
+# плашка — от −5% (решение владельца сайта от 21.10.2026), в ТОП — от −10%
+BADGE_MIN_DISCOUNT = 5
+# черновую отделку в Алматы и Астане оцениваем по черновым аналогам, в регионах — нет (решение от 21.10.2026);
+# настоящие проблемы (недострой, аварийность) — без плашки везде
+SHELL_TEXT_RE = re.compile(r"чернов|без отделки|предчистов", re.I)
+DEFECT_RE = re.compile(r"недостро|незаверш|капремонт|аварийн|под снос|котлован", re.I)
 
 
 def where_phrase(city: str | None, district: str | None) -> str:
@@ -119,28 +127,32 @@ def where_phrase(city: str | None, district: str | None) -> str:
 
 def market_badge(x: dict, lot: Lot, index: MarketIndex) -> dict | None:
     """Плашка «−N% к рынку» на карточке лота (решение владельца сайта от 20.10.2026): текущая цена против средней
-    цены м² похожих объектов в районе (вне районов — в городе). Те же предохранители, что у ТОПа: без недостроя,
-    черновой отделки, долей и аренды, с правдоподобной площадью, надёжной оценкой и скидкой 10–45%."""
+    цены м² похожих объектов в районе (вне районов — в городе). Предохранители: без недостроя, долей и аренды,
+    с правдоподобной площадью, надёжной оценкой и скидкой 5–45%; черновая отделка — только в Алматы и Астане
+    и только против черновых объявлений."""
     if x["category"] not in BADGE_CATEGORIES or not x.get("price") or x.get("flags"):
         return None
     text = f"{lot.title or ''} {lot.description or ''} {' '.join(str(v) for v in (lot.extra or {}).values())}"
-    if nz.deal_flags(lot.title, lot.description) or PROBLEM_RE.search(text) or EXCLUDED_RE.search(f"{lot.address or ''} {text}"):
+    if nz.deal_flags(lot.title, lot.description) or DEFECT_RE.search(text) or EXCLUDED_RE.search(f"{lot.address or ''} {text}"):
         return None
-    # новостройки последних лет на торгах обычно без отделки (голый бетон) — плашка, только если ремонт назван
-    if (lot.year_built or 0) >= utcnow().year - 1 and not FINISHED_RE.search(text):
+    # новостройки последних лет на торгах обычно без отделки (голый бетон), если ремонт не назван
+    new_build = (lot.year_built or 0) >= utcnow().year - 1 and not FINISHED_RE.search(text)
+    shell = bool(SHELL_TEXT_RE.search(text)) or new_build
+    city, district = x.get("city") or x.get("region"), x.get("district")
+    if shell and city not in BIG_CITIES:
         return None
     lo, hi = AREA_RANGE[x["category"]]
     if not x.get("area_m2") or not lo <= x["area_m2"] <= hi:
         return None
-    city, district = x.get("city") or x.get("region"), x.get("district")
     if city in BIG_CITIES and not district:
         return None  # оценка по всему городу завышает скидку окраин
-    est = _estimate(x, index)
-    if est is None or est["confidence"] == "низкая" or not MIN_DISCOUNT <= est["discount_pct"] < MAX_DISCOUNT:
+    est = _estimate(x, index, shell=shell)
+    if est is None or est["confidence"] == "низкая" or not BADGE_MIN_DISCOUNT <= est["discount_pct"] < MAX_DISCOUNT:
         return None
     capped = "discount_note" in est
+    where = where_phrase(city, district if district and district in est["segment"] else None)
     return {"pct": REGION_DISCOUNT_CAP if capped else est["discount_pct"], "over": capped,
-            "where": where_phrase(city, district if district and district in est["segment"] else None)}
+            "where": f"{where} (черновая отделка)" if shell else where}
 
 
 def _auto_candidates(items: list[dict], lots: dict[int, Lot], index: MarketIndex) -> list[dict]:

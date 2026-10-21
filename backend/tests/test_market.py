@@ -13,39 +13,48 @@ CARD = """<div
   <div  class="a-card__subtitle ">
       {subtitle}
   </div>
+  <div class="a-card__text-preview">{preview}</div>
 </div>
 """
 
 
 def page(*cards):
-    return "<section>" + "".join(CARD.format(**c) for c in cards) + "</section>"
+    return "<section>" + "".join(CARD.format(**{"preview": "", **c}) for c in cards) + "</section>"
 
 
 def test_parse_page():
     html = page(
-        {"id": 1, "title": "2-комнатная квартира · 55.2 м² · 7/8 этаж", "price": "30&nbsp;900&nbsp;000", "subtitle": "Есильский р-н, Е-15 15"},
+        {"id": 1, "title": "2-комнатная квартира · 55.2 м² · 7/8 этаж", "price": "30&nbsp;900&nbsp;000", "subtitle": "Есильский р-н, Е-15 15",
+         "preview": "монолитный дом, 2019 г.п., состояние: свежий ремонт, потолки 3м."},
         {"id": 2, "title": "Отдельный дом · 6 комнат · 255 м² · 7 сот.", "price": "128&nbsp;000&nbsp;000", "subtitle": "Каргалы"},
         {"id": 3, "title": "4-комнатный дом · 200 м²", "price": "от 230&nbsp;000&nbsp;000", "subtitle": "Медеуский р-н"},
+        {"id": 4, "title": "1-комнатная квартира · 40 м² · 3/9 этаж", "price": "25&nbsp;000&nbsp;000", "subtitle": "Есильский р-н",
+         "preview": "жил. комплекс Arena, монолитный дом, 2026 г.п., состояние: черновая отделка, потолки 3м."},
     )
     rows = market.parse_page(html, "apartment", "Астана")
-    assert [r["id"] for r in rows] == [1, 2]
+    assert [r["id"] for r in rows] == [1, 2, 4]
     assert rows[0] == {"id": 1, "category": "apartment", "city": "Астана", "district": "район Есиль",
-                       "rooms": 2, "area": 55.2, "price": 30_900_000}
+                       "rooms": 2, "area": 55.2, "price": 30_900_000, "shell": False}
     assert rows[1]["rooms"] == 6 and rows[1]["district"] is None
+    assert rows[2]["shell"] is True
 
 
 def test_index_falls_back_to_wider_segment():
     db = sqlite3.connect(":memory:")
     db.row_factory = sqlite3.Row
     db.executescript(market.SCHEMA)
-    rows = [(i, "apartment", "Алматы", "Медеуский район", 2, 50, 50 * (900_000 + i * 1000), "2026-10-09")
+    rows = [(i, "apartment", "Алматы", "Медеуский район", 2, 50, 50 * (900_000 + i * 1000), "2026-10-09", 0)
             for i in range(10)]
-    rows += [(100 + i, "apartment", "Алматы", "Алатауский район", 1, 40, 40 * 500_000, "2026-10-09") for i in range(3)]
-    db.executemany("INSERT INTO listings VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    rows += [(100 + i, "apartment", "Алматы", "Алатауский район", 1, 40, 40 * 500_000, "2026-10-09", 0) for i in range(3)]
+    # черновые — в своём сегменте, на оценку квартир с отделкой не влияют
+    rows += [(200 + i, "apartment", "Алматы", "Медеуский район", 2, 50, 50 * 700_000, "2026-10-09", 1) for i in range(9)]
+    db.executemany("INSERT INTO listings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     index = market.MarketIndex.from_db(db)
     est = index.estimate("apartment", "Алматы", "Медеуский район", 2, 60)
     assert est.segment == "Алматы · Медеуский район · 2" and est.sample == 10
     assert round(est.ppm) == 904_500 and round(est.value) == 904_500 * 60
+    shell = index.estimate("apartment:shell", "Алматы", "Медеуский район", 2, 60)
+    assert shell.ppm == 700_000 and shell.sample == 9
     # в Алатауском районе всего 3 объявления — оценка по городу целиком
     assert index.estimate("apartment", "Алматы", "Алатауский район", 1, 40).segment == "Алматы"
     assert index.estimate("land", "Алматы", None, None, 100) is None
@@ -121,8 +130,9 @@ def test_top_from_picks():
 
 
 def test_market_badge():
-    """Плашка «−N% к рынку»: район в предложном падеже, без района в Алматы нет, черновая отделка — нет,
-    в регионах больше 30% — «более 30%», выше рынка или подозрительно дёшево (≥45%) — нет."""
+    """Плашка «−N% к рынку»: район в предложном падеже, без района в Алматы нет, черновая отделка — только
+    в Алматы и Астане по черновым аналогам, в регионах больше 30% — «более 30%», от −5%, выше рынка или
+    подозрительно дёшево (≥45%) — нет."""
     from torgi.models import Lot
     from torgi.top import market_badge, where_phrase
 
@@ -132,8 +142,11 @@ def test_market_badge():
     assert where_phrase("Актау", None) == "в г. Актау"
 
     seg = (900_000, 1_000_000, 1_100_000, 50)
+    shell = (700_000, 800_000, 900_000, 20)
     index = market.MarketIndex({("apartment", "Алматы", "Бостандыкский район", None): seg,
-                                ("apartment", "Алматы", None, None): seg, ("apartment", "Актау", None, None): seg})
+                                ("apartment", "Алматы", None, None): seg, ("apartment", "Актау", None, None): seg,
+                                ("apartment:shell", "Алматы", "Бостандыкский район", None): shell,
+                                ("apartment:shell", "Актау", None, None): shell})
 
     def badge(price, city="Алматы", district="Бостандыкский район", extra=None):
         x = {"id": 1, "category": "apartment", "city": city, "district": district, "rooms": None, "area_m2": 50,
@@ -142,6 +155,11 @@ def test_market_badge():
 
     assert badge(40_000_000) == {"pct": 20, "over": False, "where": "в Бостандыкском районе"}
     assert badge(40_000_000, district=None) is None
-    assert badge(40_000_000, extra={"Состояние": "черновая отделка"}) is None
+    # черновая: 32 млн против 800 тыс. ₸/м² черновых аналогов — −20%; в регионах — без плашки
+    assert badge(32_000_000, extra={"Состояние": "черновая отделка"}) == {
+        "pct": 20, "over": False, "where": "в Бостандыкском районе (черновая отделка)"}
+    assert badge(28_000_000, city="Актау", district=None, extra={"Состояние": "черновая отделка"}) is None
+    assert badge(40_000_000, extra={"Состояние": "аварийное"}) is None
+    assert badge(47_000_000) == {"pct": 6, "over": False, "where": "в Бостандыкском районе"}
     assert badge(48_000_000) is None and badge(55_000_000) is None and badge(20_000_000) is None
     assert badge(32_000_000, city="Актау", district=None) == {"pct": 30, "over": True, "where": "в г. Актау"}

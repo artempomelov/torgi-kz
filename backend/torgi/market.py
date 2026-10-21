@@ -60,6 +60,10 @@ _PRICE_RE = re.compile(r'class="a-card__price">\s*([^<]+)<')
 _SUBTITLE_RE = re.compile(r'class="a-card__subtitle[^"]*">\s*([^<]+?)\s*<')
 _AREA_RE = re.compile(r"([\d.]+)\s*м²")
 _ROOMS_RE = re.compile(r"(\d+)-комнатн|(\d+)\s+комнат")
+# «состояние: черновая отделка» в кратком описании карточки; черновые сравниваем только с черновыми
+_STATE_RE = re.compile(r"состояние:\s*([^,<]+)")
+SHELL_RE = re.compile(r"чернов|предчистов|без отделки|свободная планировка", re.I)
+SHELL = ":shell"  # суффикс категории у сегментов черновой отделки: «apartment:shell»
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS listings (
@@ -70,7 +74,8 @@ CREATE TABLE IF NOT EXISTS listings (
   rooms INTEGER,
   area REAL NOT NULL,
   price REAL NOT NULL,
-  seen_at TEXT NOT NULL
+  seen_at TEXT NOT NULL,
+  shell INTEGER NOT NULL DEFAULT 0 -- черновая отделка / свободная планировка
 );
 CREATE INDEX IF NOT EXISTS listings_seg ON listings (category, city, district);
 """
@@ -80,6 +85,8 @@ def connect(path: Path = DB_PATH) -> sqlite3.Connection:
     db = sqlite3.connect(path)
     db.row_factory = sqlite3.Row
     db.executescript(SCHEMA)
+    if "shell" not in {r["name"] for r in db.execute("PRAGMA table_info(listings)")}:
+        db.execute("ALTER TABLE listings ADD COLUMN shell INTEGER NOT NULL DEFAULT 0")
     return db
 
 
@@ -106,23 +113,29 @@ def parse_page(html: str, category: str, city: str) -> list[dict]:
             first = subtitle.group(1).split(",")[0].strip()
             if "р-н" in first:
                 district = nz.canonical_district(first, city)
+        state = _STATE_RE.search(block)
         out.append({
             "id": int(ad_id), "category": category, "city": city, "district": district,
             "rooms": int(rooms.group(1) or rooms.group(2)) if rooms else None,
-            "area": float(area.group(1)), "price": value,
+            "area": float(area.group(1)), "price": value, "shell": bool(state and SHELL_RE.search(state.group(1))),
         })
     return out
 
 
+# доля от `pages` страниц выдачи по разделу и размеру города (остальное — половина): квартирам и коммерции крупных
+# городов нужны и черновые аналоги, коммерция разнородная — узким сегментам (район × размер) нужен объём
+PAGE_FACTOR = {("apartment", True): 3, ("commercial", True): 3, ("commercial", False): 1.5, ("house", True): 1}
+
+
 def collect(db: sqlite3.Connection, pages: int = 25, cities: list[str] | None = None) -> dict[str, int]:
-    """Обойти выдачу Крыши: по городам и разделам, первые N страниц (в крупных городах — вдвое больше)."""
+    """Обойти выдачу Крыши: по городам и разделам, первые страницы (сколько — PAGE_FACTOR × pages)."""
     client = httpx.Client(timeout=30, headers={"User-Agent": UA, "Accept-Language": "ru"}, follow_redirects=True)
     now = datetime.now(timezone.utc).isoformat()
     stats = {"pages": 0, "listings": 0}
     for slug in cities or CITIES:
         city = CITIES[slug]
         for section, category in SECTIONS.items():
-            limit = pages * 2 if slug in BIG and category == "apartment" else pages // (1 if slug in BIG else 2)
+            limit = round(pages * PAGE_FACTOR.get((category, slug in BIG), 0.5))
             for page in range(1, max(limit, 1) + 1):
                 url = f"{BASE}/prodazha/{section}/{slug}/" + (f"?page={page}" if page > 1 else "")
                 try:
@@ -139,10 +152,10 @@ def collect(db: sqlite3.Connection, pages: int = 25, cities: list[str] | None = 
                 if not rows:
                     break
                 db.executemany(
-                    "INSERT INTO listings (id, category, city, district, rooms, area, price, seen_at) "
-                    "VALUES (:id, :category, :city, :district, :rooms, :area, :price, :seen_at) "
+                    "INSERT INTO listings (id, category, city, district, rooms, area, price, seen_at, shell) "
+                    "VALUES (:id, :category, :city, :district, :rooms, :area, :price, :seen_at, :shell) "
                     "ON CONFLICT(id) DO UPDATE SET price = excluded.price, district = excluded.district, "
-                    "seen_at = excluded.seen_at",
+                    "seen_at = excluded.seen_at, shell = excluded.shell",
                     [{**r, "seen_at": now} for r in rows],
                 )
                 stats["listings"] += len(rows)
@@ -190,13 +203,15 @@ class MarketIndex:
 
     @classmethod
     def from_db(cls, db: sqlite3.Connection) -> "MarketIndex":
+        """Черновая отделка — в отдельных сегментах («apartment:shell»): сравниваем похожее с похожим."""
         values: dict[tuple, list[float]] = {}
-        for r in db.execute("SELECT category, city, district, rooms, area, price FROM listings"):
+        for r in db.execute("SELECT category, city, district, rooms, area, price, shell FROM listings"):
             lo, hi = PPM_RANGE[r["category"]]
             ppm = r["price"] / r["area"]
             if not lo <= ppm <= hi:
                 continue
-            for key in cls._keys(r["category"], r["city"], r["district"], r["rooms"], r["area"]):
+            category = r["category"] + SHELL if r["shell"] else r["category"]
+            for key in cls._keys(category, r["city"], r["district"], r["rooms"], r["area"]):
                 values.setdefault(key, []).append(ppm)
         stats = {}
         for key, v in values.items():
@@ -223,7 +238,8 @@ class MarketIndex:
     @staticmethod
     def _keys(category: str, city: str, district: str | None, rooms: int | None, area: float) -> list[tuple]:
         """Сегменты от узкого к широкому."""
-        extra = _rooms_bucket(rooms) if category == "apartment" else _size_bucket(area) if category == "commercial" else None
+        base = category.removesuffix(SHELL)
+        extra = _rooms_bucket(rooms) if base == "apartment" else _size_bucket(area) if base == "commercial" else None
         keys = []
         if district and extra:
             keys.append((category, city, district, extra))
@@ -236,7 +252,7 @@ class MarketIndex:
 
     def estimate(self, category: str, city: str | None, district: str | None, rooms: int | None,
                  area: float | None) -> Estimate | None:
-        if category not in PPM_RANGE or not city or not area:
+        if category.removesuffix(SHELL) not in PPM_RANGE or not city or not area:
             return None
         for key in self._keys(category, city, district, rooms, area):
             if key in self.stats:
