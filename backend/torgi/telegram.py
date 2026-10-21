@@ -88,7 +88,8 @@ def benefit_lines(lot: Lot, medians: dict | None = None, badge: dict | None = No
     median = (medians or {}).get((lot.category, lot.city or lot.region or ""))
     if badge:
         how = f"более чем на {badge['pct']}%" if badge.get("over") else f"на {badge['pct']}%"
-        lines.append(f"🔥 Цена {how} ниже средней цены м² {html.escape(badge['where'])}")
+        per = "" if lot.category == "vehicle" else " м²"  # машины — по цене целиком
+        lines.append(f"🔥 Цена {how} ниже средней цены{per} {html.escape(badge['where'])}")
     elif median and lot.price_per_m2 and lot.price_per_m2 < median * 0.9:
         place = html.escape(lot.city or lot.region or "")
         lines.append(f"🔥 Цена на {(1 - lot.price_per_m2 / median) * 100:.0f}% ниже средней цены м² на торгах в г. {place}")
@@ -102,14 +103,14 @@ def utm(channel: str | None) -> str:
     return f"?utm_source=telegram&amp;utm_medium=channel&amp;utm_campaign={campaign}"
 
 
-def format_vehicle_post(lot: Lot, footer: str = "", channel: str | None = None) -> str:
+def format_vehicle_post(lot: Lot, footer: str = "", channel: str | None = None, badge: dict | None = None) -> str:
     """Пост о машине: марка, модель, год, характеристики, цена, город, вид продажи и дата торгов."""
     esc, extra = html.escape, lot.extra or {}
     specs = [f"{extra['mileage_km']:,} км".replace(",", " ") if extra.get("mileage_km") else None,
              extra.get("engine"), extra.get("transmission"), extra.get("body"), extra.get("color")]
     lines = [f"🚗 <b>{esc(lot.title)}</b>" + (f" — {esc(lot.city)}" if lot.city else ""), ""]
     lines.append(f"💰 <b>{_money(lot.price)}</b>" if lot.price else "💰 Цена не указана")
-    lines += benefit_lines(lot)
+    lines += benefit_lines(lot, badge=badge)
     if any(specs):
         lines.append("⚙️ " + esc(" · ".join(s for s in specs if s)))
     if not lot.city and lot.region:
@@ -134,7 +135,7 @@ def format_vehicle_post(lot: Lot, footer: str = "", channel: str | None = None) 
 def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel: str | None = None,
                 badge: dict | None = None) -> str:
     if lot.category == "vehicle":
-        return format_vehicle_post(lot, footer, channel)
+        return format_vehicle_post(lot, footer, channel, badge)
     esc = html.escape
     parts = [CATEGORIES.get(lot.category, "Объект")]
     if lot.rooms and lot.category in ("apartment", "house"):

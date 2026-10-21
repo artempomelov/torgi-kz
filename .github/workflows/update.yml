@@ -66,6 +66,8 @@ jobs:
           bash .github/scripts/db-release.sh load
           # сводные рыночные цены м² для раздела «ТОП» (обновляет workflow «Рыночные цены»)
           gh release download data --pattern market-index.json --dir . 2>/dev/null || echo "Рыночных цен ещё нет — ТОП будет пустым"
+          # цены машин (aster.kz) — для плашек «−N% к рынку» в разделе «Авто»
+          gh release download data --pattern car-market-index.json --dir . 2>/dev/null || echo "Цен машин ещё нет — машины без плашек"
 
       - uses: actions/setup-python@v5
         with:
@@ -144,11 +146,11 @@ jobs:
           CF_D1_DATABASE_ID: ${{ steps.cf.outputs.db_id }}
         run: |
           if [ -n "$CF_D1_DATABASE_ID" ]; then
-            uv run python -m torgi.cli export --gated ../web/data --market ../market-index.json
+            uv run python -m torgi.cli export --gated ../web/data --market ../market-index.json --car-market ../car-market-index.json
             uv run python -m torgi.cli sync-private ../web/data/private.json
             rm ../web/data/private.json
           else
-            uv run python -m torgi.cli export ../web/data --market ../market-index.json
+            uv run python -m torgi.cli export ../web/data --market ../market-index.json --car-market ../car-market-index.json
           fi
       - name: Сборка сайта
         working-directory: web

@@ -24,12 +24,16 @@ FONTS = [
 
 
 def load_badges(path: Path) -> dict[int, dict]:
-    """{id лота: {"pct", "over", "where"}} из выгрузки сайта; нет файла — без плашек."""
+    """{id лота: {"pct", "over", "where"}} из выгрузки сайта (lots.json и cars.json рядом); нет файла — без плашек."""
     try:
         lots = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         log.info("плашки к рынку: нет %s — посты без плашек", path)
         return {}
+    try:
+        lots += json.loads(path.with_name("cars.json").read_text(encoding="utf-8"))["items"]
+    except (OSError, ValueError, KeyError):
+        pass
     return {x["id"]: x["market"] for x in lots if x.get("market")}
 
 

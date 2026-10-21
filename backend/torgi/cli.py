@@ -37,14 +37,16 @@ def main() -> None:
     m = sub.add_parser("email", help="письма о новых лотах по подпискам с сайта (Brevo)")
     m.add_argument("--dry-run", action="store_true", help="только показать, кому что ушло бы")
     k = sub.add_parser("market", help="оценка лотов по рынку (krisha.kz) — внутренний отчёт, на сайт не попадает")
-    k.add_argument("action", choices=["collect", "report", "index"])
-    k.add_argument("--out", default="market-index.json", help="для index: куда сохранить сводные цены м²")
+    k.add_argument("action", choices=["collect", "report", "index", "cars"],
+                   help="cars — собрать цены машин с aster.kz и сохранить сводку")
+    k.add_argument("--out", help="для index и cars: куда сохранить сводку (market-index.json / car-market-index.json)")
     k.add_argument("--pages", type=int, default=25, help="страниц выдачи на город и раздел")
     k.add_argument("--city", action="append", help="slug города на Крыше (almaty, astana…); по умолчанию все")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
     e.add_argument("--market", help="market-index.json — оценка по рынку для раздела «ТОП»")
+    e.add_argument("--car-market", help="car-market-index.json — оценка машин по рынку (плашки в разделе «Авто»)")
     c = sub.add_parser("sync-private", help="загрузить закрытые поля лотов в Cloudflare D1")
     c.add_argument("file", help="private.json из `export --gated`")
     s = sub.add_parser("serve", help="запустить API")
@@ -125,8 +127,17 @@ def main() -> None:
             from pathlib import Path
 
             index = market.MarketIndex.from_db(db)
-            index.to_json(Path(args.out))
-            logging.info("сводные цены: %d сегментов → %s", len(index.stats), args.out)
+            index.to_json(Path(args.out or "market-index.json"))
+            logging.info("сводные цены: %d сегментов → %s", len(index.stats), args.out or "market-index.json")
+        elif args.action == "cars":
+            from pathlib import Path
+
+            from torgi import car_market
+
+            logging.info("aster: %s", car_market.collect(db))
+            cars = car_market.CarIndex.from_db(db)
+            cars.to_json(Path(args.out or "car-market-index.json"))
+            logging.info("цены машин: %d сегментов → %s", len(cars.stats), args.out or "car-market-index.json")
         else:
             init_db()
             with SessionLocal() as session:
@@ -139,7 +150,9 @@ def main() -> None:
         init_db()
         with SessionLocal() as session:
             market_index = Path(args.market) if args.market else None
-            logging.info("экспорт: %s", export(session, Path(args.out_dir), gated=args.gated, market_index=market_index))
+            car_index = Path(args.car_market) if args.car_market else None
+            logging.info("экспорт: %s", export(session, Path(args.out_dir), gated=args.gated, market_index=market_index,
+                                               car_market_index=car_index))
     elif args.cmd == "sync-private":
         from pathlib import Path
 

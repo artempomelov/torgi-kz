@@ -1,4 +1,5 @@
 // Раздел «Автомобили с торгов»: данные (web/data/cars.json — выгрузка backend), фильтры и подписи.
+import type { MarketBadge } from "@/lib/api";
 
 export type Car = {
   id: number;
@@ -27,6 +28,7 @@ export type Car = {
   price_drop_pct?: number | null;
   drive?: string | null;
   note?: string | null; // «аварийный», «имеются обременения», «после страхового случая»
+  market?: MarketBadge | null; // плашка «−N% к рынку» по объявлениям aster.kz (backend/torgi/car_market.py)
   images: string[];
   description: string | null;
 };

@@ -163,3 +163,47 @@ def test_market_badge():
     assert badge(47_000_000) == {"pct": 6, "over": False, "where": "в Бостандыкском районе"}
     assert badge(48_000_000) is None and badge(55_000_000) is None and badge(20_000_000) is None
     assert badge(32_000_000, city="Актау", district=None) == {"pct": 30, "over": True, "where": "в г. Актау"}
+
+
+ASTER_CARD = """<li class="rd-ad-card rd-catalog-cards__card" id="{id}">
+  <a class="rd-ad-card__info" href="/catalog/1"><span class="rd-ad-card__title">
+  <span class="rd-ad-card__name">{name}</span><span class="rd-ad-card__price-row">
+  <span class="rd-ad-card__price">{price}&nbsp;₸</span></span></span>
+  <span class="rd-ad-card__caption">С пробегом {km} км, 1.5 л, бензин, автомат</span></a>
+</li>
+"""
+
+
+def test_car_market():
+    """Машины: разбор выдачи aster.kz, медиана по модели и году, плашка — без повреждений, большого пробега,
+    скидка 5–40%; в посте Telegram — «ниже средней цены таких же машин», без «м²»."""
+    from torgi import car_market
+    from torgi.models import Lot
+    from torgi.telegram import format_post
+
+    assert car_market.model_key("LADA (ВАЗ) Granta") == car_market.model_key("Lada Granta") == "LADAGRANTA"
+    assert car_market.model_key("Changan CS55PLUS") == car_market.model_key("Changan CS55 Plus")
+    cards = "".join(ASTER_CARD.format(id=i, name="Changan CS55 Plus 2025", price=f"{9_000_000 + i * 100_000:,}".replace(",", " "),
+                                      km="20&nbsp;000") for i in range(9))
+    cards += ASTER_CARD.format(id=99, name="Без года", price="1 000 000", km="1")
+    rows = car_market.parse_page(f"<ul>{cards}</ul>")
+    assert len(rows) == 9 and rows[0] == {"id": 0, "model": "CHANGANCS55PLUS", "year": 2025, "mileage": 20_000, "price": 9_000_000}
+
+    db = sqlite3.connect(":memory:")
+    db.executescript(car_market.SCHEMA)
+    db.executemany("INSERT INTO car_listings VALUES (:id, :model, :year, :mileage, :price, '2026-10-21')", rows)
+    index = car_market.CarIndex.from_db(db)
+    assert index.stats["CHANGANCS55PLUS|2025"][1] == 9_400_000
+
+    car = {"vehicle_type": "car", "brand": "Changan", "model": "CS55 Plus", "year": 2025, "mileage_km": 38_000,
+           "price": 8_000_000, "note": None}
+    assert car_market.car_badge(car, index) == {"pct": 15, "over": False, "where": "таких же машин в объявлениях"}
+    assert car_market.car_badge({**car, "note": "после страхового случая (СК «Халык»)"}, index) is None
+    assert car_market.car_badge({**car, "mileage_km": 120_000}, index) is None  # пробег объясняет цену
+    assert car_market.car_badge({**car, "price": 9_200_000}, index) is None  # дешевле меньше чем на 5%
+    assert car_market.car_badge({**car, "year": 2024}, index) is None  # нет такого года
+
+    lot = Lot(id=5, category="vehicle", title="Changan CS55 Plus, 2025 г.", city="Алматы", price=8_000_000,
+              origin="bank_balance", sale_type="direct", extra={})
+    text = format_post(lot, badge=car_market.car_badge(car, index))
+    assert "🔥 Цена на 15% ниже средней цены таких же машин в объявлениях" in text

@@ -188,7 +188,8 @@ def _dump(path: Path, data) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":"), default=str), encoding="utf-8")
 
 
-def export(session: Session, out_dir: Path, gated: bool = False, market_index: Path | None = None) -> dict[str, int]:
+def export(session: Session, out_dir: Path, gated: bool = False, market_index: Path | None = None,
+           car_market_index: Path | None = None) -> dict[str, int]:
     out_dir.mkdir(parents=True, exist_ok=True)
     cutoff = utcnow() - timedelta(days=REMOVED_KEEP_DAYS)
     lots = session.scalars(
@@ -197,10 +198,17 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
         .options(selectinload(Lot.price_history))
         .order_by(Lot.first_seen_at.desc(), Lot.id.desc())
     ).all()
-    # машины — отдельный раздел /avto/ со своим файлом
+    # машины — отдельный раздел /avto/ со своим файлом; плашка «−N% к рынку» — по объявлениям aster.kz
     vehicles = [lot for lot in lots if lot.category == VEHICLE and lot.status == "active"]
     lots = [lot for lot in lots if lot.category != VEHICLE]
-    _dump(out_dir / "cars.json", {"generated_at": utcnow().isoformat(), "items": [car_item(lot) for lot in vehicles]})
+    cars = [car_item(lot) for lot in vehicles]
+    if car_market_index and car_market_index.exists():
+        from torgi.car_market import CarIndex, car_badge
+
+        car_index = CarIndex.from_json(car_market_index)
+        for car in cars:
+            car["market"] = car_badge(car, car_index)
+    _dump(out_dir / "cars.json", {"generated_at": utcnow().isoformat(), "items": cars})
 
     dups = find_duplicates(lots)
     short = [

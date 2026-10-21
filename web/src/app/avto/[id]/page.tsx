@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CarCard } from "@/components/CarCatalog";
-import { Badge } from "@/components/LotCard";
+import { Badge, marketPct, marketTone } from "@/components/LotCard";
 import { LotImage } from "@/components/LotImage";
 import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
@@ -121,6 +121,12 @@ export default async function CarPage({ params }: PageProps<"/avto/[id]">) {
           <div className="rounded-xl border border-border bg-surface p-5">
             <div className="text-sm text-muted">{isAuction ? "Стартовая цена" : "Цена"}</div>
             <div className="mt-1 text-3xl font-bold">{formatPrice(car.price)}</div>
+            {car.market && (
+              <div className="mt-3 rounded-lg bg-background p-3 text-sm text-foreground">
+                <span className={`mr-2 inline-block rounded-md px-2 py-0.5 font-bold ${marketTone(car.market)}`}>{marketPct(car.market)}</span>
+                относительно средней цены {car.market.where}
+              </div>
+            )}
             {car.min_price && car.price && car.min_price < car.price ? (
               <div className="mt-2 rounded-lg bg-success/10 p-3 text-sm text-success">
                 Аукцион на понижение: цена может опуститься до <b>{formatPriceShort(car.min_price)}</b>

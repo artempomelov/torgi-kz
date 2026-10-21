@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { Badge } from "@/components/LotCard";
+import { Badge, marketTone } from "@/components/LotCard";
 import { TelegramCta } from "@/components/TelegramCta";
 import { LotImage } from "@/components/LotImage";
 import {
@@ -29,6 +29,11 @@ export function CarCard({ car }: { car: Car }) {
           <span className="rounded-md bg-surface/95 px-2 py-0.5 text-xs font-medium text-foreground">
             {VEHICLE_TYPES[car.vehicle_type] ?? car.vehicle_type}
           </span>
+          {car.market && (
+            <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${marketTone(car.market)}`}>
+              −{car.market.pct}% к рынку
+            </span>
+          )}
           {car.price_drop_pct ? (
             <span className="rounded-md bg-accent px-2 py-0.5 text-xs font-semibold text-white">−{car.price_drop_pct}%</span>
           ) : null}
