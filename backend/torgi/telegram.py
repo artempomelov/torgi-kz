@@ -185,7 +185,7 @@ HUB_FOOTER = '📢 Все торги Казахстана — <a href="https://t
 
 def matches_channel(lot: Lot, rule: dict | None) -> bool:
     """Фильтр дополнительного канала: {"region": "Алматы"}, {"category": ["commercial", "industrial"]}.
-    Машины попадают только в канал, где категория «vehicle» указана явно."""
+    Машины попадают только в канал, где категория «vehicle» указана явно (в основной — по MAIN_MIX)."""
     categories = (rule or {}).get("category")
     categories = [categories] if isinstance(categories, str) else categories or []
     if lot.category == "vehicle" and "vehicle" not in categories:
@@ -215,52 +215,98 @@ def pending_lots(session: Session, channel: str, limit: int, since_days: int, ru
     return lots[:limit]
 
 
-# Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям. Квартиры Алматы
-# и Астаны при этом дублируются с городскими каналами — так и задумано. Дома, квартиры в регионах и промышленные
-# объекты в основной канал не идут.
+VEHICLE = "vehicle"
+
+
+def _big_city(lot: Lot) -> bool:
+    return bool({lot.region, lot.city} & {"Алматы", "Астана"})
+
+
+# машина для основного канала — легковая, не старше 10 лет, без обременений, повреждений и долей, с 3+ фото
+CAR_PROBLEM_RE = re.compile(r"обремен|неисправ|ключ|аварийн|дол[ия]|страхов", re.I)
+
+
+def _presentable_car(lot: Lot) -> bool:
+    extra = lot.extra or {}
+    return (lot.category == VEHICLE and extra.get("vehicle_type") == "car" and len(lot.images or []) >= 3
+            and (extra.get("year") or 0) >= utcnow().year - 10 and not CAR_PROBLEM_RE.search(extra.get("note") or ""))
+
+
+# Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям (решение владельца
+# сайта от 21.10.2026): из 9 постов в день 6–7 квартир Алматы и Астаны, 1 машина, 1 коммерческое помещение
+# (по всему Казахстану) или квартира в регионах. Квартиры Алматы и Астаны дублируются с городскими каналами — так
+# и задумано. Дома, земля, паркоместа и промышленные объекты в основной канал не идут.
 MAIN_MIX = [
-    ("квартиры Алматы и Астаны", 0.7,
-     lambda lot: lot.category == "apartment" and bool({lot.region, lot.city} & {"Алматы", "Астана"})),
-    ("коммерция", 0.2, lambda lot: lot.category == "commercial"),
-    ("паркоместа и земля", 0.1, lambda lot: lot.category in ("parking", "land")),
+    ("квартиры Алматы и Астаны", 7 / 9, lambda lot: lot.category == "apartment" and _big_city(lot)),
+    ("машина", 1 / 9, _presentable_car),
+    ("коммерция или квартира в регионах", 1 / 9,
+     lambda lot: lot.category == "commercial" or lot.category == "apartment" and not _big_city(lot)),
 ]
 
 
-def _building(lot: Lot) -> str:
-    from torgi.top import building_key
-
-    return building_key({"city": lot.city or lot.region, "id": lot.id}, lot.address, lot.title)
-
-
-def mixed_lots(session: Session, channel: str, limit: int, since_days: int) -> list[Lot]:
-    """Лоты основного канала по долям MAIN_MIX: в каждый слот — категория, сильнее всех отстающая от своей доли
-    среди сегодняшних постов. Новых квартир Алматы и Астаны мало (2–3 в день), поэтому к ним добавляются ещё не
-    опубликованные в канале активные квартиры с фото. Из одного дома или ЖК — один лот в день (у банков бывают
-    серии по 8 квартир в одном доме). Нет подходящих лотов — слот пустует: доли важнее количества постов."""
-    fresh = pending_lots(session, channel, 10**9, since_days)
+def badged_lots(session: Session, channel: str, badges: dict[int, dict], cars: bool = False) -> list[Lot]:
+    """Кандидаты в канал: недвижимость — только с плашкой «−N% к рынку» (решение владельца сайта от 21.10.2026:
+    плашка обязательна во всех постах); cars — плюс машины, у них оценки рынка нет. С фото, без флагов качества,
+    ещё не опубликованные в канале (в том числе помеченные при первом запуске канала); новые — первыми."""
     published = select(ChannelPost.lot_id).where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None))
-    backlog = session.scalars(
-        select(Lot).where(Lot.status == "active", Lot.price.is_not(None), Lot.category == "apartment",
-                          Lot.id.not_in(published)).order_by(Lot.first_seen_at.desc(), Lot.id.desc())
-    )
-    queues = [[lot for lot in fresh if match(lot)] for _, _, match in MAIN_MIX]
-    queued = {lot.id for lot in queues[0]}
-    queues[0] += [lot for lot in backlog if lot.id not in queued and lot.images and not lot.flags and MAIN_MIX[0][2](lot)]
+    which = Lot.id.in_(list(badges))
+    if cars:
+        which = which | (Lot.category == VEHICLE)
+    stmt = (select(Lot).where(Lot.status == "active", Lot.price.is_not(None), Lot.id.not_in(published), which)
+            .order_by(Lot.first_seen_at.desc(), Lot.id.desc()))
+    return [lot for lot in session.scalars(stmt) if lot.images and not lot.flags]
 
-    today = utcnow().astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
-    recent = session.scalars(
+
+def _today(session: Session, channel: str) -> list[Lot]:
+    start = utcnow().astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    return list(session.scalars(
         select(Lot).join(ChannelPost, ChannelPost.lot_id == Lot.id)
-        .where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None), ChannelPost.posted_at >= today)
-    ).all()
+        .where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None), ChannelPost.posted_at >= start)
+    ))
+
+
+class _Buildings:
+    """Из одного дома или ЖК — один лот в день: у банков бывают серии по 8 квартир в одном доме."""
+
+    def __init__(self, recent: list[Lot]):
+        self.seen = {self.key(lot) for lot in recent}
+
+    @staticmethod
+    def key(lot: Lot) -> str:
+        from torgi.top import building_key
+
+        if lot.category == VEHICLE:  # машины с одной стоянки — разные лоты
+            return f"id|{lot.id}"
+        return building_key({"city": lot.city or lot.region, "id": lot.id}, lot.address, lot.title)
+
+    def take(self, lot: Lot) -> bool:
+        key = self.key(lot)
+        if key in self.seen:
+            return False
+        self.seen.add(key)
+        return True
+
+
+def channel_lots(session: Session, channel: str, limit: int, rule: dict | None, badges: dict[int, dict]) -> list[Lot]:
+    """Лоты городского или тематического канала недвижимости: только с плашкой, по фильтру канала."""
+    buildings = _Buildings(_today(session, channel))
+    picked: list[Lot] = []
+    for lot in badged_lots(session, channel, badges):
+        if len(picked) >= limit:
+            break
+        if matches_channel(lot, rule) and buildings.take(lot):
+            picked.append(lot)
+    return picked
+
+
+def mixed_lots(session: Session, channel: str, limit: int, badges: dict[int, dict]) -> list[Lot]:
+    """Лоты основного канала по долям MAIN_MIX: в каждый слот — категория, сильнее всех отстающая от своей доли
+    среди сегодняшних постов. Нет подходящих лотов с плашкой — слот пустует: доли и плашки важнее количества постов."""
+    candidates = badged_lots(session, channel, badges, cars=True)
+    queues = [[lot for lot in candidates if match(lot)] for _, _, match in MAIN_MIX]
+    recent = _today(session, channel)
     counts = [sum(1 for lot in recent if match(lot)) for _, _, match in MAIN_MIX]
-    keys: dict[int, str] = {}
-
-    def house(lot: Lot) -> str:
-        if lot.id not in keys:
-            keys[lot.id] = _building(lot)
-        return keys[lot.id]
-
-    buildings = {house(lot) for lot in recent}
+    buildings = _Buildings(recent)
     picked: list[Lot] = []
     while len(picked) < limit:
         total = sum(counts) + 1
@@ -270,11 +316,10 @@ def mixed_lots(session: Session, channel: str, limit: int, since_days: int) -> l
             break
         i = -max(gaps)[1]
         lot = queues[i].pop(0)
-        if house(lot) in buildings:
+        if not buildings.take(lot):
             continue  # из этого дома сегодня уже был пост — слот не тратим
         picked.append(lot)
         counts[i] += 1
-        buildings.add(house(lot))
     return picked
 
 
@@ -481,8 +526,12 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
             log.info("канал %s: выпуск уже был, следующий — по расписанию %s", channel,
                      ", ".join(f"{h}:00" for h in settings.telegram_slots))
             return 0
-    main = rule is None and channel == settings.telegram_channel
-    lots = mixed_lots(session, channel, limit, since_days) if main else pending_lots(session, channel, limit, since_days, rule)
+    if rule is None and channel == settings.telegram_channel:
+        lots = mixed_lots(session, channel, limit, badges or {})
+    elif cars:  # оценки рынка у машин нет — канал машин публикует новые машины как раньше
+        lots = pending_lots(session, channel, limit, since_days, rule)
+    else:
+        lots = channel_lots(session, channel, limit, rule, badges or {})
     hub = (settings.telegram_channel or "").lstrip("@")
     footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
     for i, lot in enumerate(lots):

@@ -71,8 +71,9 @@ def test_about_fits_limits_and_updates_only_changed():
 
 
 def test_main_channel_mix():
-    """Основной канал: 70% квартир Алматы и Астаны (в том числе ещё не опубликованных старых), 20% коммерции,
-    10% паркомест и земли; дома и квартиры в регионах не идут; нет квартир — посты не добиваются землёй."""
+    """Основной канал: из 9 постов 7 квартир Алматы и Астаны (в том числе ещё не опубликованных старых), 1 машина,
+    1 коммерция или квартира в регионах; недвижимость — только с плашкой «−N% к рынку»; дома, земля не идут;
+    нет квартир — слоты пустуют. Городской канал — тоже только лоты с плашкой."""
     from datetime import timedelta
 
     from sqlalchemy import select
@@ -82,7 +83,7 @@ def test_main_channel_mix():
     from torgi.models import ChannelPost, utcnow
 
     init_db()
-    ch = "@mix_test"
+    ch, city = "@mix_test", "@mix_city_test"
     with SessionLocal() as session:
         now = utcnow()
         # лоты других тестов в общей базе — «опубликованы давно», в выборку и счёт долей не попадают
@@ -101,24 +102,37 @@ def test_main_channel_mix():
         old_flat = lot(10, "apartment", days=30)  # старая, помечена при первом запуске, но не опубликована
         twins = [lot(60 + i, "apartment", "Астана", address=f"Астана, ул. Шамши Калдаякова, д. 11, кв. {i}")
                  for i in range(2)]  # серия банка в одном доме — в день берём одну
-        lot(11, "apartment", "Караганда")
-        lot(12, "house")
+        plain = lot(13, "apartment")  # без оценки рынка — без плашки, в каналы не идёт
+        regional = lot(11, "apartment", "Караганда")
+        house = lot(12, "house")
         shops = [lot(20 + i, "commercial") for i in range(5)]
         land = [lot(30 + i, "land", days=1) for i in range(20)]
+        cars = [lot(80 + i, "vehicle", days=i, images=("p",) * 3) for i in range(3)]
+        for car in cars:
+            car.extra = {"vehicle_type": "car", "year": now.year - 2}
+        cars[0].extra = {**cars[0].extra, "note": "имеются обременения"}  # в основной канал не идёт
         session.flush()
         session.add(ChannelPost(lot_id=old_flat.id, channel=ch, message_id=None))
-        # за неделю в канал ушла одна земля
+        # сегодня в канал уже ушла земля — по новой смеси она не считается
         session.add(ChannelPost(lot_id=land[0].id, channel=ch, message_id=1))
         session.commit()
+        badge = {"pct": 20, "over": False, "where": "в г. Алматы"}
+        badges = {x.id: badge for x in (*flats, old_flat, *twins, regional, house, shops[0], *land)}
 
-        picked = telegram.mixed_lots(session, ch, 10, since_days=3)
+        picked = telegram.mixed_lots(session, ch, 9, badges)
         cats = [x.category for x in picked]
         assert old_flat in picked and set(flats) <= set(picked) and len(set(twins) & set(picked)) == 1
-        assert cats.count("apartment") == 5 and all(x.region in ("Алматы", "Астана") for x in picked if x.category == "apartment")
-        assert "house" not in cats and cats.count("land") == 0  # земля уже набрала свою долю
-        # квартиры кончились — коммерции не больше её доли, остальные слоты пустуют
-        assert 1 <= cats.count("commercial") <= 2 and len(picked) < 10
-        assert all(x in shops for x in picked if x.category == "commercial")
+        assert plain not in picked and house not in picked and "land" not in cats
+        assert sum(1 for x in picked if x.category == "apartment" and x.region in ("Алматы", "Астана")) == 5
+        assert cats.count("vehicle") == 1 and picked[cats.index("vehicle")] == cars[1]  # свежая машина без обременений
+        # 5 квартир Алматы и Астаны, машина и одна коммерция с плашкой или квартира в регионах; квартиры кончились —
+        # остальные слоты пустуют
+        assert len(set(picked) & {regional, shops[0]}) == 1 and len(picked) == 7
+        assert not set(shops[1:]) & set(picked)
+
+        in_city = telegram.channel_lots(session, city, 9, {"region": "Алматы"}, badges)
+        assert plain not in in_city and not set(cars) & set(in_city) and house in in_city
+        assert all(x.region == "Алматы" and x.id in badges for x in in_city)
 
 
 def test_market_badge_on_photo(tmp_path):
