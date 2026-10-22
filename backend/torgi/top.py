@@ -135,8 +135,9 @@ def market_badge(x: dict, lot: Lot, index: MarketIndex) -> dict | None:
     text = f"{lot.title or ''} {lot.description or ''} {' '.join(str(v) for v in (lot.extra or {}).values())}"
     if nz.deal_flags(lot.title, lot.description) or DEFECT_RE.search(text) or EXCLUDED_RE.search(f"{lot.address or ''} {text}"):
         return None
-    # новостройки последних лет на торгах обычно без отделки (голый бетон), если ремонт не назван
-    new_build = (lot.year_built or 0) >= utcnow().year - 1 and not FINISHED_RE.search(text)
+    # новостройки последних лет на торгах обычно без отделки (голый бетон), если ремонт не назван: квартиры
+    # госимущества 2023–2024 гг. в Астане на фото — бетон, а в тексте об отделке ни слова
+    new_build = (lot.year_built or 0) >= utcnow().year - 3 and not FINISHED_RE.search(text)
     shell = bool(SHELL_TEXT_RE.search(text)) or new_build
     city, district = x.get("city") or x.get("region"), x.get("district")
     if shell and city not in BIG_CITIES:
