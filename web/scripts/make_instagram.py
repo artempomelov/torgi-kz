@@ -71,9 +71,10 @@ def mln(v: float) -> str:
 
 
 def wrap(d: ImageDraw.ImageDraw, text: str, f: ImageFont.FreeTypeFont, width: int) -> list[str]:
-    # неразрывные группы: предлог или союз — со следующим словом, тире — с предыдущим, «3 314» — целиком
+    # неразрывные группы: предлог или союз — со следующим словом, тире — с предыдущим, «3 314» — целиком;
+    # неразрывный пробел («30 млн ₸») строку не делит
     units: list[str] = []
-    for word in text.split():
+    for word in (w for w in text.split(" ") if w):
         prev = units[-1].split()[-1] if units else ""
         if units and (word in ("—", "–") or (len(prev) <= 2 and prev.isalpha()) or (prev.isdigit() and word.isdigit())):
             units[-1] += " " + word
@@ -320,6 +321,7 @@ HASHTAGS = {
     "Алматы": "#недвижимостьалматы #квартираалматы #алматы #купитьквартирувалматы #квартиранижерынка",
     "Астана": "#недвижимостьастана #квартираастана #астана #купитьквартирувастане #квартиранижерынка",
     "бизнес": "#коммерческаянедвижимость #готовыйбизнес #помещение #офис #бизнесказахстан",
+    "до30": "#квартиранижерынка #недорогиеквартиры #купитьквартиру #квартиразалог #первоежильё",
     "common": "#торги #недвижимостьказахстан #залоговоеимущество #аукцион #инвестициивнедвижимость #torgikz",
 }
 
@@ -327,14 +329,28 @@ HASHTAGS = {
 # не стройка и не захламлённые комнаты. photos — четыре фото коллажа по номеру в лоте (с нуля), по умолчанию
 # комната, кухня, санузел, дом; (номер, "подпись") — своя подпись ячейки. title — вместо «Коммерческая, N м²»,
 # district — если у лота не указан район (иначе оценка по городу в целом и скидка завышена).
+# cover: "house" — обложка как у самого охватного поста (тёмный фон, знак раздела с домиком, «ТОП-N … ниже рынка»),
+# иначе — мозаика фото; cover_title — заголовок такой обложки ({n} — число объектов).
 PICKS = [
     {"folder": "02-top-almaty", "kicker": "ТОП недели · Алматы", "title": "5 квартир с ремонтом",
-     "headline": "ТОП-5 квартир с ремонтом в Алматы", "hashtags": "Алматы", "lots": [
+     "headline": "ТОП-5 квартир Алматы с торгов", "hashtags": "Алматы", "cover": "house",
+     "cover_title": "ТОП-{n} квартир Алматы ниже рынка", "lots": [
          {"id": 1583, "photos": [5, 2, (4, "спальня"), 0]},
          {"id": 1272, "photos": [4, 11, 10, 8]},
          {"id": 109, "photos": [8, 9, 6, 0]},
          {"id": 1454, "photos": [6, 7, 5, 0], "district": "Наурызбайский район, мкр. Шугыла"},
-         {"id": 105, "photos": [3, 14, 1, 6], "district": "Наурызбайский район, мкр. Шугыла"},
+         # тот же ЖК, что у 1272, — фото дома не повторяем
+         {"id": 1302, "photos": [2, (9, "спальня"), (1, "прихожая"), (8, "кабинет")]},
+     ]},
+    # «до 30 млн» — по Казахстану: в Алматы таких квартир с оценкой рынка всего 6 и почти у всех фото только фасадов
+    {"folder": "08-top-do-30-mln", "kicker": "ТОП недели · до 30 млн", "title": "5 квартир до 30 млн ₸",
+     "headline": "ТОП-5 квартир до 30 млн ₸ с торгов", "hashtags": "до30", "cover": "house",
+     "cover_title": "ТОП-{n} квартир до 30 млн ₸ ниже рынка", "lots": [
+         {"id": 98, "photos": [10, (11, "комната"), (6, "прихожая"), 0]},
+         {"id": 1102, "title": "Квартира, 2-комн., 50,2 м²", "photos": [7, 6, 9, 0]},
+         {"id": 164, "photos": [3, 2, (4, "гостиная"), (5, "спальня")]},
+         {"id": 100, "photos": [0, 2, 3, (1, "спальня")]},
+         {"id": 1141, "photos": [8, 5, 6, (4, "прихожая")]},
      ]},
     {"folder": "03-top-astana", "kicker": "ТОП недели · Астана", "title": "5 квартир с ремонтом",
      "headline": "ТОП-5 квартир с ремонтом в Астане", "hashtags": "Астана", "lots": [
@@ -386,9 +402,13 @@ def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
                      "shown": REGION_DISCOUNT_CAP if capped else discount})
     rows.sort(key=lambda r: -r["discount"])
     lo, hi = min(r["shown"] for r in rows), max(r["shown"] for r in rows)
-    slides = [mosaic_cover(pick["kicker"], pick["title"], f"ниже рынка на {lo}–{hi}%",
-                           pick.get("subtitle", "Торги и залоги банков"),
-                           [r["photos"][0][0] for r in rows])]
+    if pick.get("cover") == "house":
+        slides = [cover_slide(pick["cover_title"].format(n=len(rows)),
+                              f"Торги и залоги банков: ниже рынка на {lo}–{hi}%", pick["kicker"])]
+    else:
+        slides = [mosaic_cover(pick["kicker"], pick["title"], f"ниже рынка на {lo}–{hi}%",
+                               pick.get("subtitle", "Торги и залоги банков"),
+                               [r["photos"][0][0] for r in rows])]
     slides += [collage_slide(r["lot"], r["title"], r["place"], r["photos"], r["estimate"], r["discount"], i, r["note"])
                for i, r in enumerate(rows, 1)]
     slides.append(cta_slide(f"Ещё {total} объектов с торгов", [
