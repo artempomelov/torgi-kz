@@ -232,16 +232,12 @@ def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Im
     d.text((64, y), title, font=fit_font(d, title, BOLD, 44, W - 128), fill=INK)
     d.text((64, y + 62), place, font=fit_font(d, place, REG, 32, W - 128), fill=MUTED)
     y += 128
-    price, pf = mln(lot["price"]), font(BLACK, 84)
-    d.text((64, y), price, font=pf, fill=INK)
-    market = "оценка приблизительная" if note else f"рынок ≈ {mln(estimate)}"
-    x = 64 + d.textlength(price, font=pf) + 28
-    d.text((x, y + 40), market, font=fit_font(d, market, REG, 34, int(W - 40 - x)), fill=MUTED)
+    # только цена и скидка на плашке — без «рынок ≈ …» и пояснений об оценке (решение владельца от 23.10.2026)
+    d.text((64, y), mln(lot["price"]), font=font(BLACK, 84), fill=INK)
     tags = [ORIGIN.get(lot["origin"], lot["origin"])]
     if lot.get("sale_type") in SALE:
         tags.append(SALE[lot["sale_type"]])
     pill(d, (64, y + 128), " · ".join(tags), font(BOLD, 28), LIGHT, COBALT)
-    d.text((64, H - 50), "оценка torgi.kz по объявлениям", font=font(REG, 24), fill=MUTED, anchor="ls")
     d.text((W - 64, H - 50), link, font=font(BOLD, 30), fill=COBALT, anchor="rs")
     return img
 

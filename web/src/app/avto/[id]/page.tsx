@@ -122,9 +122,8 @@ export default async function CarPage({ params }: PageProps<"/avto/[id]">) {
             <div className="text-sm text-muted">{isAuction ? "Стартовая цена" : "Цена"}</div>
             <div className="mt-1 text-3xl font-bold">{formatPrice(car.price)}</div>
             {car.market && (
-              <div className="mt-3 rounded-lg bg-background p-3 text-sm text-foreground">
-                <span className={`mr-2 inline-block rounded-md px-2 py-0.5 font-bold ${marketTone(car.market)}`}>{marketPct(car.market)}</span>
-                относительно средней цены {car.market.where}
+              <div className="mt-3">
+                <span className={`inline-block rounded-md px-2 py-0.5 text-sm font-bold ${marketTone(car.market)}`}>{marketPct(car.market)} к рынку</span>
               </div>
             )}
             {car.min_price && car.price && car.min_price < car.price ? (

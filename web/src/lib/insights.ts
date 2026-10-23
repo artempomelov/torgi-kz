@@ -1,6 +1,6 @@
-// Выборки по каталогу на этапе сборки: витрина главной, похожие объекты, сравнение цены с рынком.
+// Выборки по каталогу на этапе сборки: витрина главной, похожие объекты.
 import type { Lot } from "./api";
-import { PPM_CATEGORIES, isLowInterest } from "./filter";
+import { isLowInterest } from "./filter";
 
 const MAIN_CATEGORIES = new Set(["apartment", "house", "commercial"]);
 
@@ -55,22 +55,6 @@ export function similarLots(lot: Lot, lots: Lot[], limit = 4): Lot[] {
     ),
     limit,
   );
-}
-
-export type MarketCompare = { median: number; diffPct: number; sample: number; where: string };
-
-/** Цена за м² против медианы по таким же объектам в том же городе (по нашей базе торгов и залогов). */
-export function compareToMarket(lot: Lot, lots: Lot[]): MarketCompare | null {
-  if (!PPM_CATEGORIES.has(lot.category) || !lot.price_per_m2) return null;
-  const where = place(lot);
-  if (!where) return null;
-  const values = lots
-    .filter((x) => x.id !== lot.id && x.category === lot.category && samePlace(x, lot) && x.price_per_m2 && !x.flags.length)
-    .map((x) => x.price_per_m2!)
-    .sort((a, b) => a - b);
-  if (values.length < 5) return null;
-  const median = values[Math.floor(values.length / 2)];
-  return { median, diffPct: Math.round(((lot.price_per_m2 - median) / median) * 100), sample: values.length, where };
 }
 
 /** Объявление висит давно — уместен торг. */

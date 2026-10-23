@@ -74,7 +74,7 @@ def main():
     n = len(rows)
     # обложка — как у самого охватного поста «ТОП-5 квартир Алматы ниже рынка»: тёмный фон и знак раздела
     slides = [mi.cover_slide(f"ТОП-{n} машин с торгов ниже рынка",
-                             f"Залоги и имущество банков: цены на {lo}–{hi}% ниже объявлений о продаже таких же машин",
+                             f"Залоги и имущество банков: ниже рынка на {lo}–{hi}%",
                              "ТОП недели · Авто", icon="car")]
     slides += [mi.collage_slide(r["car"], r["title"], r["place"], r["photos"], r["market"], r["discount"], i, link=LINK)
                for i, r in enumerate(rows, 1)]

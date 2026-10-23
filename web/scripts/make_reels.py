@@ -38,10 +38,6 @@ def title(lot: dict) -> str:
     return f"{rooms} {CITY_IN.get(lot.get('city'), 'в г. ' + str(lot.get('city')))}"
 
 
-def market_price(lot: dict) -> float:
-    return lot["price"] / (1 - lot["market"]["pct"] / 100)
-
-
 def candidates(n: int = 8):
     """Контактные листы: лучшие лоты с плашкой, которых ещё не было в Reels и в постах/сторис."""
     lots = json.loads((ig.DATA / "lots-full.json").read_text(encoding="utf-8"))
@@ -102,8 +98,8 @@ def card(lot: dict, photo: Image.Image | None) -> Image.Image:
     bg, fg = ig.discount_colors(lot["market"]["pct"], lot["market"]["over"])
     ig.pill(d, (60, y), f"−{lot['market']['pct']}% к рынку", ig.font(ig.BLACK, 54), bg, fg, pad=(28, 12))
     y += 130
-    facts = [f"рынок в районе — около {ig.mln(market_price(lot))}",
-             " · ".join(x for x in (f"{lot['area_m2']:g} м²".replace(".", ",") if lot.get("area_m2") else None,
+    # только скидка — без «рынок в районе — около …» (решение владельца от 23.10.2026)
+    facts = [" · ".join(x for x in (f"{lot['area_m2']:g} м²".replace(".", ",") if lot.get("area_m2") else None,
                                     f"{lot['floor']} этаж" if lot.get("floor") else None,
                                     f"дом {lot['year_built']} г." if lot.get("year_built") else None) if x),
              (lot.get("district") or lot.get("city") or "")]
@@ -156,8 +152,7 @@ def render(lot_id: int, idx: list[int]):
     facts = ", ".join(x for x in (f"{lot['area_m2']:g} м²".replace(".", ",") if lot.get("area_m2") else None,
                                   lot.get("district")) if x)
     caption = (f"{title(lot)} за {ig.mln(lot['price'])} — на {pct}% ниже рынка 🔥\n\n"
-               f"{facts}\n"
-               f"Рынок в районе — около {ig.mln(market_price(lot))}\n\n"
+               f"{facts}\n\n"
                "Сохраните, чтобы не потерять 📌 Все фото и детали — на сайте torgi.kz, ссылка в шапке профиля.\n"
                f"{ig.TG_LINE}\n\n"
                f"{HASHTAGS.get(city, '')} {COMMON_TAGS}")

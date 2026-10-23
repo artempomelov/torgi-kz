@@ -59,24 +59,11 @@ def _hashtag(text: str) -> str:
     return "#" + re.sub(r"[^\wё]", "", text.replace("-", "_").replace(" ", "_"), flags=re.I)
 
 
-# --- выгода: снижение цены и сравнение с медианой по городу ----------------------------------
+# --- выгода: снижение цены и скидка к рынку ----------------------------------------------------
 
-PPM_CATEGORIES = ("apartment", "commercial")
-
-
-def market_medians(session: Session) -> dict[tuple[str, str], float]:
-    """Медиана цены за м² по (категория, город) среди активных лотов — для «ниже рынка на N%»."""
-    values: dict[tuple[str, str], list[float]] = {}
-    rows = session.execute(select(Lot.category, Lot.city, Lot.region, Lot.price_per_m2).where(
-        Lot.status == "active", Lot.price_per_m2.is_not(None), Lot.category.in_(PPM_CATEGORIES)))
-    for category, city, region, ppm in rows:
-        values.setdefault((category, city or region or ""), []).append(ppm)
-    return {k: sorted(v)[len(v) // 2] for k, v in values.items() if len(v) >= 5}
-
-
-def benefit_lines(lot: Lot, medians: dict | None = None, badge: dict | None = None) -> list[str]:
-    """Выгода: снижение цены, нижняя цена аукциона и «Цена на N% ниже средней цены м² …» (формулировка владельца
-    сайта от 20.10.2026; badge — плашка сайта «−N% к рынку», иначе сравнение с лотами на торгах в том же городе)."""
+def benefit_lines(lot: Lot, badge: dict | None = None) -> list[str]:
+    """Выгода: снижение цены, нижняя цена аукциона и скидка к рынку — только «Цена на N% ниже рынка», без рыночных
+    цен и пояснений (решение владельца сайта от 23.10.2026); badge — плашка сайта «−N% к рынку»."""
     lines = []
     prices = [p.price for p in real_price_history(lot.price_history)]
     if lot.price and prices and prices[0] > lot.price:
@@ -85,14 +72,9 @@ def benefit_lines(lot: Lot, medians: dict | None = None, badge: dict | None = No
     if lot.min_price and lot.price and lot.min_price < lot.price:
         lines.append(f"⬇️ Аукцион на понижение: цена может опуститься до {_money(lot.min_price)} "
                      f"(−{(1 - lot.min_price / lot.price) * 100:.0f}%)")
-    median = (medians or {}).get((lot.category, lot.city or lot.region or ""))
     if badge:
         how = f"более чем на {badge['pct']}%" if badge.get("over") else f"на {badge['pct']}%"
-        per = "" if lot.category == "vehicle" else " м²"  # машины — по цене целиком
-        lines.append(f"🔥 Цена {how} ниже средней цены{per} {html.escape(badge['where'])}")
-    elif median and lot.price_per_m2 and lot.price_per_m2 < median * 0.9:
-        place = html.escape(lot.city or lot.region or "")
-        lines.append(f"🔥 Цена на {(1 - lot.price_per_m2 / median) * 100:.0f}% ниже средней цены м² на торгах в г. {place}")
+        lines.append(f"🔥 Цена {how} ниже рынка")
     return lines
 
 
@@ -132,8 +114,7 @@ def format_vehicle_post(lot: Lot, footer: str = "", channel: str | None = None, 
     return "\n".join(lines)[:CAPTION_LIMIT]
 
 
-def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel: str | None = None,
-                badge: dict | None = None) -> str:
+def format_post(lot: Lot, footer: str = "", channel: str | None = None, badge: dict | None = None) -> str:
     if lot.category == "vehicle":
         return format_vehicle_post(lot, footer, channel, badge)
     esc = html.escape
@@ -151,7 +132,7 @@ def format_post(lot: Lot, medians: dict | None = None, footer: str = "", channel
     if lot.price_per_m2:
         price += f" ({_money(lot.price_per_m2)}/м²)"
     lines.append(price)
-    lines += benefit_lines(lot, medians, badge)
+    lines += benefit_lines(lot, badge)
     # точный адрес — только на сайте после входа; в канале — город и район
     area = lot_district(lot.address, lot.city or lot.region, lot.title, lot.description)
     place = ", ".join(p for p in (lot.city or lot.region, area) if p)
@@ -396,7 +377,6 @@ def refresh(session: Session) -> int:
     bot = TelegramBot(settings.telegram_bot_token)
     rules = {name: rule for name, rule, _ in channels()}
     hub = (settings.telegram_channel or "").lstrip("@")
-    medians = market_medians(session)
     badges = load_badges(Path(settings.telegram_badges))
     posts = session.scalars(select(ChannelPost).where(
         ChannelPost.channel.in_(list(rules)), ChannelPost.message_id.is_not(None))).all()
@@ -407,7 +387,7 @@ def refresh(session: Session) -> int:
             continue
         footer = MAIN_FOOTER if rules.get(post.channel) is None else HUB_FOOTER.format(hub=hub)
         badge = badges.get(lot.id)
-        text = format_post(lot, medians, footer, post.channel, badge)
+        text = format_post(lot, footer, post.channel, badge)
         # плашка «−N% к рынку» — и в старых постах: заменяем главное фото (подпись передаём вместе с ним)
         main = badged_photo(lot.images[0], badge, bot.client) if badge and lot.images else None
         if main:
@@ -507,7 +487,7 @@ def slot_quota(now: datetime | None = None) -> int:
 
 
 def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
-                limit: int, medians: dict, dry_run: bool, badges: dict | None = None) -> int:
+                limit: int, dry_run: bool, badges: dict | None = None) -> int:
     # канал машин открыт позже раздела — уже собранные машины в нём тоже публикуем
     cars = "vehicle" in ((rule or {}).get("category") or [])
     if not cars and not dry_run and session.scalar(select(ChannelPost.id).where(ChannelPost.channel == channel).limit(1)) is None:
@@ -532,7 +512,7 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
     footer = MAIN_FOOTER if rule is None else HUB_FOOTER.format(hub=hub) if hub else ""
     for i, lot in enumerate(lots):
         badge = (badges or {}).get(lot.id)
-        text = format_post(lot, medians, footer, channel, badge)
+        text = format_post(lot, footer, channel, badge)
         if dry_run:
             print(f"--- {channel}: лот {lot.id} ({lot.source}){' · плашка ' + badge_label(badge) if badge else ''}\n{text}\n")
             continue
@@ -568,12 +548,11 @@ def run(session: Session, limit: int = 5, dry_run: bool = False, mark_all: bool 
             log.info("вне часов публикации (%s–%s по Алматы)", start, end)
             return 0
     bot = None if dry_run else TelegramBot(settings.telegram_bot_token)
-    medians = market_medians(session)
     badges = load_badges(Path(settings.telegram_badges))
     total = 0
     for channel, rule, daily in targets:
         try:
-            total += run_channel(session, bot, channel, rule, daily, limit, medians, dry_run, badges)
+            total += run_channel(session, bot, channel, rule, daily, limit, dry_run, badges)
         except RuntimeError:
             log.exception("канал %s: ошибка публикации", channel)
     return total

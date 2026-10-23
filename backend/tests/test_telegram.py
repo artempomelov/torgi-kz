@@ -30,12 +30,14 @@ def test_benefits_and_channel_rules():
     lot = Lot(id=7, source="sauda", category="apartment", origin="state", sale_type="auction_down", city="Астана",
               region="Астана", price=8_000_000, price_per_m2=200_000, min_price=4_000_000, area_m2=40)
     lot.price_history = [PriceChange(price=10_000_000), PriceChange(price=8_000_000)]
-    text = format_post(lot, {("apartment", "Астана"): 400_000}, footer="FOOTER").replace("\xa0", " ")
+    text = format_post(lot, footer="FOOTER").replace("\xa0", " ")
     assert "📉 <b>Цена снижена на 20%</b> — выгода 2 000 000 ₸" in text
     assert "цена может опуститься до 4 000 000 ₸ (−50%)" in text
-    assert "🔥 Цена на 50% ниже средней цены м² на торгах в г. Астана" in text
+    assert "🔥" not in text  # без оценки рынка — без строки о скидке (сравнения с медианой торгов больше нет)
     badge = {"pct": 34, "over": False, "where": "в районе Сарыарка"}
-    assert "🔥 Цена на 34% ниже средней цены м² в районе Сарыарка" in format_post(lot, badge=badge)
+    with_badge = format_post(lot, badge=badge)
+    assert "🔥 Цена на 34% ниже рынка\n" in with_badge and "Сарыарка" not in with_badge.split("🔥")[1].split("\n")[0]
+    assert "🔥 Цена более чем на 30% ниже рынка" in format_post(lot, badge={"pct": 30, "over": True, "where": "в г. Актау"})
     assert text.endswith("FOOTER")
     assert matches_channel(lot, {"region": "Астана"}) and not matches_channel(lot, {"region": ["Алматы"]})
     assert matches_channel(lot, {"category": ["apartment", "house"]}) and not matches_channel(lot, {"category": "land"})

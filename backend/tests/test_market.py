@@ -176,7 +176,7 @@ ASTER_CARD = """<li class="rd-ad-card rd-catalog-cards__card" id="{id}">
 
 def test_car_market():
     """Машины: разбор выдачи aster.kz, медиана по модели и году, плашка — без повреждений, большого пробега,
-    скидка 5–40%; в посте Telegram — «ниже средней цены таких же машин», без «м²»."""
+    скидка 5–40%; в посте Telegram — только «Цена на N% ниже рынка»."""
     from torgi import car_market
     from torgi.models import Lot
     from torgi.telegram import format_post
@@ -206,4 +206,4 @@ def test_car_market():
     lot = Lot(id=5, category="vehicle", title="Changan CS55 Plus, 2025 г.", city="Алматы", price=8_000_000,
               origin="bank_balance", sale_type="direct", extra={})
     text = format_post(lot, badge=car_market.car_badge(car, index))
-    assert "🔥 Цена на 15% ниже средней цены таких же машин в объявлениях" in text
+    assert "🔥 Цена на 15% ниже рынка" in text

@@ -15,7 +15,7 @@ import { TelegramCta } from "@/components/TelegramCta";
 import { collectionsForLot } from "@/lib/collections";
 import { getAllLotsFull, getLot, getLots, getTopItem } from "@/lib/data";
 import { describeLot } from "@/lib/describe";
-import { compareToMarket, isStale, similarLots } from "@/lib/insights";
+import { isStale, similarLots } from "@/lib/insights";
 import { consultLink } from "@/lib/subscribe";
 import {
   CATEGORY_LABELS,
@@ -87,7 +87,6 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
   const isAuction = lot.sale_type === "auction" || lot.sale_type === "auction_down";
   const lots = getLots();
   const similar = similarLots(lot, lots);
-  const market = compareToMarket(lot, lots);
   const collections = collectionsForLot(lot, lots);
   const top = lot.status === "active" ? getTopItem(lot.id) : null;
   const stale = lot.status === "active" && !isAuction && isStale(lot.listed_at);
@@ -138,7 +137,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
           <section className="rounded-xl border border-border bg-surface p-5">
             <h2 className="mb-2 text-lg font-semibold">Об объекте</h2>
             <div className="space-y-1.5 text-sm leading-6">
-              {describeLot(lot, market).map((p) => <p key={p}>{p}</p>)}
+              {describeLot(lot).map((p) => <p key={p}>{p}</p>)}
             </div>
             <LotStatsBadge id={lot.id} record compact={false} className="mt-3" />
           </section>
@@ -174,30 +173,18 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
                 с момента публикации
               </div>
             ) : null}
+            {/* только скидка — без рыночных цен и пояснений к ним (решение владельца сайта от 23.10.2026) */}
             {top && (
               <Link href={`/top/#${top.slug}`} className="mt-3 block rounded-lg bg-background p-3 text-sm text-foreground hover:bg-surface-2">
                 <span className={`mr-2 inline-block rounded-md px-2 py-0.5 font-bold ${marketTone({ pct: top.discount_pct, over: !!top.discount_note })}`}>
-                  {top.discount_note ? "более −30%" : `−${top.discount_pct}%`}
+                  {top.discount_note ? "более −30%" : `−${top.discount_pct}%`} к рынку
                 </span>
-                относительно средней цены м² {top.where ?? ""}
                 <span className="mt-1 block text-xs text-muted">🔥 #{top.rank} в «{top.section}»</span>
               </Link>
             )}
             {!top && lot.market && (
-              <div className="mt-3 rounded-lg bg-background p-3 text-sm text-foreground">
-                <span className={`mr-2 inline-block rounded-md px-2 py-0.5 font-bold ${marketTone(lot.market)}`}>{marketPct(lot.market)}</span>
-                относительно средней цены м² {lot.market.where}
-              </div>
-            )}
-            {!top && !lot.market && market && (
-              <div className={`mt-3 rounded-lg p-3 text-sm ${market.diffPct <= -10 ? "bg-success/10 text-success" : "bg-background text-muted"}`}>
-                {market.diffPct <= -3
-                  ? <>Цена за м² на <b>{-market.diffPct}%</b> ниже</>
-                  : market.diffPct >= 3
-                    ? <>Цена за м² на <b>{market.diffPct}%</b> выше</>
-                    : <>Цена за м² на уровне</>}{" "}
-                медианы по {market.sample} похожим объектам на торгах и в залогах ({market.where}):{" "}
-                {Math.round(market.median).toLocaleString("ru-RU")} ₸/м².
+              <div className="mt-3">
+                <span className={`inline-block rounded-md px-2 py-0.5 text-sm font-bold ${marketTone(lot.market)}`}>{marketPct(lot.market)} к рынку</span>
               </div>
             )}
             {stale && (
