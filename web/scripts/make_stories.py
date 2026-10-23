@@ -45,11 +45,11 @@ POSTS += [{x["id"] for x in pick["lots"]} for pick in ig.PICKS]
 MAX_REPEATS = 2
 
 STORIES = {
-    "lot_of_day": {"id": 1697, "photos": [2, 1, 4], "city": "Астана"},
+    "lot_of_day": {"id": 138, "photos": [8, 6, 9], "city": "Астана"},
     "countdown": None,  # {"id": …, "photos": […], "title": …} — когда есть презентабельный лот с торгами через 3–10 дней
-    "second": "doma",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
-    # третья (если нет «До торгов») — раздел «Авто»: машина и фото без госномера; не те, что в карусели ТОПа машин
-    "cars": [(4890, 2), (4871, 3), (4861, 1), (4899, 1), (4919, 1), (4903, 0)],
+    "second": "kvartiry-regiony",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
+    # третья (если нет «До торгов») — раздел «Авто»: машина и фото без госномера и людей; не те, что в карусели ТОПа
+    "cars": [(4896, 4), (4870, 3), (4915, 2), (4912, 0), (4890, 2), (4871, 3)],
 }
 
 
@@ -195,7 +195,12 @@ def story_cars(cars: list[tuple[dict, Image.Image | None]], total: int) -> Image
         d.text((x + 16, y + tile - 58), name, font=ig.fit_font(d, name, ig.BOLD, 28, tile - 32), fill=ig.WHITE, anchor="ls")
         d.text((x + 16, y + tile - 16), ig.mln(car["price"]).replace(" ₸", ""), font=ig.font(ig.BLACK, 34),
                fill=ig.WHITE, anchor="ls")
-        ig.pill(d, (x + 12, y + 12), str(car["year"]), ig.font(ig.BLACK, 28), ig.GREEN, ig.WHITE, pad=(14, 6))
+        # плашка «−N% к рынку», где есть оценка (aster.kz), иначе — год
+        if car.get("market"):
+            ig.pill(d, (x + 12, y + 12), f"−{car['market']['pct']}% к рынку", ig.font(ig.BLACK, 26),
+                    *ig.discount_colors(car["market"]["pct"]), pad=(12, 6))
+        else:
+            ig.pill(d, (x + 12, y + 12), str(car["year"]), ig.font(ig.BLACK, 28), ig.GREEN, ig.WHITE, pad=(14, 6))
     header(d, "Новое на torgi.kz")
     y = top_y + rows * (tile + gap) + 30
     d.text((60, y), "Машины с торгов", font=ig.font(ig.BLACK, 70), fill=ig.WHITE)

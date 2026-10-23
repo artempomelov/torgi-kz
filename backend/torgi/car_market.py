@@ -31,6 +31,8 @@ MIN_SAMPLE = 5
 MIN_DISCOUNT, MAX_DISCOUNT = 5, 40
 # на фото и в описании проблемы — плашку не ставим: цена ниже из-за них (обременение при аресте снимается продажей)
 PROBLEM_RE = re.compile(r"неисправ|ключ|аварийн|дол[ия]|страхов|битая|после дтп", re.I)
+# повреждения видны только на фото, в тексте лота ни слова — без плашки (id лота в базе; пополняем при отборе)
+NO_BADGE = {4876}  # Ravon R4 2019: разбита решётка, вмятины
 
 _CARD_RE = re.compile(r'<li class="rd-ad-card[^"]*" id="(\d+)"(.*?)(?=<li class="rd-ad-card|\Z)', re.S)
 _NAME_RE = re.compile(r'rd-ad-card__name">([^<]+)<')
@@ -164,7 +166,8 @@ def car_badge(car: dict, index: CarIndex) -> dict | None:
     """Плашка «−N% к рынку» для легковой машины (решение владельца сайта от 21.10.2026): цена против медианы
     объявлений той же модели того же года. Без плашки: повреждения, «нет ключей», доля; пробег намного больше
     обычного для сегмента (дешевизна объяснима); разнородный сегмент; скидка вне 5–40%."""
-    if car.get("vehicle_type") != "car" or not car.get("price") or PROBLEM_RE.search(car.get("note") or ""):
+    if (car.get("vehicle_type") != "car" or not car.get("price") or PROBLEM_RE.search(car.get("note") or "")
+            or car.get("id") in NO_BADGE):
         return None
     est = index.estimate(car.get("brand"), car.get("model"), car.get("year"))
     if est is None or est.spread > 0.6:
