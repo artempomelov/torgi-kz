@@ -370,6 +370,29 @@ class TelegramBot:
                          link_preview_options={"is_disabled": True})["message_id"]
 
 
+def _refresh_post(bot: TelegramBot, post: ChannelPost, lot: Lot, text: str, badge: dict | None) -> int:
+    """Один пост: с плашкой — заменяем главное фото вместе с подписью, иначе правим подпись или текст."""
+    main = badged_photo(lot.images[0], badge, bot.client) if badge and lot.images else None
+    if main:
+        try:
+            bot.call_files("editMessageMedia", {"main": main}, chat_id=post.channel, message_id=post.message_id,
+                           media={"type": "photo", "media": "attach://main", "caption": text, "parse_mode": "HTML"})
+            return 1
+        except RuntimeError as exc:  # пост без фото (ушёл текстом) — правим только текст
+            log.warning("пост %s/%s: фото не заменено (%s)", post.channel, post.message_id, exc)
+    common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
+    for method, extra in (("editMessageCaption", {"caption": text}),
+                          ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
+        try:
+            bot.call(method, **common, **extra)
+            return 1
+        except RuntimeError as exc:
+            if "not modified" in str(exc):
+                return 0
+            # пост без фото — у него нет подписи, правим текст; иначе пробуем следующий способ
+    return 0
+
+
 def refresh(session: Session) -> int:
     """Переписать уже опубликованные посты по текущему шаблону (например, после смены формата)."""
     if not settings.telegram_bot_token or not settings.telegram_channel:
@@ -386,30 +409,11 @@ def refresh(session: Session) -> int:
         if lot is None:
             continue
         footer = MAIN_FOOTER if rules.get(post.channel) is None else HUB_FOOTER.format(hub=hub)
-        badge = badges.get(lot.id)
-        text = format_post(lot, footer, post.channel, badge)
-        # плашка «−N% к рынку» — и в старых постах: заменяем главное фото (подпись передаём вместе с ним)
-        main = badged_photo(lot.images[0], badge, bot.client) if badge and lot.images else None
-        if main:
-            try:
-                bot.call_files("editMessageMedia", {"main": main}, chat_id=post.channel, message_id=post.message_id,
-                               media={"type": "photo", "media": "attach://main", "caption": text, "parse_mode": "HTML"})
-                edited += 1
-                time.sleep(1)
-                continue
-            except RuntimeError as exc:  # пост без фото (ушёл текстом) — правим только текст
-                log.warning("пост %s/%s: фото не заменено (%s)", post.channel, post.message_id, exc)
-        common = {"chat_id": post.channel, "message_id": post.message_id, "parse_mode": "HTML"}
-        for method, extra in (("editMessageCaption", {"caption": text}),
-                              ("editMessageText", {"text": text, "link_preview_options": {"is_disabled": True}})):
-            try:
-                bot.call(method, **common, **extra)
-                edited += 1
-                break
-            except RuntimeError as exc:
-                if "not modified" in str(exc):
-                    break
-                # пост без фото — у него нет подписи, правим текст; иначе пробуем следующий способ
+        try:
+            edited += _refresh_post(bot, post, lot, format_post(lot, footer, post.channel, badges.get(lot.id)),
+                                    badges.get(lot.id))
+        except (RuntimeError, httpx.HTTPError) as exc:  # обрыв связи на одном посте не останавливает остальные
+            log.warning("пост %s/%s: не переписан (%s)", post.channel, post.message_id, exc)
         time.sleep(1)
     log.info("переписано постов: %d из %d", edited, len(posts))
     return edited
