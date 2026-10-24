@@ -20,6 +20,11 @@ def test_parse_code():
     assert parse_code("c-7") == Lead("consult", 7) and parse_code("check-7") == Lead("check", 7)
     assert parse_code("c") == Lead("consult")
     assert parse_code("q-r0_1").regions == ["Алматы", "Астана"]
+    down = parse_code("q-ca-tdp")
+    assert down.sale_types == ["auction_down", "direct"] and down.describe().endswith("аукцион на понижение, прямая продажа")
+    assert "sale_type=auction_down&sale_type=direct" in down.catalog_url()
+    assert not down.matches(Lot(category="apartment", sale_type="auction", flags=[]))
+    assert down.matches(Lot(category="apartment", sale_type="direct", flags=[]))
     assert parse_code("q-r99") is None and parse_code("hello world") is None and parse_code("abc") is None
 
 

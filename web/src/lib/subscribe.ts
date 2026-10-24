@@ -20,6 +20,7 @@ const ORG = {
   arrested: "a", bank_balance: "b", bank_pledge: "z", court: "s",
   state: "g", bankrupt: "k", tax_debtor: "t", confiscated: "f",
 } as const;
+const SALE = { auction: "a", auction_down: "d", direct: "p", tender: "k" } as const;
 
 const letters = (ids: string[], map: Record<string, string>) => ids.map((id) => map[id]).filter(Boolean).join("");
 const mln = (v: string) => (v ? Math.round(Number(v) / 1_000_000) : 0);
@@ -38,6 +39,8 @@ export function searchCode(f: Filters): string | null {
   if (f.area_min) parts.push(`s${Math.round(Number(f.area_min))}`);
   const origins = letters(f.origin, ORG);
   if (origins) parts.push(`o${origins}`);
+  const sales = letters(f.sale_type, SALE);
+  if (sales) parts.push(`t${sales}`);
   if (!parts.length) return null;
   return `q-${parts.join("-")}`.slice(0, 64);
 }

@@ -11,7 +11,7 @@ import { LotImage } from "@/components/LotImage";
 import { SaveSearch } from "@/components/SaveSearch";
 import type { Lot, Meta } from "@/lib/api";
 import { loadLots } from "@/lib/catalog-data";
-import { PAGE_SIZE, SORTS, applyFilters, groupParkings, parseFilters, type ParkingGroup } from "@/lib/filter";
+import { PAGE_SIZE, SORTS, applyFilters, groupParkings, parseFilters, saleTypeOptions, type ParkingGroup } from "@/lib/filter";
 import { CATEGORY_PLURAL, ORIGIN_LABELS, SOURCE_LABELS, formatPriceShort, plural } from "@/lib/format";
 import { FEATURES } from "@/lib/features";
 import { BOT_USERNAME, botLink, searchCode } from "@/lib/subscribe";
@@ -225,6 +225,19 @@ export function Catalog({ meta, initial }: { meta: Meta; initial: Lot[] }) {
             </div>
             <p className="mt-1 text-xs text-muted">Для квартир и коммерции</p>
           </div>
+
+          <fieldset>
+            <legend className="label">Вид торгов</legend>
+            <div className="space-y-1">
+              {saleTypeOptions(lots, f.sale_type).map((o) => (
+                <label key={o.id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="sale_type" value={o.id} defaultChecked={f.sale_type.includes(o.id)} />
+                  <span className="flex-1">{o.title}</span>
+                  {o.count !== null && <span className="text-xs text-muted">{o.count}</span>}
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
           <fieldset>
             <legend className="label">Вид продажи</legend>

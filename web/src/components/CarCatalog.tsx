@@ -13,6 +13,7 @@ import {
   CAR_PAGE_SIZE, CAR_SORTS, VEHICLE_TYPES, applyCarFilters, carName, carOptions, carSpecs, parseCarFilters, type Car,
 } from "@/lib/cars";
 import { ORIGIN_LABELS, SALE_TYPE_LABELS, SOURCE_LABELS, formatDate, formatPrice, formatPriceShort, plural } from "@/lib/format";
+import { saleTypeOptions } from "@/lib/filter";
 
 export function CarCard({ car }: { car: Car }) {
   const isAuction = car.sale_type === "auction" || car.sale_type === "auction_down";
@@ -191,6 +192,19 @@ export function CarCatalog({ cars }: { cars: Car[] }) {
               <option value="вариатор">Вариатор</option>
             </select>
           </div>
+
+          <fieldset>
+            <legend className="label">Вид торгов</legend>
+            <div className="space-y-1">
+              {saleTypeOptions(cars, f.sale_type).map((o) => (
+                <label key={o.id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" name="sale_type" value={o.id} defaultChecked={f.sale_type.includes(o.id)} />
+                  <span className="flex-1">{o.title}</span>
+                  {o.count !== null && <span className="text-xs text-muted">{o.count}</span>}
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
           <fieldset>
             <legend className="label">Вид продажи</legend>

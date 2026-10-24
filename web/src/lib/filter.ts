@@ -1,5 +1,6 @@
 // Фильтрация и сортировка каталога в браузере (повторяет логику /api/lots бэкенда).
 import type { Lot } from "./api";
+import { SALE_TYPE_LABELS } from "./format";
 
 export const PAGE_SIZE = 24;
 
@@ -19,6 +20,7 @@ export type Filters = {
   category: string[];
   source: string[];
   origin: string[];
+  sale_type: string[]; // вид торгов: аукцион, на понижение, прямая продажа
   region: string[]; // несколько: «Алматы» и «Астана»
   city: string[]; // города внутри областей: «Караганда»
   district: string[]; // «Алматы|Бостандыкский район» — район привязан к городу
@@ -41,6 +43,7 @@ export function parseFilters(params: URLSearchParams): Filters {
     category: params.getAll("category"),
     source: params.getAll("source"),
     origin: params.getAll("origin"),
+    sale_type: params.getAll("sale_type"),
     region: params.getAll("region").filter(Boolean),
     city: params.getAll("city").filter(Boolean),
     district: params.getAll("district").filter(Boolean),
@@ -56,6 +59,14 @@ export function parseFilters(params: URLSearchParams): Filters {
     sort: params.get("sort") ?? "new",
     page: Math.max(1, Number(params.get("page")) || 1),
   };
+}
+
+/** Варианты фильтра «Вид торгов» с числом лотов (null — каталог ещё грузится). Редкий «Конкурс» (сейчас 2 лота)
+ *  показываем, только когда таких наберётся хотя бы 10 или он уже выбран. */
+export function saleTypeOptions(items: { sale_type: string | null }[] | null, selected: string[]) {
+  return Object.entries(SALE_TYPE_LABELS)
+    .map(([id, title]) => ({ id, title, count: items ? items.filter((x) => x.sale_type === id).length : null }))
+    .filter((o) => selected.includes(o.id) || (o.id === "tender" ? (o.count ?? 0) >= 10 : o.count !== 0));
 }
 
 /** Лоты, которые в общей выдаче опускаем ниже: паркинги, «прочее», земля дешевле 1 млн ₸, без цены. */
@@ -111,6 +122,7 @@ export function applyFilters(lots: Lot[], f: Filters): Lot[] {
     if (f.category.length && !f.category.includes(lot.category)) return false;
     if (f.source.length && !f.source.includes(lot.source)) return false;
     if (f.origin.length && !f.origin.includes(lot.origin)) return false;
+    if (f.sale_type.length && !f.sale_type.includes(lot.sale_type ?? "")) return false;
     if ((f.region.length || f.city.length) && !f.region.includes(lot.region ?? "") && !f.city.includes(lot.city ?? "")) {
       return false;
     }

@@ -60,6 +60,7 @@ export type CarFilters = {
   price_max: string;
   transmission: string;
   origin: string[];
+  sale_type: string[];
   sort: string;
   page: number;
 };
@@ -78,6 +79,7 @@ export function parseCarFilters(p: URLSearchParams): CarFilters {
     price_max: p.get("price_max") ?? "",
     transmission: p.get("transmission") ?? "",
     origin: p.getAll("origin"),
+    sale_type: p.getAll("sale_type"),
     sort: p.get("sort") ?? "new",
     page: Math.max(1, Number(p.get("page")) || 1),
   };
@@ -97,7 +99,8 @@ export function applyCarFilters(cars: Car[], f: CarFilters): Car[] {
     (pMin === null || (c.price ?? 0) >= pMin) &&
     (pMax === null || (c.price ?? Infinity) <= pMax) &&
     (!f.transmission || (c.transmission ?? "").toLowerCase().includes(f.transmission.toLowerCase())) &&
-    (!f.origin.length || f.origin.includes(c.origin)),
+    (!f.origin.length || f.origin.includes(c.origin)) &&
+    (!f.sale_type.length || f.sale_type.includes(c.sale_type ?? "")),
   );
   const by = {
     price_asc: (a: Car, b: Car) => (a.price ?? Infinity) - (b.price ?? Infinity),

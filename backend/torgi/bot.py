@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session
 
 from torgi.config import settings
 from torgi.models import BotState, Lot, Subscription, utcnow
-from torgi.normalize import CATEGORIES, ORIGINS, REGIONS
+from torgi.normalize import CATEGORIES, ORIGINS, REGIONS, SALE_TYPES
 from torgi.telegram import INSTAGRAM, TelegramBot, _money, channels, matches_channel, total_phrase
 
 log = logging.getLogger(__name__)
@@ -39,6 +39,7 @@ log = logging.getLogger(__name__)
 CAT = {"a": "apartment", "h": "house", "c": "commercial", "l": "land", "p": "parking", "i": "industrial", "o": "other"}
 ORG = {"a": "arrested", "b": "bank_balance", "z": "bank_pledge", "s": "court",
        "g": "state", "k": "bankrupt", "t": "tax_debtor", "f": "confiscated"}
+SALE = {"a": "auction", "d": "auction_down", "p": "direct", "k": "tender"}
 CATEGORY_PLURAL = {"apartment": "Квартиры", "house": "Дома", "commercial": "Коммерция", "land": "Земля",
                    "parking": "Паркинги", "industrial": "Промбазы", "other": "Прочее"}
 ALMATY = timezone(timedelta(hours=5))  # весь Казахстан в UTC+5
@@ -67,6 +68,7 @@ class SearchFilter:
     ppm_max: float | None = None
     area_min: float | None = None
     origins: list[str] = field(default_factory=list)
+    sale_types: list[str] = field(default_factory=list)
 
     def matches(self, lot: Lot) -> bool:
         # машины — только по подписке именно на машины: «все объекты» значит всю недвижимость
@@ -86,6 +88,8 @@ class SearchFilter:
             return False
         if self.origins and lot.origin not in self.origins:
             return False
+        if self.sale_types and lot.sale_type not in self.sale_types:
+            return False
         return not lot.flags
 
     def describe(self) -> str:
@@ -101,6 +105,8 @@ class SearchFilter:
             parts.append(f"от {self.area_min:g} м²")
         if self.origins:
             parts.append(", ".join(ORIGINS[o].lower() for o in self.origins))
+        if self.sale_types:
+            parts.append(", ".join(SALE_TYPES[t].lower() for t in self.sale_types))
         return " · ".join(parts)
 
     def catalog_url(self) -> str:
@@ -111,6 +117,7 @@ class SearchFilter:
             if value:
                 q.append((key, f"{value:.0f}"))
         q += [("origin", o) for o in self.origins]
+        q += [("sale_type", t) for t in self.sale_types]
         q += [("utm_source", "telegram"), ("utm_medium", "bot")]
         return f"{settings.site_url}/lots/?{urlencode(q)}"
 
@@ -160,6 +167,8 @@ def parse_code(code: str) -> SearchFilter | LotWatch | Lead | None:
                 f.area_min = float(value)
             elif key == "o":
                 f.origins = [ORG[ch] for ch in value if ch in ORG]
+            elif key == "t":
+                f.sale_types = [SALE[ch] for ch in value if ch in SALE]
         except (ValueError, IndexError):
             return None
     return f
