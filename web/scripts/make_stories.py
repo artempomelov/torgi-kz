@@ -43,13 +43,15 @@ POSTS = [{354, 1704, 1280, 2901, 3678},  # «ТОП-5 Алматы» 14.10
          {1583, 1206, 109, 1454, 105}]  # «ТОП-5 квартир с ремонтом в Алматы» 17.10
 POSTS += [{x["id"] for x in pick["lots"]} for pick in ig.PICKS]
 MAX_REPEATS = 2
+# плитка мозаики берёт обложку лота; здесь — другое фото (номер в лоте), если на обложке люди или портреты
+MOSAIC_PHOTOS = {390: 4, 414: 8}
 
 STORIES = {
-    "lot_of_day": {"id": 138, "photos": [8, 6, 9], "city": "Астана"},
+    "lot_of_day": {"id": 189, "photos": [5, 3, 6], "city": "Астана"},
     "countdown": None,  # {"id": …, "photos": […], "title": …} — когда есть презентабельный лот с торгами через 3–10 дней
-    "second": "kvartiry-regiony",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
+    "second": "doma",  # вторая история — мозаика этого раздела ТОПа (варианты — в variants/)
     # третья (если нет «До торгов») — раздел «Авто»: машина и фото без госномера и людей; не те, что в карусели ТОПа
-    "cars": [(4896, 4), (4870, 3), (4915, 2), (4912, 0), (4890, 2), (4871, 3)],
+    "cars": [(4838, 1), (4857, 2), (4919, 1), (4899, 1), (4903, 0), (4859, 1)],
 }
 
 
@@ -133,7 +135,7 @@ def story_numbers(meta: dict) -> Image.Image:
     img, d = canvas(ig.COBALT)
     header(d, "Сейчас на torgi.kz")
     ig.house(d, W // 2, 420, 0.8, ig.WHITE, arrow=ig.INK)
-    total = f"{meta['total']:,}".replace(",", " ")
+    total = "3 000+"  # число лотов в публичных текстах не обновляем (решение владельца от 22–24.10.2026)
     d.text((W // 2, 860), total, font=ig.font(ig.BLACK, 170), fill=ig.WHITE, anchor="mm")
     d.text((W // 2, 990), "объектов с торгов", font=ig.font(ig.BOLD, 52), fill=ig.WHITE, anchor="mm")
     counts = {c["id"]: c["count"] for c in meta["categories"]}
@@ -274,7 +276,8 @@ def main():
         if repeats > MAX_REPEATS or len(chosen) < 6:
             print(f"  мозаика {slug}: {repeats} лотов из одного поста — повторяет пост, пропускаем")
             continue
-        items = [(full[x["id"]], x, ig.fetch_photo(x.get("image") or (full[x["id"]]["images"] or [None])[0]))
+        items = [(full[x["id"]], x, ig.fetch_photo(full[x["id"]]["images"][MOSAIC_PHOTOS[x["id"]]] if x["id"] in MOSAIC_PHOTOS
+                                                   else x.get("image") or (full[x["id"]]["images"] or [None])[0]))
                  for x in chosen]
         best = max(REGION_CAP if x.get("discount_note") else x["discount_pct"] for _, x, _ in items)
         n = len(section["items"])
