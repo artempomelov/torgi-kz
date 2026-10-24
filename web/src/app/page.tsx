@@ -7,7 +7,7 @@ import { TopLotCard } from "@/components/TopLotCard";
 import type { Lot } from "@/lib/api";
 import { getCars, getLots, getMeta, getTop, getUpcomingAuctions } from "@/lib/data";
 import { applyFilters, parseFilters } from "@/lib/filter";
-import { CATEGORY_PLURAL, plural } from "@/lib/format";
+import { CATEGORY_PLURAL } from "@/lib/format";
 import { latestLots, pickShowcase } from "@/lib/insights";
 
 // Готовые подборки на главной: ссылка в каталог с фильтрами и число объектов в ней
@@ -45,24 +45,23 @@ export default function Home() {
   // на главной — свежие легковые с фото, разных марок
   const carPicks = cars.filter((c) => c.vehicle_type === "car" && c.images.length > 1 && c.brand)
     .filter((c, i, all) => all.findIndex((x) => x.brand === c.brand) === i).slice(0, 4);
-  const total = meta.total + cars.length;
 
   return (
     <div>
       <section className="hero-bg border-b border-border">
         <div className="mx-auto max-w-7xl px-4 py-12 md:py-16">
-          <h1 className="max-w-3xl text-3xl font-bold leading-tight text-foreground md:text-5xl">
+          <h1 className="text-3xl font-bold leading-tight text-foreground md:text-5xl lg:text-[min(3.3vw,2.85rem)]">
             Недвижимость и автотранспорт с торгов Казахстана
           </h1>
           <div className="mt-4">
             <AiBadge />
           </div>
-          <p className="mt-4 max-w-2xl text-base text-muted md:text-lg">
-            Полная база: {total.toLocaleString("ru-RU")} {plural(total, ["объект", "объекта", "объектов"])} —
+          <p className="mt-4 text-base text-muted md:text-lg">
+            Полная база: 3&nbsp;000+ объектов —
             квартиры, дома, коммерция, земля, автомобили и спецтехника. Арестованное имущество, госимущество
             и приватизация, имущество банкротов, залоги и имущество банков.
           </p>
-          <form action="/lots/" className="mt-8 flex max-w-2xl flex-col gap-2 sm:flex-row">
+          <form action="/lots/" className="mt-8 flex flex-col gap-2 sm:flex-row">
             <input
               name="q"
               placeholder="Город или улица"

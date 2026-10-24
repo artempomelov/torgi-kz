@@ -433,15 +433,18 @@ AI_LINE = "✨ Первый агрегатор торгов с использо�
 BOT_SHORT_ABOUT = f"{HEADLINE}\n{AI_LINE}\ntorgi.kz"
 
 
-def total_phrase(total: int | None) -> str:
-    """«более 3 300» — число активных лотов, округлённое вниз до сотен, чтобы текст менялся не каждый день."""
-    return f"более {total // 100 * 100:,}".replace(",", " ") if total and total >= 1000 else ""
+# число лотов в публичных текстах — везде одно и то же «3 000+» и не обновляется (решение владельца от 22–24.10.2026)
+PUBLIC_TOTAL = "3 000+"
+
+
+def total_phrase(total: int | None = None) -> str:
+    """Число лотов для описаний и ответов бота: фиксированное «3 000+», а не живой счётчик."""
+    return PUBLIC_TOTAL
 
 
 def channel_about(total: int | None = None) -> dict[str, str]:
-    count = f" — {total_phrase(total)} объектов" if total_phrase(total) else ""
     return {
-        "@torgi_kz_news": f"{HEADLINE}\n{AI_LINE}\n{count.removeprefix(' — ').capitalize() or 'Полная база'}: жильё, "
+        "@torgi_kz_news": f"{HEADLINE}\n{AI_LINE}\n{total_phrase(total)} объектов: жильё, "
                           f"коммерция, земля, авто. {KINDS}\nАвто → {AUTO_CHANNEL}\n{LINKS}",
         AUTO_CHANNEL: f"Автомобили и спецтехника с торгов Казахстана: марка, год, цена и фото.\n{AI_LINE}\n"
                       f"{HUB_LINE}\n{LINKS}",

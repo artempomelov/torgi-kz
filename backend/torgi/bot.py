@@ -237,7 +237,7 @@ GENERAL_REPLY = (
 def general_reply(session: Session) -> str:
     active = session.scalar(select(func.count()).select_from(Lot).where(Lot.status == "active")) or 0
     return GENERAL_REPLY.format(site=settings.site_url, utm="utm_source=telegram&amp;utm_medium=bot",
-                                count=total_phrase(active) or "сотни", instagram=INSTAGRAM)
+                                count=total_phrase(active), instagram=INSTAGRAM)
 
 
 def _admin_chats(session: Session) -> list[int]:

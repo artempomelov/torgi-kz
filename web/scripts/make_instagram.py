@@ -411,7 +411,7 @@ def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
                                [r["photos"][0][0] for r in rows])]
     slides += [collage_slide(r["lot"], r["title"], r["place"], r["photos"], r["estimate"], r["discount"], i, r["note"])
                for i, r in enumerate(rows, 1)]
-    slides.append(cta_slide(f"Ещё {total} объектов с торгов", [
+    slides.append(cta_slide(f"Ещё {total} лотов с торгов", [
         "Больше объектов ниже рынка — в разделе «ТОП» на torgi.kz",
         "Новые лоты каждый день — в Telegram @torgi_kz_news",
         "Бесплатная консультация по любому лоту",
@@ -433,7 +433,8 @@ def main():
     full = {lot["id"]: lot for lot in json.loads((DATA / "lots-full.json").read_text(encoding="utf-8"))}
     meta = json.loads((DATA / "meta.json").read_text(encoding="utf-8"))
     index = MarketIndex.from_json(DATA / "market-index.json")
-    total = f"{meta['total']:,}".replace(",", " ")
+    # число лотов в публичных текстах — «3 000+», как в шапке профиля; не обновляем (решение владельца от 22.10.2026)
+    total = "3 000+"
 
     # профиль
     prof = OUT / "profile"

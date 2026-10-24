@@ -44,7 +44,7 @@ export function Faq({ className = "" }: { className?: string }) {
     mainEntity: ITEMS.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })),
   };
   return (
-    <section className={`mx-auto max-w-4xl px-4 ${className}`}>
+    <section className={`mx-auto max-w-7xl px-4 ${className}`}>
       <h2 className="mb-4 text-2xl font-bold">Частые вопросы</h2>
       <div className="divide-y divide-border rounded-xl border border-border bg-surface">
         {ITEMS.map(([q, a]) => (

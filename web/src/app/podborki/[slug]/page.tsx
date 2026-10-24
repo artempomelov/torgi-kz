@@ -67,7 +67,7 @@ export default async function CollectionPage({ params }: PageProps<"/podborki/[s
         <Link href="/podborki/" className="hover:text-brand-ink">Подборки</Link>
       </nav>
       <h1 className="text-3xl font-bold leading-tight md:text-4xl">{c.title}</h1>
-      <p className="mt-3 max-w-3xl text-muted">
+      <p className="mt-3 text-muted">
         {c.lead}. Сейчас в продаже {items.length} {plural(items.length, ["объект", "объекта", "объектов"])}
         {minPrice ? <>, цены от {formatPrice(minPrice)}</> : null}
         {medianPpm ? <>, типичная цена — {formatPrice(medianPpm)} за м²</> : null}

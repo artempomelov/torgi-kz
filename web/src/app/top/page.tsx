@@ -21,7 +21,7 @@ export default function TopPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <h1 className="text-3xl font-bold md:text-4xl">ТОП выгодных объектов</h1>
-      <p className="mt-3 max-w-3xl text-muted">
+      <p className="mt-3 text-muted">
         Объекты с торгов и из залогов банков, цена которых заметно ниже рынка. Рынок — это оценка torgi.kz по
         объявлениям о продаже похожих объектов в том же городе и районе: для квартир — с тем же числом комнат.
         Рейтинг обновляется вместе с каталогом.
@@ -54,7 +54,7 @@ export default function TopPage() {
         </section>
       ))}
 
-      <section className="mt-14 max-w-3xl rounded-xl border border-border bg-surface p-5 text-sm leading-6 text-muted">
+      <section className="mt-14 rounded-xl border border-border bg-surface p-5 text-sm leading-6 text-muted">
         <h2 className="mb-2 text-base font-semibold text-foreground">Как мы считаем выгоду</h2>
         <p>
           Для каждого объекта берём медианную цену квадратного метра в объявлениях о продаже похожих объектов: тот же

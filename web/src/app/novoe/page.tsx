@@ -25,7 +25,7 @@ export default function NewPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <h1 className="text-3xl font-bold md:text-4xl">Новое на торгах</h1>
-      <p className="mt-3 max-w-3xl text-muted">Последние объекты, добавленные на torgi.kz.</p>
+      <p className="mt-3 text-muted">Последние объекты, добавленные на torgi.kz.</p>
 
       {[...days].map(([d, items]) => (
         <section key={d} className="mt-8">

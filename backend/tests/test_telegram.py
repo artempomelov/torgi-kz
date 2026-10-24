@@ -50,7 +50,7 @@ def test_about_fits_limits_and_updates_only_changed():
     assert all(len(text) <= 255 for text in about.values())
     assert len(telegram.BOT_SHORT_ABOUT) <= 120
     assert all(telegram.INSTAGRAM in text and "torgi.kz ·" in text for text in about.values())
-    assert "Более 123 400 объектов" in about["@torgi_kz_news"] and "@torgi_kz_news" in about["@torgi_kz_biz"]
+    assert "3 000+ объектов" in about["@torgi_kz_news"] and "@torgi_kz_news" in about["@torgi_kz_biz"]
 
     class FakeBot:
         def __init__(self):
