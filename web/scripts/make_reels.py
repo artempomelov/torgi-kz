@@ -3,7 +3,8 @@
     uv run --project backend --with pillow --with httpx --with imageio-ffmpeg python web/scripts/make_reels.py candidates
     uv run --project backend --with pillow --with httpx --with imageio-ffmpeg python web/scripts/make_reels.py 1454 4,1,2,3,5
 
-candidates — контактные листы лучших неопубликованных лотов с плашкой (квартиры Алматы и Астаны, 5+ фото):
+candidates — контактные листы лучших неопубликованных лотов с плашкой (квартиры Алматы и Астаны, 5+ фото;
+сначала недорогие со скидкой от 30%):
 по ним глазами выбираем лот и 4–5 фото без людей, номеров и мусора (как для каруселей). Второй вызов — ролик:
 marketing/instagram/<дата>/reels/<id>.mp4, обложка cover.jpg и caption.txt. Звука нет: музыку добавляем
 в приложении Instagram при публикации (трендовый трек даёт охват). Сверху ~250 px и снизу ~420 px Instagram
@@ -38,17 +39,28 @@ def title(lot: dict) -> str:
     return f"{rooms} {CITY_IN.get(lot.get('city'), 'в г. ' + str(lot.get('city')))}"
 
 
+MIN_PCT = 30  # лучше всего заходят недорогие квартиры Алматы и Астаны со скидкой от 30% (владелец, 25.10.2026)
+
+
+def pool(skip: set[int]) -> list[dict]:
+    """Квартиры Алматы и Астаны с плашкой: сначала со скидкой от 30% — от дешёвых к дорогим, потом остальные по скидке."""
+    lots = json.loads((ig.DATA / "lots-full.json").read_text(encoding="utf-8"))
+    out = [x for x in lots if x.get("market") and x["category"] == "apartment" and x.get("city") in CITY_IN
+           and x.get("status", "active") == "active" and len(x.get("images") or []) >= 5 and x["id"] not in skip
+           and not x.get("duplicate_of") and "черновая" not in x["market"]["where"]]
+    strong = lambda x: x["market"]["over"] or x["market"]["pct"] >= MIN_PCT  # noqa: E731
+    return sorted(out, key=lambda x: (not strong(x), x["price"] if strong(x) else -x["market"]["pct"]))
+
+
 def candidates(n: int = 8):
     """Контактные листы: лучшие лоты с плашкой, которых ещё не было в Reels и в постах/сторис."""
-    lots = json.loads((ig.DATA / "lots-full.json").read_text(encoding="utf-8"))
-    skip = used() | {x["id"] for pick in ig.PICKS for x in pick["lots"]}
-    pool = [x for x in lots if x.get("market") and x["category"] == "apartment" and x.get("city") in CITY_IN
-            and len(x.get("images") or []) >= 5 and x["id"] not in skip and not x.get("duplicate_of")
-            and "черновая" not in x["market"]["where"]]
-    pool.sort(key=lambda x: (-x["market"]["pct"] if not x["market"]["over"] else -30))
-    out = OUT / "candidates"
+    sheets(pool(used() | {x["id"] for pick in ig.PICKS for x in pick["lots"]})[:n], OUT / "candidates")
+
+
+def sheets(lots: list[dict], out: Path):
+    """Контактный лист на лот: до 12 фото с номерами — по ним глазами выбираем кадры без людей и мусора."""
     out.mkdir(parents=True, exist_ok=True)
-    for x in pool[:n]:
+    for x in lots:
         thumbs = [ig.fetch_photo(u) for u in x["images"][:12]]
         sheet = Image.new("RGB", (4 * 300, 3 * 250 + 60), "white")
         d = ImageDraw.Draw(sheet)
