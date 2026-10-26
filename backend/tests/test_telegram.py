@@ -169,3 +169,25 @@ def test_three_batches_a_day():
         return datetime(2026, 10, 21, hour - 5, 15, tzinfo=timezone.utc)
 
     assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 2, 2, 4, 4, 6, 6]
+
+
+def test_bank_slide_goes_last(monkeypatch):
+    """Рекламный слайд банка первой картинкой уходит в конец: обложка и плашка — на фото объекта."""
+    from PIL import Image, ImageDraw
+
+    from torgi import promo
+
+    slide = Image.new("RGB", (800, 600), "#0b2a1f")
+    ImageDraw.Draw(slide).rectangle((0, 0, 400, 120), fill="white")
+    photo = Image.effect_noise((800, 600), 80).convert("RGB")  # «фото» с деталями — не похоже на слайд
+    monkeypatch.setattr(promo, "SLIDES", {promo.dhash(slide): "тест"})
+    pictures = {"slide.jpg": slide.resize((1200, 900)), "room.jpg": photo, "kitchen.jpg": photo.rotate(90)}
+    monkeypatch.setattr(promo, "_download", lambda url, client: pictures[url])
+
+    lot = Lot(images=["slide.jpg", "room.jpg", "kitchen.jpg"], extra={"note": "x"})
+    assert promo.check_cover(lot, None)
+    assert lot.images == ["room.jpg", "kitchen.jpg", "slide.jpg"]
+    assert lot.extra == {"note": "x", "promo_images": ["slide.jpg"], "cover_checked": "room.jpg"}
+    assert not promo.check_cover(lot, None)  # уже проверено — фото больше не скачиваем
+    # источник прислал фото в старом порядке — известный слайд снова в конце
+    assert promo.promo_last(["slide.jpg", "room.jpg"], set(lot.extra["promo_images"])) == ["room.jpg", "slide.jpg"]

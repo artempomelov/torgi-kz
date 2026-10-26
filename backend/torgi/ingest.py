@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from torgi import normalize as nz
+from torgi import promo
 from torgi.config import settings
 from torgi.models import Lot, ParseRun, PriceChange, utcnow
 from torgi.parsers import PARSERS
@@ -53,6 +54,10 @@ def apply(session: Session, source: str, parsed: ParsedLot, existing: Lot | None
             for key, value in asdict(parsed).items():
                 if key in _SERVICE_FIELDS or key == "price" or _is_empty(value):
                     continue
+                if key == "images":  # рекламные слайды банка, найденные раньше, — снова в конец (torgi.promo)
+                    value = promo.promo_last(value, set((lot.extra or {}).get("promo_images") or []))
+                if key == "extra":  # отметки проверки обложки — служебные, источник их не знает
+                    value = {**value, **{k: v for k, v in (lot.extra or {}).items() if k in promo.EXTRA_KEYS}}
                 if getattr(lot, key) != value:
                     setattr(lot, key, value)
         lot.last_seen_at = now
@@ -117,6 +122,11 @@ def run_source(session: Session, source: str, http: HttpClient | None = None, fu
                     lot.status, lot.removed_at = "removed", now
                     stats.removed += 1
 
+        # рекламный слайд банка первой картинкой — в конец, чтобы обложка и плашка были на фото объекта
+        try:
+            promo.fix_covers(session, source, http)
+        except Exception:  # проверка обложек не должна ронять парсинг источника
+            log.exception("%s: проверка обложек не удалась", source)
         run.status = "ok"
     except Exception as exc:
         session.rollback()
