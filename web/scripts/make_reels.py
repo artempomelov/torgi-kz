@@ -2,13 +2,15 @@
 
     uv run --project backend --with pillow --with httpx --with imageio-ffmpeg python web/scripts/make_reels.py candidates
     uv run --project backend --with pillow --with httpx --with imageio-ffmpeg python web/scripts/make_reels.py 1454 4,1,2,3,5
+    uv run --project backend python web/scripts/make_reels.py published 1454
 
 candidates — контактные листы лучших неопубликованных лотов с плашкой (квартиры Алматы и Астаны, 5+ фото;
 сначала недорогие со скидкой от 30%):
 по ним глазами выбираем лот и 4–5 фото без людей, номеров и мусора (как для каруселей). Второй вызов — ролик:
 marketing/instagram/<дата>/reels/<id>.mp4, обложка cover.jpg и caption.txt. Звука нет: музыку добавляем
 в приложении Instagram при публикации (трендовый трек даёт охват). Сверху ~250 px и снизу ~420 px Instagram
-закрывает кадр интерфейсом — текст держим посередине. Использованные лоты — в marketing/instagram/reels-used.json.
+закрывает кадр интерфейсом — текст держим посередине. Ролик готовим на согласование, публикуем только по команде
+владельца (28.10.2026); после публикации — published <id>: лот попадает в marketing/instagram/reels-used.json.
 """
 
 import json
@@ -169,7 +171,6 @@ def render(lot_id: int, idx: list[int]):
                f"{ig.TG_LINE}\n\n"
                f"{HASHTAGS.get(city, '')} {COMMON_TAGS}")
     (OUT / f"{lot_id}-caption.txt").write_text(caption, encoding="utf-8")
-    USED.write_text(json.dumps(sorted(used() | {lot_id})), encoding="utf-8")
     print(out)
     print(caption)
 
@@ -183,6 +184,8 @@ def main():
     args = sys.argv[1:]
     if not args or args[0] == "candidates":
         candidates()
+    elif args[0] == "published":  # ролик вышел — лот больше не предлагаем
+        USED.write_text(json.dumps(sorted(used() | {int(args[1])})), encoding="utf-8")
     else:
         render(int(args[0]), [int(i) for i in args[1].split(",")])
 

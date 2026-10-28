@@ -2,11 +2,14 @@
 
     uv run --project backend --with pillow --with httpx python web/scripts/make_threads.py candidates
     uv run --project backend --with pillow --with httpx python web/scripts/make_threads.py 189 5,3,6,7
+    uv run --project backend python web/scripts/make_threads.py published 189
 
 candidates — те же кандидаты, что для Reels (недорогие квартиры Алматы и Астаны со скидкой от 30% — первыми),
-без лотов, которые уже были в Threads; в один день с Reels берём другой лот. Второй вызов — marketing/threads/<дата>/: 01–04.jpg, post.txt
-и preview.jpg; лот записывается в marketing/threads/used.json. Публикуем с веба: «Что нового?» → тема
-(«Квартира в Алматы» / «Квартира в Астане») → текст → 4 фото. Только скидка — без рыночных цен (решение от 23.10.2026).
+без лотов, которые уже были в Threads; в один день с Reels берём другой лот. Второй вызов — marketing/threads/<дата>/<id>/:
+01–04.jpg, post.txt и preview.jpg (у каждого лота своя папка — подготовки разных лотов друг друга не затирают).
+Пост готовим на согласование, публикуем только по команде владельца (28.10.2026) с веба: «Что нового?» → тема
+(«Квартира в Алматы» / «Квартира в Астане») → текст → убрать превью ссылки → 4 фото; после публикации —
+published <id>: лот попадает в marketing/threads/used.json. Только скидка — без рыночных цен (решение от 23.10.2026).
 """
 
 import json
@@ -59,14 +62,15 @@ def text(lot: dict) -> str:
 
 def render(lot_id: int, idx: list[int]):
     lot = {x["id"]: x for x in json.loads((ig.DATA / "lots-full.json").read_text(encoding="utf-8"))}[lot_id]
-    OUT.mkdir(parents=True, exist_ok=True)
+    out = OUT / str(lot_id)
+    out.mkdir(parents=True, exist_ok=True)
     frames = []
     for n, i in enumerate(idx, 1):
         # лента Threads обрезает широкие фото — кадр 4:5, чтобы плашка слева не срезалась
         img = ImageOps.fit(ig.fetch_photo(lot["images"][i]).convert("RGB"), (1080, 1350), Image.LANCZOS)
         if n == 1:
             img = draw(img, lot["market"])
-        img.save(OUT / f"{n:02}.jpg", quality=92)
+        img.save(out / f"{n:02}.jpg", quality=92)
         frames.append(img)
     h = 440
     strip = [f.resize((round(f.width * h / f.height), h)) for f in frames]
@@ -75,11 +79,10 @@ def render(lot_id: int, idx: list[int]):
     for s in strip:
         sheet.paste(s, (x, 0))
         x += s.width + 10
-    sheet.save(OUT / "preview.jpg", quality=88)
+    sheet.save(out / "preview.jpg", quality=88)
     post = text(lot)
-    (OUT / "post.txt").write_text(post, encoding="utf-8")
-    USED.write_text(json.dumps(sorted(used() | {lot_id})), encoding="utf-8")
-    print(OUT)
+    (out / "post.txt").write_text(post, encoding="utf-8")
+    print(out)
     print(post)
 
 
@@ -87,6 +90,8 @@ def main():
     args = sys.argv[1:]
     if not args or args[0] == "candidates":
         reels.sheets(reels.pool(used())[:8], OUT / "candidates")
+    elif args[0] == "published":  # пост вышел — лот больше не предлагаем
+        USED.write_text(json.dumps(sorted(used() | {int(args[1])})), encoding="utf-8")
     else:
         render(int(args[0]), [int(i) for i in args[1].split(",")])
 
