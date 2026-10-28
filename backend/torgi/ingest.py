@@ -127,7 +127,10 @@ def run_source(session: Session, source: str, http: HttpClient | None = None, fu
             promo.fix_covers(session, source, http)
         except Exception:  # проверка обложек не должна ронять парсинг источника
             log.exception("%s: проверка обложек не удалась", source)
-        run.status = "ok"
+        # ни одного лота при непустой базе — источник сломался или сменил вёрстку (E-Qazyna с 24.10.2026)
+        run.status = "ok" if stats.found or not active_before else "empty"
+        if run.status == "empty":
+            log.error("%s: источник не вернул ни одного лота при %d активных — проверьте парсер", source, active_before)
     except Exception as exc:
         session.rollback()
         run = session.merge(run)
@@ -143,3 +146,21 @@ def run_source(session: Session, source: str, http: HttpClient | None = None, fu
             http.close()
     log.info("%s: %s", source, stats)
     return stats
+
+
+AUCTIONS = ("auction", "auction_down", "tender")
+
+
+def close_finished(session: Session) -> int:
+    """Торги прошли, а источник ещё не снял лот (E-Qazyna и банки обновляются раз в сутки, а парсер может и сломаться):
+    статус «ended» — лот уходит из каталога, каналов и бота, страница остаётся с пометкой «Торги прошли».
+    Если источник снова выставит лот (повторные торги), apply() вернёт его в активные."""
+    now = utcnow()
+    lots = session.scalars(select(Lot).where(Lot.status == "active", Lot.sale_type.in_(AUCTIONS))).all()
+    ended = [lot for lot in lots if (when := lot.auction_end or lot.auction_start) and when < now]
+    for lot in ended:
+        lot.status, lot.removed_at = "ended", now
+    session.commit()
+    if ended:
+        log.info("торги прошли — снято с витрины: %d", len(ended))
+    return len(ended)

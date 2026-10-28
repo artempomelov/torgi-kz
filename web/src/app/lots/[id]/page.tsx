@@ -98,7 +98,9 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
 
       {lot.status !== "active" && (
         <div className="mt-4 rounded-lg border border-accent/40 bg-accent/15 p-3 text-sm text-accent-ink">
-          Объект снят с продажи у источника {formatDate(lot.last_seen_at)}.
+          {lot.status === "ended"
+            ? `Торги прошли ${formatDate(lot.auction_end ?? lot.auction_start!, true)}. Итоги — у продавца.`
+            : `Объект снят с продажи у источника ${formatDate(lot.last_seen_at)}.`}
         </div>
       )}
 
@@ -217,14 +219,16 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
             </div>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
-            <div className="text-sm font-semibold">Нужна помощь с покупкой?</div>
-            <a href={consultLink(lot.id)} target="_blank" rel="noopener noreferrer"
-               className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
-              Бесплатная консультация по лоту
-            </a>
-            <p className="text-xs text-muted">Ответим на вопросы и подскажем, что проверить перед покупкой, — в Telegram.</p>
-          </div>
+          {lot.status === "active" && (
+            <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
+              <div className="text-sm font-semibold">Нужна помощь с покупкой?</div>
+              <a href={consultLink(lot.id)} target="_blank" rel="noopener noreferrer"
+                 className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
+                Бесплатная консультация по лоту
+              </a>
+              <p className="text-xs text-muted">Ответим на вопросы и подскажем, что проверить перед покупкой, — в Telegram.</p>
+            </div>
+          )}
 
           {lot.status === "active" && (
             <div className="rounded-xl border border-border bg-surface p-4">

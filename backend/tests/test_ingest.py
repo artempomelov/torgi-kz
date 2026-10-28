@@ -91,6 +91,41 @@ def test_ingest_and_api(monkeypatch):
     assert json.loads((out / "meta.json").read_text(encoding="utf-8"))["gated"] is True
 
 
+def test_finished_auctions_leave_showcase(monkeypatch):
+    """Торги прошли, а источник лот ещё не снял — «ended» (из каталога, каналов и бота); повторные торги у источника
+    возвращают лот. Источник, не вернувший ни одного лота при непустой базе, — запуск «empty», а не «ok»."""
+    from datetime import timedelta
+
+    from torgi.models import ParseRun, utcnow
+
+    class EndedParser(FakeParser):
+        name = "ended"
+
+    monkeypatch.setitem(ingest.PARSERS, "ended", EndedParser)
+    init_db()
+    past, future = utcnow() - timedelta(hours=2), utcnow() + timedelta(days=3)
+    batch = [lot("past", 1_000_000, sale_type="auction", auction_start=past),
+             lot("down", 1_000_000, sale_type="auction_down", auction_start=past, auction_end=future),  # ещё идёт
+             lot("soon", 1_000_000, sale_type="auction", auction_start=future),
+             lot("direct", 1_000_000, sale_type="direct", auction_start=past)]
+    FakeParser.batches.append(batch)
+    with SessionLocal() as session:
+        ingest.run_source(session, "ended", http=object())
+        assert ingest.close_finished(session) >= 1
+        status = {x.source_id: x.status for x in session.query(Lot).filter_by(source="ended")}
+    assert status == {"past": "ended", "down": "active", "soon": "active", "direct": "active"}
+
+    FakeParser.batches.append([lot("past", 1_000_000, sale_type="auction", auction_start=future), *batch[1:]])
+    with SessionLocal() as session:
+        ingest.run_source(session, "ended", http=object())
+        assert session.query(Lot).filter_by(source="ended", source_id="past").one().status == "active"
+
+        FakeParser.batches.append([])
+        ingest.run_source(session, "ended", http=object())
+        last = session.query(ParseRun).filter_by(source="ended").order_by(ParseRun.id.desc()).first()
+        assert (last.status, last.found) == ("empty", 0)
+
+
 def test_export_gated_private(tmp_path):
     """Закрытый режим: адрес, контакты, ссылка — только в private.json; координаты в статике огрублены."""
     import json

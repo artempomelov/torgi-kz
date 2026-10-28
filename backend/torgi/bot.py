@@ -625,7 +625,8 @@ def notify(session: Session, bot: Bot, now: datetime) -> int:
         if sub.lot_id:
             lot = session.get(Lot, sub.lot_id)
             if lot is None or lot.status != "active":
-                text = "Объект, за которым вы следили, снят с продажи у источника."
+                text = ("Торги по объекту, за которым вы следили, прошли — итоги у продавца." if lot and lot.status == "ended"
+                        else "Объект, за которым вы следили, снят с продажи у источника.")
                 if lot:
                     text += f"\n{_lot_line(lot)}"
                 sub.active = False

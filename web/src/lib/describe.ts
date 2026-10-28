@@ -32,7 +32,9 @@ export function describeLot(lot: LotFull): string[] {
     }
     out.push(`${sentence}${how ? `; продажа: ${how}` : ""}.`);
   }
-  if (lot.auction_start) {
+  if (lot.status === "ended") {
+    out.push(`Торги прошли ${formatDate(lot.auction_end ?? lot.auction_start!, true)}.`);
+  } else if (lot.auction_start) {
     out.push(`Торги назначены на ${formatDate(lot.auction_start, true)}${
       lot.applications_deadline ? `, заявки принимаются до ${formatDate(lot.applications_deadline, true)}` : ""}${
       lot.deposit ? `, гарантийный взнос — ${formatPrice(lot.deposit)}` : ""}.`);

@@ -58,7 +58,7 @@ def main() -> None:
     if args.cmd == "initdb":
         init_db()
     elif args.cmd == "parse":
-        from torgi.ingest import run_source
+        from torgi.ingest import close_finished, run_source
 
         if unknown := [s for s in args.sources if s not in PARSERS]:
             ap.error(f"неизвестные источники: {', '.join(unknown)}; доступны: {', '.join(PARSERS)}")
@@ -70,6 +70,8 @@ def main() -> None:
                     run_source(session, name, full=args.full)
                 except Exception:
                     failed.append(name)
+        with SessionLocal() as session:  # каждые полчаса — и для источников, которые парсятся раз в сутки
+            close_finished(session)
         if failed:
             logging.error("Ошибки в источниках: %s", ", ".join(failed))
             sys.exit(1)
