@@ -49,6 +49,8 @@ ORIGIN = {
     "tax_debtor": "Имущество налогового должника", "confiscated": "Конфискат",
 }
 SALE = {"auction": "аукцион", "auction_down": "аукцион на понижение", "direct": "прямая продажа", "tender": "тендер"}
+MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября",
+          "ноября", "декабря"]
 # подписи ячеек коллажа по умолчанию: главное фото без подписи
 CELL_LABELS = {"apartment": ["", "кухня", "санузел", "дом"], "house": ["", "кухня", "санузел", "дом"],
                "commercial": ["", "", "", "здание"]}
@@ -401,8 +403,10 @@ def pick_post(pick: dict, full: dict, total: str) -> str:
     rows.sort(key=lambda r: -r["discount"])
     lo, hi = min(r["shown"] for r in rows), max(r["shown"] for r in rows)
     if pick.get("cover") == "house":
+        # под заголовком — дата подборки, без диапазона скидок (решение владельца от 30.10.2026)
+        today = date.today()
         slides = [cover_slide(pick["cover_title"].format(n=len(rows)),
-                              f"Торги и залоги банков: ниже рынка на {lo}–{hi}%", pick["kicker"])]
+                              f"Торги и залоги банков на {today.day} {MONTHS[today.month - 1]}", pick["kicker"])]
     else:
         slides = [mosaic_cover(pick["kicker"], pick["title"], f"ниже рынка на {lo}–{hi}%",
                                pick.get("subtitle", "Торги и залоги банков"),
