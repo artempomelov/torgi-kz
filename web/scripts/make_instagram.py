@@ -2,7 +2,7 @@
 
     uv run --project backend --with pillow python web/scripts/make_instagram.py
 
-Данные — web/data (выгрузка `torgi.cli export --market …` и market-index.json). Лоты для подборок
+Данные — web/data (выгрузка `torgi.cli export --market …`; скидка — с плашки сайта). Лоты для подборок
 отбираем глазами по контактным листам web/scripts/instagram_candidates.py и вписываем в PICKS.
 Результат — marketing/instagram/<дата>/:
   profile/      аватар, обложки «Актуального», тексты профиля (profile.md)
@@ -23,8 +23,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
-from torgi.market import MarketIndex  # noqa: E402
-from torgi.top import BIG_CITIES, REGION_DISCOUNT_CAP  # noqa: E402
+from torgi.top import REGION_DISCOUNT_CAP  # noqa: E402
 
 DATA = ROOT / "web" / "data"
 OUT = ROOT / "marketing" / "instagram" / date.today().isoformat()
@@ -207,7 +206,7 @@ def mosaic_cover(kicker: str, title: str, accent: str, subtitle: str, photos: li
 
 
 def collage_slide(lot: dict, title: str, place: str, photos: list[tuple[Image.Image | None, str]],
-                  estimate: float, discount: int, rank: int, note: str | None = None,
+                  estimate: float | None, discount: int, rank: int, note: str | None = None,
                   link: str = "torgi.kz/top") -> Image.Image:
     """Объект подборки: коллаж 2×2 (по умолчанию комната, кухня, санузел, дом) и белая плашка с ценой.
     note — «более 30%» вместо точной скидки (вне Алматы и Астаны оценка грубее, как в ТОПе на сайте)."""
@@ -375,28 +374,27 @@ PICKS = [
 ]
 
 
-def pick_post(pick: dict, full: dict, index: MarketIndex, total: str) -> str:
+def pick_post(pick: dict, full: dict, total: str) -> str:
     rows = []
     for p in pick["lots"]:
         lot = full.get(p["id"])
         if not lot or not lot.get("price"):
             print(f"  {pick['folder']}: лота {p['id']} нет в выгрузке (снят с торгов?) — пропускаем")
             continue
-        city = lot.get("city") or lot.get("region")
-        district = p.get("district", "").split(",")[0] or lot.get("district")
-        est = index.estimate(lot["category"], city, district, lot.get("rooms"), lot.get("area_m2"))
-        if est is None:
-            print(f"  {pick['folder']}: для лота {p['id']} нет оценки рынка — пропускаем")
+        # скидка — с плашки сайта (lot["market"]), как в Reels и Threads: перейдя по ссылке, человек видит ту же цифру
+        market = lot.get("market")
+        if not market:
+            print(f"  {pick['folder']}: у лота {p['id']} на сайте нет плашки скидки — пропускаем")
             continue
+        city = lot.get("city") or lot.get("region")
         head, _, place = lot["headline"].partition(" — ")
         labels = CELL_LABELS.get(lot["category"], CELL_LABELS["commercial"])
         photos = []
         for k, spec in enumerate(p["photos"]):
             i, label = spec if isinstance(spec, tuple) else (spec, labels[k])
             photos.append((fetch_photo(lot["images"][i]), label))
-        discount = round((1 - lot["price"] / est.value) * 100)
-        capped = city not in BIG_CITIES and discount > REGION_DISCOUNT_CAP
-        rows.append({"lot": lot, "title": p.get("title") or head, "photos": photos, "estimate": round(est.value, -4),
+        discount, capped = market["pct"], market["over"]
+        rows.append({"lot": lot, "title": p.get("title") or head, "photos": photos, "estimate": None,
                      "place": f"{city}, {p['district']}" if p.get("district") else place, "discount": discount,
                      "note": f"более {REGION_DISCOUNT_CAP}%" if capped else None,
                      "shown": REGION_DISCOUNT_CAP if capped else discount})
@@ -432,7 +430,6 @@ def main():
         old.unlink()
     full = {lot["id"]: lot for lot in json.loads((DATA / "lots-full.json").read_text(encoding="utf-8"))}
     meta = json.loads((DATA / "meta.json").read_text(encoding="utf-8"))
-    index = MarketIndex.from_json(DATA / "market-index.json")
     # число лотов в публичных текстах — «3 000+», как в шапке профиля; не обновляем (решение владельца от 22.10.2026)
     total = "3 000+"
 
@@ -477,7 +474,7 @@ def main():
 
     # 2, 3, 6. подборки недели: Алматы, Астана, бизнес
     for pick in PICKS:
-        captions.append((pick["folder"], pick_post(pick, full, index, total)))
+        captions.append((pick["folder"], pick_post(pick, full, total)))
 
     # 4. как купить
     steps = [
