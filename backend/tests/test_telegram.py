@@ -72,8 +72,9 @@ def test_about_fits_limits_and_updates_only_changed():
     assert not any(m == "setMyShortDescription" for m, _ in bot.calls)
 
 
-def test_main_channel_mix():
-    """Основной канал: из 6 постов 4 квартиры Алматы и Астаны, 1 машина, 1 коммерция или квартира в регионах;
+def test_main_channel_mix(monkeypatch):
+    """Основной канал: из 6 постов 4 квартиры Алматы и Астаны, 1 машина, 1 коммерция или квартира в регионах
+    (при 3 постах в день — за два дня);
     дома и земля не идут; внутри категории — сначала лоты с плашкой «−N% к рынку». Городской канал — тоже сначала
     с плашкой, потом остальные; ещё не опубликованные старые лоты — тоже кандидаты."""
     from datetime import timedelta
@@ -130,6 +131,24 @@ def test_main_channel_mix():
         assert shops[0] in picked and len(picked) == 6  # коммерция с плашкой — раньше коммерции без неё
         assert old_flat in telegram.candidate_lots(session, ch, badges)  # помечена при первом запуске, не опубликована
 
+        def publish(lots, when):
+            for x in lots:
+                post = session.scalar(select(ChannelPost).where(ChannelPost.lot_id == x.id, ChannelPost.channel == ch))
+                post = post or ChannelPost(lot_id=x.id, channel=ch)
+                post.message_id, post.posted_at = 2, when
+                session.add(post)
+            session.commit()
+
+        # 3 поста в день: доли считаются за вчера и сегодня — машина и коммерция выходят через день
+        publish(picked, now - timedelta(days=1))
+        day2 = telegram.mixed_lots(session, ch, 3, badges)
+        assert sorted(x.category for x in day2) == ["apartment", "apartment", "vehicle"]
+        publish(day2, now)
+        monkeypatch.setattr(telegram, "utcnow", lambda: now + timedelta(days=1))
+        day3 = telegram.mixed_lots(session, ch, 3, badges)
+        assert regional in day3 and not any(x.category == "vehicle" for x in day3)  # слот «коммерция или регионы»
+        monkeypatch.undo()
+
         in_city = telegram.channel_lots(session, city, 50, {"region": "Алматы"}, badges)
         assert plain in in_city and not set(cars) & set(in_city) and all(x.region == "Алматы" for x in in_city)
         first_plain = next(i for i, x in enumerate(in_city) if x.id not in badges)
@@ -162,13 +181,13 @@ def test_market_badge_on_photo(tmp_path):
 
 
 def test_three_batches_a_day():
-    """По 2 поста в канал в 10:00, 14:00 и 19:00 по Алматы (UTC+5)."""
+    """По 1 посту в канал в 10:00, 14:00 и 19:00 по Алматы (UTC+5) — 3 в день."""
     from torgi.telegram import slot_quota
 
     def at(hour):
         return datetime(2026, 10, 21, hour - 5, 15, tzinfo=timezone.utc)
 
-    assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 2, 2, 4, 4, 6, 6]
+    assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 1, 1, 2, 2, 3, 3]
 
 
 def test_bank_slide_goes_last(monkeypatch):

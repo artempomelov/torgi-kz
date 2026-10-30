@@ -215,8 +215,9 @@ def _presentable_car(lot: Lot) -> bool:
 
 
 # Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям (решение владельца
-# сайта от 21.10.2026): из 6 постов в день 4–5 квартир Алматы и Астаны, остальное — машина и коммерческое помещение
-# (по всему Казахстану) или квартира в регионах. Квартиры Алматы и Астаны дублируются с городскими каналами — так
+# сайта от 21.10.2026): из 6 постов 4–5 квартир Алматы и Астаны, остальное — машина и коммерческое помещение
+# (по всему Казахстану) или квартира в регионах. С 30.10.2026 постов 3 в день, поэтому доли считаем за два дня:
+# машина и коммерция выходят через день. Квартиры Алматы и Астаны дублируются с городскими каналами — так
 # и задумано. Дома, земля, паркоместа и промышленные объекты в основной канал не идут.
 MAIN_MIX = [
     ("квартиры Алматы и Астаны", 0.7, lambda lot: lot.category == "apartment" and _big_city(lot)),
@@ -238,8 +239,9 @@ def candidate_lots(session: Session, channel: str, badges: dict[int, dict]) -> l
     return lots
 
 
-def _today(session: Session, channel: str) -> list[Lot]:
-    start = utcnow().astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+def _today(session: Session, channel: str, days_back: int = 0) -> list[Lot]:
+    """Лоты, опубликованные в канале сегодня (days_back=1 — со вчерашнего дня) по Алматы."""
+    start = utcnow().astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_back)
     return list(session.scalars(
         select(Lot).join(ChannelPost, ChannelPost.lot_id == Lot.id)
         .where(ChannelPost.channel == channel, ChannelPost.message_id.is_not(None), ChannelPost.posted_at >= start)
@@ -282,12 +284,11 @@ def channel_lots(session: Session, channel: str, limit: int, rule: dict | None, 
 
 def mixed_lots(session: Session, channel: str, limit: int, badges: dict[int, dict]) -> list[Lot]:
     """Лоты основного канала по долям MAIN_MIX: в каждый слот — категория, сильнее всех отстающая от своей доли
-    среди сегодняшних постов; внутри категории — сначала лоты с плашкой. Нет подходящих лотов — слот пустует."""
+    среди постов за вчера и сегодня; внутри категории — сначала лоты с плашкой. Нет подходящих лотов — слот пустует."""
     candidates = candidate_lots(session, channel, badges)
     queues = [[lot for lot in candidates if match(lot)] for _, _, match in MAIN_MIX]
-    recent = _today(session, channel)
-    counts = [sum(1 for lot in recent if match(lot)) for _, _, match in MAIN_MIX]
-    buildings = _Buildings(recent)
+    counts = [sum(1 for lot in _today(session, channel, days_back=1) if match(lot)) for _, _, match in MAIN_MIX]
+    buildings = _Buildings(_today(session, channel))
     picked: list[Lot] = []
     while len(picked) < limit:
         total = sum(counts) + 1
