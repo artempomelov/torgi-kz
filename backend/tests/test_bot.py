@@ -125,6 +125,10 @@ def test_admin_replies_through_bot(capsys, monkeypatch):
         assert "--> 2002\nЗдравствуйте! Вы оставляли заявку на сайте torgi.kz" in out
         assert "Бопай ханым" in out and "216 250" in out
         assert "Подписывайтесь на" in out and "t.me/torgi_kz_news" in out and "t.me/torgi_kz_almaty" in out
+        # без косой черты — тоже сводка, а не слово «info»
+        bot.handle_message(session, b, 3003, "Info", utcnow(), admin, reply_to=2)
+        out = capsys.readouterr().out
+        assert "--> 2002\nЗдравствуйте! Вы оставляли заявку" in out and "--> 2002\nInfo" not in out
         bot.handle_message(session, b, 3003, "текст", utcnow(), admin, reply_to=999)
         assert "Не нашёл, кому ответить" in capsys.readouterr().out
         session.rollback()

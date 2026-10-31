@@ -467,13 +467,17 @@ def admin_reply(session: Session, bot: Bot, chat_id: int, text: str, reply_to: d
     if not thread:
         bot.send(chat_id, "Не нашёл, кому ответить: нажмите «Ответить» (Reply) на сообщении с заявкой или вопросом.")
         return
-    if text.split()[0] in ("/info", "/lot"):
+    command = text.split()[0]
+    # «info» без косой черты — тоже команда: 30.10.2026 клиенту ушло слово «info» вместо сводки по лоту
+    if text.lower() in ("info", "info2", "lot"):
+        command = "/" + text.lower()
+    if command in ("/info", "/lot"):
         lot = session.get(Lot, thread["lot"]) if thread.get("lot") else None
         if lot is None:
             bot.send(chat_id, "К этой заявке не привязан лот — ответьте /info2 (стандартный ответ о сайте) или текстом.")
             return
         message = lot_info(lot)
-    elif text.split()[0] == "/info2":
+    elif command == "/info2":
         message = general_reply(session) + channel_invite()
     else:
         message = html.escape(text)
