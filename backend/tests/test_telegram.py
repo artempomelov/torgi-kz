@@ -74,7 +74,7 @@ def test_about_fits_limits_and_updates_only_changed():
 
 def test_main_channel_mix(monkeypatch):
     """Основной канал: из 6 постов 4 квартиры Алматы и Астаны, 1 машина, 1 коммерция или квартира в регионах
-    (при 3 постах в день — за два дня);
+    (при 2 постах в день — за три дня);
     дома и земля не идут; внутри категории — сначала лоты с плашкой «−N% к рынку». Городской канал — тоже сначала
     с плашкой, потом остальные; ещё не опубликованные старые лоты — тоже кандидаты."""
     from datetime import timedelta
@@ -101,7 +101,7 @@ def test_main_channel_mix(monkeypatch):
             session.add(x)
             return x
 
-        flats = [lot(i, "apartment", "Астана" if i % 2 else "Алматы") for i in range(3)]
+        flats = [lot(i, "apartment", "Астана" if i % 2 else "Алматы") for i in range(4)]
         old_flat = lot(10, "apartment", days=30)  # старая, помечена при первом запуске, но не опубликована
         twins = [lot(60 + i, "apartment", "Астана", address=f"Астана, ул. Шамши Калдаякова, д. 11, кв. {i}")
                  for i in range(2)]  # серия банка в одном доме — в день берём одну
@@ -139,13 +139,18 @@ def test_main_channel_mix(monkeypatch):
                 session.add(post)
             session.commit()
 
-        # 3 поста в день: доли считаются за вчера и сегодня — машина и коммерция выходят через день
-        publish(picked, now - timedelta(days=1))
-        day2 = telegram.mixed_lots(session, ch, 3, badges)
-        assert sorted(x.category for x in day2) == ["apartment", "apartment", "vehicle"]
-        publish(day2, now)
+        # 2 поста в день: доли считаются за три дня — машина и коммерция выходят раз в три дня, в разные дни
+        assert telegram._mix_days() == 3
+        publish(picked, now - timedelta(days=2))
+        day1 = telegram.mixed_lots(session, ch, 2, badges)
+        assert [x.category for x in day1] == ["apartment", "apartment"]  # 6 постов позавчера — доли уже набраны
+        publish(day1, now)
         monkeypatch.setattr(telegram, "utcnow", lambda: now + timedelta(days=1))
-        day3 = telegram.mixed_lots(session, ch, 3, badges)
+        day2 = telegram.mixed_lots(session, ch, 2, badges)
+        assert sorted(x.category for x in day2) == ["apartment", "vehicle"]
+        publish(day2, now + timedelta(days=1))
+        monkeypatch.setattr(telegram, "utcnow", lambda: now + timedelta(days=2))
+        day3 = telegram.mixed_lots(session, ch, 2, badges)
         assert regional in day3 and not any(x.category == "vehicle" for x in day3)  # слот «коммерция или регионы»
         monkeypatch.undo()
 
@@ -180,14 +185,14 @@ def test_market_badge_on_photo(tmp_path):
     assert img.getpixel((40, 40)) == (225, 29, 72)  # красная плашка у левого верхнего угла
 
 
-def test_three_batches_a_day():
-    """По 1 посту в канал в 10:00, 14:00 и 19:00 по Алматы (UTC+5) — 3 в день."""
+def test_two_batches_a_day():
+    """По 1 посту в канал в 10:00 и 19:00 по Алматы (UTC+5) — 2 в день."""
     from torgi.telegram import slot_quota
 
     def at(hour):
         return datetime(2026, 10, 21, hour - 5, 15, tzinfo=timezone.utc)
 
-    assert [slot_quota(at(h)) for h in (9, 10, 13, 14, 18, 19, 20)] == [0, 1, 1, 2, 2, 3, 3]
+    assert [slot_quota(at(h)) for h in (9, 10, 14, 18, 19, 20)] == [0, 1, 1, 1, 2, 2]
 
 
 def test_bank_slide_goes_last(monkeypatch):

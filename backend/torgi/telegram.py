@@ -216,8 +216,9 @@ def _presentable_car(lot: Lot) -> bool:
 
 # Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям (решение владельца
 # сайта от 21.10.2026): из 6 постов 4–5 квартир Алматы и Астаны, остальное — машина и коммерческое помещение
-# (по всему Казахстану) или квартира в регионах. С 30.10.2026 постов 3 в день, поэтому доли считаем за два дня:
-# машина и коммерция выходят через день. Квартиры Алматы и Астаны дублируются с городскими каналами — так
+# (по всему Казахстану) или квартира в регионах. Постов в день меньше шести (с 01.11.2026 — 2), поэтому доли
+# считаем за несколько дней, чтобы в окно попадало ~6 постов (MIX_POSTS): при 2 в день — за три дня, машина
+# и коммерция выходят раз в три дня каждая. Квартиры Алматы и Астаны дублируются с городскими каналами — так
 # и задумано. Дома, земля, паркоместа и промышленные объекты в основной канал не идут.
 MAIN_MIX = [
     ("квартиры Алматы и Астаны", 0.7, lambda lot: lot.category == "apartment" and _big_city(lot)),
@@ -225,6 +226,13 @@ MAIN_MIX = [
     ("коммерция или квартира в регионах", 0.15,
      lambda lot: lot.category == "commercial" or lot.category == "apartment" and not _big_city(lot)),
 ]
+MIX_POSTS = 6
+
+
+def _mix_days() -> int:
+    """За сколько дней (включая сегодня) считать доли MAIN_MIX: окно примерно в MIX_POSTS постов."""
+    daily = max(1, settings.telegram_batch * len(settings.telegram_slots))
+    return max(1, -(-MIX_POSTS // daily))
 
 
 def candidate_lots(session: Session, channel: str, badges: dict[int, dict]) -> list[Lot]:
@@ -240,7 +248,7 @@ def candidate_lots(session: Session, channel: str, badges: dict[int, dict]) -> l
 
 
 def _today(session: Session, channel: str, days_back: int = 0) -> list[Lot]:
-    """Лоты, опубликованные в канале сегодня (days_back=1 — со вчерашнего дня) по Алматы."""
+    """Лоты, опубликованные в канале сегодня по Алматы (days_back=N — и за N предыдущих дней)."""
     start = utcnow().astimezone(KZ_TZ).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_back)
     return list(session.scalars(
         select(Lot).join(ChannelPost, ChannelPost.lot_id == Lot.id)
@@ -284,10 +292,11 @@ def channel_lots(session: Session, channel: str, limit: int, rule: dict | None, 
 
 def mixed_lots(session: Session, channel: str, limit: int, badges: dict[int, dict]) -> list[Lot]:
     """Лоты основного канала по долям MAIN_MIX: в каждый слот — категория, сильнее всех отстающая от своей доли
-    среди постов за вчера и сегодня; внутри категории — сначала лоты с плашкой. Нет подходящих лотов — слот пустует."""
+    среди постов за последние _mix_days() дней; внутри категории — сначала лоты с плашкой. Нет подходящих лотов — слот пустует."""
     candidates = candidate_lots(session, channel, badges)
     queues = [[lot for lot in candidates if match(lot)] for _, _, match in MAIN_MIX]
-    counts = [sum(1 for lot in _today(session, channel, days_back=1) if match(lot)) for _, _, match in MAIN_MIX]
+    recent = _today(session, channel, days_back=_mix_days() - 1)
+    counts = [sum(1 for lot in recent if match(lot)) for _, _, match in MAIN_MIX]
     buildings = _Buildings(_today(session, channel))
     picked: list[Lot] = []
     while len(picked) < limit:

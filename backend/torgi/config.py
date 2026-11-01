@@ -25,10 +25,10 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_channel: str | None = None  # "@имя_канала" или числовой id
     telegram_post_delay: float = 4.0  # секунд между постами (лимит Telegram ~20 сообщений/мин в канал)
-    # Выпуски: в каждый канал по telegram_batch постов в часы telegram_slots по Алматы — 3 × 1 = 3 поста в день
-    # (решение владельца от 30.10.2026; с 21.10 было 3 × 2 = 6); пропущенный выпуск догоняется следующим запуском
-    # (не больше одного выпуска)
-    telegram_slots: tuple[int, ...] = (10, 14, 19)
+    # Выпуски: в каждый канал по telegram_batch постов в часы telegram_slots по Алматы — 2 × 1 = 2 поста в день
+    # (решение владельца от 01.11.2026; с 30.10 было 3 × 1, с 21.10 — 3 × 2); пропущенный выпуск догоняется следующим
+    # запуском (не больше одного выпуска)
+    telegram_slots: tuple[int, ...] = (10, 19)
     telegram_batch: int = 1
     # Региональные/тематические каналы: JSON {"@канал": {"region": "Алматы"} | {"category": ["commercial"]}, ...}
     telegram_channels: str = ""
