@@ -103,7 +103,12 @@ class EurasianParser(Parser):
     base_url = LIST_URL
 
     def fetch(self, http: HttpClient, known: Mapping[str, float | None]) -> Iterator[ParsedLot]:
-        data = http.get(API, params={"limit": 0, "depth": 1}).json()
-        for item in data.get("docs") or []:
-            if lot := parse_item(item):
-                yield lot
+        # С 06.11.2026 API отдаёт не больше 10 записей за запрос (limit=0 → 400),
+        # поэтому идём по страницам.
+        page = 1
+        while page and page <= 100:
+            data = http.get(API, params={"limit": 10, "depth": 1, "page": page}).json()
+            for item in data.get("docs") or []:
+                if lot := parse_item(item):
+                    yield lot
+            page = data.get("nextPage") if data.get("hasNextPage") else None
