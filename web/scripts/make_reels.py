@@ -76,8 +76,24 @@ def sheets(lots: list[dict], out: Path):
         print(out / f"{x['id']}.jpg")
 
 
+PHOTO_Y = 760  # центр фото в «карточном» кадре: выше середины, текст первой сцены (y≥1080) — под фото
+
+
+def small(photo: Image.Image, zoom: float = 0.12) -> bool:
+    """Фото пришлось бы растянуть больше чем вдвое (банки часто дают 1024×576) — в 9:16 оно расплывётся."""
+    return max(W * (1 + zoom) / photo.width, H * (1 + zoom) / photo.height) > 2
+
+
 def kenburns(photo: Image.Image, t: float, zoom: float = 0.12, pan: int = 1) -> Image.Image:
-    """Кадр с плавным приближением: t от 0 до 1."""
+    """Кадр с плавным приближением: t от 0 до 1. Маленькое горизонтальное фото не растягиваем на весь экран,
+    а ставим во всю ширину поверх размытого фона — иначе ролик мутный (Reels 169 отклонён 04.11.2026)."""
+    if small(photo, zoom) and photo.width > photo.height:
+        bg = ImageOps.fit(photo, (W // 4, H // 4)).filter(ImageFilter.GaussianBlur(6)).resize((W, H), Image.BILINEAR)
+        img = Image.blend(bg, Image.new("RGB", (W, H), ig.INK), 0.55)
+        s = W / photo.width * (1 + zoom * 0.6 * t)
+        fg = photo.resize((int(photo.width * s), int(photo.height * s)), Image.LANCZOS)
+        img.paste(fg, ((W - fg.width) // 2 + int(pan * 20 * (t - 0.5)), PHOTO_Y - fg.height // 2))
+        return img
     base = ImageOps.fit(photo, (int(W * (1 + zoom)), int(H * (1 + zoom))), Image.LANCZOS)
     scale = 1 + zoom * (1 - t)
     w, h = int(W * scale), int(H * scale)

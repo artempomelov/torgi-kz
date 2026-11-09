@@ -182,7 +182,9 @@ def cover_slide(title: str, subtitle: str, kicker: str, icon: str = "house") -> 
     y = 640
     pill(d, (80, y), kicker, font(BOLD, 34), COBALT, WHITE)
     y = text_block(d, (80, y + 95), title, font(BLACK, 84), WHITE, W - 160, 1.1)
-    text_block(d, (80, y + 25), subtitle, font(REG, 38), "#b8c2d6", W - 160)
+    y += 25
+    for part in subtitle.split("\n"):  # «\n» — принудительный перенос строки
+        y = text_block(d, (80, y), part, font(REG, 38), "#b8c2d6", W - 160)
     d.text((W - 80, H - 80), "листайте →", font=font(BOLD, 36), fill="#8aa6ff", anchor="rs")
     return img
 
@@ -403,10 +405,11 @@ def pick_post(pick: dict, full: dict, total: str) -> str:
     rows.sort(key=lambda r: -r["discount"])
     lo, hi = min(r["shown"] for r in rows), max(r["shown"] for r in rows)
     if pick.get("cover") == "house":
-        # под заголовком — дата подборки, без диапазона скидок (решение владельца от 30.10.2026)
+        # под заголовком — дата подборки, без диапазона скидок (решение владельца от 30.10.2026);
+        # «на 3 ноября» — отдельной строкой (решение владельца от 03.11.2026)
         today = date.today()
         slides = [cover_slide(pick["cover_title"].format(n=len(rows)),
-                              f"Торги и залоги банков на {today.day} {MONTHS[today.month - 1]}", pick["kicker"])]
+                              f"Торги и залоги банков\nна {today.day} {MONTHS[today.month - 1]}", pick["kicker"])]
     else:
         slides = [mosaic_cover(pick["kicker"], pick["title"], f"ниже рынка на {lo}–{hi}%",
                                pick.get("subtitle", "Торги и залоги банков"),
