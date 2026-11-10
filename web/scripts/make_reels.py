@@ -9,7 +9,8 @@ candidates — контактные листы лучших неопублико
 по ним глазами выбираем лот и 4–5 фото без людей, номеров и мусора (как для каруселей). Второй вызов — ролик:
 marketing/instagram/<дата>/reels/<id>.mp4, обложка cover.jpg и caption.txt. Звука нет: музыку добавляем
 в приложении Instagram при публикации (трендовый трек даёт охват). Сверху ~250 px и снизу ~420 px Instagram
-закрывает кадр интерфейсом — текст держим посередине. Ролик готовим на согласование, публикуем только по команде
+закрывает кадр интерфейсом — текст держим посередине. Скидка и цена — в каждом кадре (badge): обложку
+Instagram выбирает сам из середины ролика. Ролик готовим на согласование, публикуем только по команде
 владельца (28.10.2026); после публикации — published <id>: лот попадает в marketing/instagram/reels-used.json.
 """
 
@@ -102,6 +103,30 @@ def kenburns(photo: Image.Image, t: float, zoom: float = 0.12, pan: int = 1) -> 
     return frame.resize((W, H), Image.BILINEAR)
 
 
+BADGE_Y = 340  # ниже интерфейса Instagram сверху (~250 px); видно и в сетке профиля 3:4 (y 240–1680), и в ленте 4:5 (y 285–1635)
+_TOP_SHADE = None
+
+
+def badge(img: Image.Image, lot: dict) -> Image.Image:
+    """Скидка и цена в каждом кадре с фото. Обложку Reels Instagram берёт не из первого кадра, а из середины ролика:
+    10.11.2026 у Reels 122 в сетке профиля оказался фасад без цифр. Владелец: «на 1 слайде в рилсах всегда должно быть
+    видно скидку, чтобы ещё не запустивший рилс человек заинтересовался» — поэтому скидка в любом кадре."""
+    global _TOP_SHADE
+    if _TOP_SHADE is None:  # затемнение сверху вниз, чтобы цифры читались на светлом фото
+        _TOP_SHADE = Image.linear_gradient("L").rotate(180).resize((W, 560)).point(lambda v: int(v * 0.75))
+    img.paste(Image.new("RGB", (W, 560), "#000000"), (0, BADGE_Y - 220), _TOP_SHADE)
+    d = ImageDraw.Draw(img)
+    bg, fg = ig.discount_colors(lot["market"]["pct"], lot["market"]["over"])
+    f = ig.font(ig.BLACK, 64)
+    x = ig.pill(d, (60, BADGE_Y), f"−{lot['market']['pct']}% к рынку", f, bg, fg, pad=(30, 14))
+    price = ig.mln(lot["price"])
+    if x + 28 + d.textlength(price, font=f) <= W - 60:
+        d.text((x + 28, BADGE_Y + 14 - f.size * 0.12), price, font=f, fill=ig.WHITE)
+    else:  # длинная плашка — цена строкой ниже
+        d.text((60, BADGE_Y + 112), price, font=f, fill=ig.WHITE)
+    return img
+
+
 def overlay_text(img: Image.Image, lines: list[tuple[str, int, str]], y: int, chip: tuple[str, str, str] | None = None):
     """Подложка-градиент и строки (текст, размер, цвет) с плашкой сверху."""
     shade = Image.linear_gradient("L").resize((W, 900)).point(lambda v: int(v * 0.85))
@@ -156,7 +181,7 @@ def render(lot_id: int, idx: list[int]):
     hook_lines = [(title(lot), 84, ig.WHITE), (f"за {ig.mln(lot['price'])}", 84, ig.WHITE)]
     scenes = [(3.0, lambda t, p=photos[0]: _with(kenburns(p, t), hook_lines, 1080, (f"−{pct}% к рынку", bg, fg)))]
     for k, p in enumerate(photos[1:5]):
-        scenes.append((1.8, lambda t, p=p, k=k: kenburns(p, t, pan=1 if k % 2 else -1)))
+        scenes.append((1.8, lambda t, p=p, k=k: badge(kenburns(p, t, pan=1 if k % 2 else -1), lot)))
     final = card(lot, photos[0])
     scenes.append((4.0, lambda t: final))
     ffmpeg = __import__("imageio_ffmpeg").get_ffmpeg_exe()
