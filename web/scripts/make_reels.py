@@ -31,6 +31,14 @@ USED = ig.ROOT / "marketing" / "instagram" / "reels-used.json"
 CITY_IN = {"Алматы": "в Алматы", "Астана": "в Астане"}
 HASHTAGS = {"Алматы": "#недвижимостьалматы #квартираалматы #алматы", "Астана": "#недвижимостьастана #квартираастана #астана"}
 COMMON_TAGS = "#торги #залоговоеимущество #квартиры #недвижимость #torgikz"
+# «в Уральске», а не «в г. Уральск» — для лотов из регионов (кандидаты по-прежнему только Алматы и Астана, CITY_IN)
+CITY_PREP = CITY_IN | {
+    "Шымкент": "в Шымкенте", "Караганда": "в Караганде", "Актобе": "в Актобе", "Актау": "в Актау",
+    "Атырау": "в Атырау", "Уральск": "в Уральске", "Павлодар": "в Павлодаре", "Семей": "в Семее",
+    "Усть-Каменогорск": "в Усть-Каменогорске", "Костанай": "в Костанае", "Тараз": "в Таразе",
+    "Темиртау": "в Темиртау", "Кокшетау": "в Кокшетау", "Петропавловск": "в Петропавловске",
+    "Талдыкорган": "в Талдыкоргане", "Кызылорда": "в Кызылорде", "Туркестан": "в Туркестане",
+    "Экибастуз": "в Экибастузе", "Конаев": "в Конаеве", "Жезказган": "в Жезказгане"}
 
 
 def used() -> set[int]:
@@ -39,7 +47,12 @@ def used() -> set[int]:
 
 def title(lot: dict) -> str:
     rooms = f"{lot['rooms']}-комнатная" if lot.get("rooms") else "Квартира"
-    return f"{rooms} {CITY_IN.get(lot.get('city'), 'в г. ' + str(lot.get('city')))}"
+    return f"{rooms} {CITY_PREP.get(lot.get('city'), 'в г. ' + str(lot.get('city')))}"
+
+
+def chip(m: dict) -> str:
+    """Плашка скидки — как на сайте и в Telegram (torgi.badge): вне Алматы и Астаны оценка грубее, там «более −30%»."""
+    return f"{'более ' if m.get('over') else ''}−{m['pct']}% к рынку"
 
 
 MIN_PCT = 30  # лучше всего заходят недорогие квартиры Алматы и Астаны со скидкой от 30% (владелец, 25.10.2026)
@@ -118,7 +131,7 @@ def badge(img: Image.Image, lot: dict) -> Image.Image:
     d = ImageDraw.Draw(img)
     bg, fg = ig.discount_colors(lot["market"]["pct"], lot["market"]["over"])
     f = ig.font(ig.BLACK, 64)
-    x = ig.pill(d, (60, BADGE_Y), f"−{lot['market']['pct']}% к рынку", f, bg, fg, pad=(30, 14))
+    x = ig.pill(d, (60, BADGE_Y), chip(lot["market"]), f, bg, fg, pad=(30, 14))
     price = ig.mln(lot["price"])
     if x + 28 + d.textlength(price, font=f) <= W - 60:
         d.text((x + 28, BADGE_Y + 14 - f.size * 0.12), price, font=f, fill=ig.WHITE)
@@ -151,7 +164,7 @@ def card(lot: dict, photo: Image.Image | None) -> Image.Image:
     d.text((60, y), ig.mln(lot["price"]), font=ig.font(ig.BLACK, 120), fill=ig.WHITE)
     y += 160
     bg, fg = ig.discount_colors(lot["market"]["pct"], lot["market"]["over"])
-    ig.pill(d, (60, y), f"−{lot['market']['pct']}% к рынку", ig.font(ig.BLACK, 54), bg, fg, pad=(28, 12))
+    ig.pill(d, (60, y), chip(lot["market"]), ig.font(ig.BLACK, 54), bg, fg, pad=(28, 12))
     y += 130
     # только скидка — без «рынок в районе — около …» (решение владельца от 23.10.2026)
     facts = [" · ".join(x for x in (f"{lot['area_m2']:g} м²".replace(".", ",") if lot.get("area_m2") else None,
@@ -179,7 +192,7 @@ def render(lot_id: int, idx: list[int]):
     bg, fg = ig.discount_colors(pct, lot["market"]["over"])
     # сцены: (длительность, функция кадра от t)
     hook_lines = [(title(lot), 84, ig.WHITE), (f"за {ig.mln(lot['price'])}", 84, ig.WHITE)]
-    scenes = [(3.0, lambda t, p=photos[0]: _with(kenburns(p, t), hook_lines, 1080, (f"−{pct}% к рынку", bg, fg)))]
+    scenes = [(3.0, lambda t, p=photos[0]: _with(kenburns(p, t), hook_lines, 1080, (chip(lot["market"]), bg, fg)))]
     for k, p in enumerate(photos[1:5]):
         scenes.append((1.8, lambda t, p=p, k=k: badge(kenburns(p, t, pan=1 if k % 2 else -1), lot)))
     final = card(lot, photos[0])
@@ -206,11 +219,11 @@ def render(lot_id: int, idx: list[int]):
     city = lot.get("city")
     facts = ", ".join(x for x in (f"{lot['area_m2']:g} м²".replace(".", ",") if lot.get("area_m2") else None,
                                   lot.get("district")) if x)
-    caption = (f"{title(lot)} за {ig.mln(lot['price'])} — на {pct}% ниже рынка 🔥\n\n"
+    caption = (f"{title(lot)} за {ig.mln(lot['price'])} — {'более чем ' if lot['market']['over'] else ''}на {pct}% ниже рынка 🔥\n\n"
                f"{facts}\n\n"
                "Сохраните, чтобы не потерять 📌 Все фото и детали — на сайте torgi.kz, ссылка в шапке профиля.\n"
                f"{ig.TG_LINE}\n\n"
-               f"{HASHTAGS.get(city, '')} {COMMON_TAGS}")
+               f"{HASHTAGS.get(city, '#' + str(city).lower().replace('-', ''))} {COMMON_TAGS}")
     (OUT / f"{lot_id}-caption.txt").write_text(caption, encoding="utf-8")
     print(out)
     print(caption)
