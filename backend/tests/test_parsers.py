@@ -1,5 +1,6 @@
 """Парсеры на реальных ответах источников (сохранены 28.09.2026 в tests/fixtures)."""
 
+import html
 import json
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -175,20 +176,42 @@ def test_alatau_documents():
 def test_sauda_list_and_detail():
     from torgi.parsers import sauda
 
+    # с 24.10.2026 список — таблица /ru/list-fb (серверная версия для клиентов без JavaScript)
     cards = sauda.parse_list(text("sauda_list.html"))
-    assert len(cards) == 20
-    card = cards[0]
-    assert card["id"] == "337778617530000000" and card["price"] == 171_545_853
-    assert card["region"] == "Павлодарская область" and card["start"] == "01.10.2026 12:00"
+    assert len(cards) == 15  # ссылка вне таблицы (реклама) — не лот
+    card = cards[1]
+    assert card["id"] == "342076555824000000" and card["price"] == 18_214_875 and card["number"] == "472511"
+    assert card["start"] == "02.12.2026 15:00:00" and card["status"] == "Активный"
 
+    # карточка — JSON в data-config
     lot = sauda.parse_detail(text("sauda_detail.html"), card, "RealEstate")
-    assert lot.origin == "state" and lot.category == "commercial" and lot.sale_type == "auction"
-    assert (lot.area_m2, lot.land_area_ha, lot.cadastral) == (834.8, 0.0603, "14:218:001:203")
-    assert (lot.city, lot.deposit) == ("Павлодар", 25_731_878)
-    assert lot.applications_deadline == datetime(2026, 10, 1, 11, 55, tzinfo=KZ)
-    assert lot.contacts["phone"] == "+7 778 700 28 99, +7 778 870 11 04"
-    assert len(lot.images) == 6 and all("/image-proxy/1200x900/" in u for u in lot.images)
-    assert [d["title"] for d in lot.documents][:1] == ["Справка Ф2 г. Павлодар, Баян Батыра 4 (11.09.2026)"]
+    assert lot.origin == "bankrupt" and lot.category == "industrial" and lot.sale_type == "auction"
+    assert (lot.area_m2, lot.cadastral) == (5284.0, "05-085-031-124")
+    assert (lot.city, lot.region, lot.deposit) == ("Усть-Каменогорск", "Восточно-Казахстанская область", 910_743.75)
+    assert lot.auction_start == datetime(2026, 12, 2, 15, 0, tzinfo=KZ)
+    assert lot.applications_deadline == datetime(2026, 12, 2, 14, 55, tzinfo=KZ)
+    assert lot.contacts["phone"] == "87001234567"  # короткий городской номер без кода не берём
+    assert len(lot.images) == 27 and all("/image-proxy/1200x900/http" in u for u in lot.images)
+    assert [d["title"] for d in lot.documents][:2] == ["Договор купли продажи", "Приказ о назначении"]
+    assert all(d["url"].startswith(sauda.BASE + "/ru/MnuFileStoreFileDownload?FileId=") for d in lot.documents)
+
+
+def test_sauda_skips_rent():
+    from torgi.parsers import sauda
+
+    card = sauda.parse_list(text("sauda_list.html"))[0]
+    page = f'<div data-config="{html.escape(json.dumps({"typeText": "Тендер по передаче объекта в имущественный наем (аренду) (с 10.08.2019)", "obj": {"title": "Объект аренды", "info": "Помещение"}}, ensure_ascii=False))}"></div>'
+    assert sauda.parse_detail(page, card, "RealEstate") is None
+    assert sauda.parse_detail("<html>Ошибка исполнения</html>", card, "RealEstate") is None
+
+
+def test_sauda_phones():
+    from torgi.parsers.sauda import phones
+
+    assert phones("ГУ; Телефоны для справок: +7 (7262) 45-53-11, 43-69-30, 43-39-15;") == ["+7 (7262) 45-53-11"]
+    assert phones("ТОО; Телефоны для справок: (7172) 72-84-40;") == ["+7 (7172) 72-84-40"]
+    assert phones("ИП; Телефоны для справок: 87057018928, +7 778 700 28 99;") == ["87057018928", "+7 778 700 28 99"]
+    assert phones("ТОО; Адрес: г. Астана") == []
 
 
 def test_sauda_origin():
@@ -262,9 +285,14 @@ def test_sauda_min_price():
     """Аукцион на понижение: минимальная цена, ниже которой торги не опустятся."""
     from torgi.parsers import sauda
 
-    card = {"id": "339335707459000000", "title": "Паркинг", "price": 6_648_063, "region": "Астана", "start": None}
+    card = sauda.parse_list(text("sauda_list.html"))[2]
     lot = sauda.parse_detail(text("sauda_detail_down.html"), card, "RealEstate")
-    assert (lot.price, lot.min_price, lot.deposit) == (6_648_063, 1_994_419, 332_404)
+    assert (lot.price, lot.min_price, lot.deposit) == (5_937_624, 1_781_288, 296_882)
+    assert (lot.origin, lot.category, lot.sale_type, lot.city) == ("state", "parking", "auction_down", "Астана")
+    assert (lot.area_m2, lot.year_built, lot.extra["fund"]) == (18.0, 2025, "Не жилой фонд")
+    assert lot.contacts == {"owner": 'Товарищество с ограниченной ответственностью "Елорда құрылыс компаниясы"',
+                            "phone": "+7 (7172) 72-84-40"}
+
 
 
 def test_krisha_curated_ad():

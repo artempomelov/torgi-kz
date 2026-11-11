@@ -49,6 +49,8 @@ def apply(session: Session, source: str, parsed: ParsedLot, existing: Lot | None
             lot.price_history.append(PriceChange(price=parsed.price, seen_at=now))
             lot.price = parsed.price
             stats.price_changed += 1
+        if parsed.partial and parsed.auction_start and parsed.auction_start != lot.auction_start:
+            lot.auction_start = parsed.auction_start  # перенос торгов виден и без детальной страницы (E-Qazyna)
         if not parsed.partial:
             # Пустые значения не затирают ранее полученные (например, координаты из детали)
             for key, value in asdict(parsed).items():

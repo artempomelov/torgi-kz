@@ -126,6 +126,30 @@ def test_finished_auctions_leave_showcase(monkeypatch):
         assert (last.status, last.found) == ("empty", 0)
 
 
+def test_partial_lot_moves_auction_date(monkeypatch):
+    """E-Qazyna: известный лот с той же ценой приходит без карточки (partial), но с датой торгов из списка —
+    перенос торгов попадает в базу, и close_finished не снимает лот как прошедший."""
+    from datetime import timedelta
+
+    from torgi.models import utcnow
+
+    class MovedParser(FakeParser):
+        name = "moved"
+
+    monkeypatch.setitem(ingest.PARSERS, "moved", MovedParser)
+    init_db()
+    soon, later = utcnow() + timedelta(hours=1), utcnow() + timedelta(days=20)
+    run_moved = lambda batch: (FakeParser.batches.append(batch), ingest.run_source(SessionLocal(), "moved", http=object()))  # noqa: E731
+    run_moved([lot("1", 5_000_000, sale_type="auction", auction_start=soon)])
+    partial = ParsedLot(source_id="1", url="https://example.kz/1", title="", origin="state", category="other",
+                        price=5_000_000, auction_start=later, partial=True)
+    run_moved([partial])
+    with SessionLocal() as session:
+        moved = session.query(Lot).filter_by(source="moved", source_id="1").one()
+        assert abs((moved.auction_start - later).total_seconds()) < 1
+        assert (moved.category, moved.title) == ("apartment", "Квартира 1")  # остальное partial не трогает
+
+
 def test_export_gated_private(tmp_path):
     """Закрытый режим: адрес, контакты, ссылка — только в private.json; координаты в статике огрублены."""
     import json

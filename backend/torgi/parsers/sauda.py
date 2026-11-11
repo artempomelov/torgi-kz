@@ -2,11 +2,13 @@
 имущества, имущество банкротов, налоговых должников, конфискат, ФПК, КУВА, банки в ликвидации,
 земельные торги акиматов.
 
-Серверный HTML (ASP.NET), без API. Список: /ru/list?searchStatus=ApplicationsAccept&objectType=...&p=N
-(20 лотов на страницу), карточка: /ru/list/{id}. Аренда и доверительное управление — не продажа, пропускаем.
+С 24.10.2026 сайт грузит список лотов скриптом. Для клиентов без JavaScript у него есть серверная версия
+/ru/list-fb?flObjectType=...&flCoarseStatus=Active&p=N — таблица по 15 лотов: номер, название, адрес, дата торгов,
+начальная цена, статус. Карточка /ru/list/{id} отдаёт данные лота JSON-ом в атрибуте data-config: тип торгов,
+цены, гарантийный взнос, сроки, объект, продавец, фото, документы. Аренда и доверительное управление — не продажа,
+пропускаем.
 """
 
-import html
 import json
 import re
 from collections.abc import Iterator, Mapping
@@ -19,12 +21,12 @@ from torgi import normalize as nz
 from torgi.parsers.base import HttpClient, ParsedLot, Parser
 
 BASE = "https://sauda.e-qazyna.kz"
+LIST_URL = f"{BASE}/ru/list-fb"
 KZ_TZ = timezone(timedelta(hours=5))
 OBJECT_TYPES = ["RealEstate", "RealEstateNotFinished", "PropComplex", "Land", "LandAgricultural"]
 LAND_TYPES = {"Land", "LandAgricultural"}
 
 _NOT_SALE_RE = re.compile(r"аренд|наем|доверит|закреплени", re.I)
-_PHONE_RE = re.compile(r"(?:\+7|8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}")
 _PAIR_RE = re.compile(r"([А-Яа-яЁёA-Za-z0-9 ,./()c]{3,60}?)\s+-\s+([^;]+)")
 
 
@@ -66,42 +68,62 @@ def sale_type_for(auction_type: str) -> str:
     return "auction"
 
 
+_LIST_COLUMNS = {"Номер аукциона": "number", "Наименование объекта": "title", "Адрес объекта": "address",
+                 "Дата начала торгов": "start", "Начальная цена": "price", "Статус": "status"}
+
+
 def parse_list(page: str) -> list[dict]:
-    """Карточки списка (берём десктопный вариант разметки — он полный)."""
+    """Строки таблицы /ru/list-fb. Столбцы ищем по заголовкам, а не по порядку."""
     soup = BeautifulSoup(page, "lxml")
     cards: dict[str, dict] = {}
-    for block in soup.select("div.d-none.d-sm-block"):
-        link = block.select_one(".name-trade-card a[href^='/ru/list/']")
-        if not link:
-            continue
-        lot_id = link["href"].rsplit("/", 1)[-1]
-        title = _text(link)
-        kind, _, rest = title.partition(":")
-        info = block.select_one(".name-trade-card")
-        type_el = info.find_next_sibling("div") if info else None
-        date_el = block.select_one(".uil-stopwatch")
-        region_el = block.select_one(".mdi-map-marker-outline")
-        price_el = block.select_one(".font-21")
-        img = block.select_one("img")
-        num = block.select_one(".badge")
-        cards[lot_id] = {
-            "id": lot_id,
-            "kind": kind.strip() if rest else "",
-            "title": (rest or kind).strip(),
-            "auction_type": _text(type_el),
-            "start": _text(date_el.parent) if date_el else "",
-            "region": _text(region_el.parent) if region_el else "",
-            "price": nz.parse_number(_text(price_el).replace("₸", "")),
-            "thumb": img["src"] if img and img.get("src") else None,
-            "number": _text(num).lstrip("№") or None,
-        }
+    for table in soup.select("table"):
+        heads = [_text(th) for th in table.select("thead th")]
+        keys = [next((v for k, v in _LIST_COLUMNS.items() if h.startswith(k)), None) for h in heads]
+        for tr in table.select("tbody tr"):
+            link = tr.select_one("a[href^='/ru/list/']")
+            if not link:
+                continue
+            row = {k: _text(td) for k, td in zip(keys, tr.find_all("td", recursive=False)) if k}
+            lot_id = link["href"].rstrip("/").rsplit("/", 1)[-1]
+            cards[lot_id] = {
+                "id": lot_id,
+                "title": row.get("title", ""),
+                "address": row.get("address", ""),
+                "start": row.get("start", ""),
+                "price": nz.parse_number(row.get("price")),
+                "number": row.get("number") or None,
+                "status": row.get("status", ""),
+            }
     return list(cards.values())
 
 
-def _section(soup: BeautifulSoup, label: str) -> str:
-    head = soup.find("p", string=re.compile(rf"^\s*{label}\s*$"))
-    nxt = head.find_next_sibling("p") if head else None
-    return _text(nxt)
+def detail_config(page: str) -> dict:
+    """JSON лота из data-config карточки (тот, где есть «obj» — объект продажи)."""
+    soup = BeautifulSoup(page, "lxml")
+    for el in soup.select("[data-config]"):
+        try:
+            cfg = json.loads(el["data-config"])
+        except ValueError:
+            continue
+        if isinstance(cfg, dict) and isinstance(cfg.get("obj"), dict):
+            return cfg
+    return {}
+
+
+def phones(seller: str) -> list[str]:
+    """«Телефоны для справок: +7 (7262) 45-53-11, 43-69-30; …» — номера с кодом (10–11 цифр), короткие городские — нет."""
+    if "Телефон" not in seller:
+        return []
+    part = seller.split("Телефон", 1)[1].split(":", 1)[-1].split(";", 1)[0]
+    found = []
+    for piece in part.split(","):
+        piece = piece.strip()
+        digits = re.sub(r"\D", "", piece)
+        if len(digits) == 10:
+            found.append(f"+7 {piece}")
+        elif len(digits) == 11 and digits[0] in "78":
+            found.append(piece)
+    return list(dict.fromkeys(found))
 
 
 def object_pairs(text: str) -> dict[str, str]:
@@ -117,17 +139,20 @@ def object_pairs(text: str) -> dict[str, str]:
 
 
 def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
-    soup = BeautifulSoup(page, "lxml")
-    seller = _section(soup, "Продавец")
-    auction_type = card.get("auction_type") or ""
+    cfg = detail_config(page)
+    if not cfg:
+        return None
+    o = cfg["obj"]
+    seller = o.get("sellerInfo") or ""
+    auction_type = cfg.get("typeText") or ""
     origin = origin_for(auction_type, seller)
-    if origin is None:
+    if origin is None or _NOT_SALE_RE.search(o.get("title") or ""):  # «Объект аренды»
         return None
 
-    obj = _section(soup, "Объект продажи")
-    location = _section(soup, "Расположение объекта")
+    obj = o.get("info") or ""
+    location = o.get("address") or card.get("address") or ""
+    title = cfg.get("title") or card.get("title") or obj[:200]
     pairs = object_pairs(obj)
-    title = card.get("title") or obj[:200]
 
     def pair(*prefixes: str) -> str | None:
         for p in prefixes:
@@ -150,29 +175,18 @@ def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
     area = nz.parse_number(pair("общая площадь")) or nz.parse_area_m2(f"{title} {obj}")
     land = nz.parse_number(pair("площадь земельного")) or nz.parse_land_ha(f"{title} {obj}")
 
-    photos: list[str] = []
-    if m := re.search(r'data-srcs="([^"]+)"', page):
-        try:
-            photos = [f"{BASE}/image-proxy/1200x900/{u}" for u in json.loads(html.unescape(m.group(1)))]
-        except ValueError:
-            pass
-    if not photos and card.get("thumb"):
-        photos = [card["thumb"].replace("/150x110/", "/1200x900/")]
-
+    photos = [f"{BASE}/image-proxy/1200x900/{u}" for u in cfg.get("images") or [] if isinstance(u, str)]
     documents = []
-    for a in soup.select("a[href*='MnuFileStoreFileDownload']"):
-        name = _text(a)
+    for f in cfg.get("files") or []:
+        url = f.get("url") or ""
+        if not url:
+            continue
+        name = (f.get("name") or "").strip()
         documents.append({"title": re.sub(r"\.(pdf|docx?|xlsx?|jpe?g|png|zip|rar)$", "", name, flags=re.I) or "Документ",
-                          "url": BASE + a["href"] if a["href"].startswith("/") else a["href"]})
+                          "url": BASE + url if url.startswith("/") else url})
 
-    phone_part = seller.split("Телефон", 1)[1] if "Телефон" in seller else ""
-    phones = list(dict.fromkeys(p.strip() for p in _PHONE_RE.findall(phone_part)))
     seller_name = seller.split(";")[0].strip() if seller else None
     city = nz.detect_city(location, title)
-    page_text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True))
-    deposit = re.search(r"Гарантийный взнос\s*₸?\s*([\d\s]+,\d{2})", page_text)
-    min_price = re.search(r"Минимальная цена\s*₸?\s*([\d\s]+,\d{2})", page_text)
-    deadline = re.search(r"Дата завершения приема заявок\s*(\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2})", page_text)
     floor, floors_total = nz.parse_floor(obj)
 
     return ParsedLot(
@@ -183,7 +197,7 @@ def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
         category=category,
         sale_type=sale_type_for(auction_type),
         description=nz.clean_text(obj),
-        region=nz.normalize_region(card.get("region"), location, city=city),
+        region=nz.normalize_region(location, title, city=city),
         city=city,
         address=location or None,
         area_m2=None if category == "land" else area,
@@ -193,16 +207,16 @@ def parse_detail(page: str, card: dict, object_type: str) -> ParsedLot | None:
         floors_total=floors_total,
         year_built=nz.parse_int(pair("год постройки")) or nz.parse_year(obj),
         cadastral=pair("кадастровый номер") or nz.parse_cadastral(f"{title} {obj}"),
-        price=card.get("price"),
-        deposit=nz.parse_number(deposit.group(1)) if deposit else None,
-        min_price=nz.parse_number(min_price.group(1)) if min_price else None,
-        auction_start=_dt(card.get("start")),
-        applications_deadline=_dt(deadline.group(1) if deadline else None),
+        price=card.get("price") or cfg.get("startPrice"),
+        deposit=cfg.get("guarantee") or None,
+        min_price=cfg.get("minPrice") or None,
+        auction_start=_dt(cfg.get("startAt") or card.get("start")),
+        applications_deadline=_dt(cfg.get("acceptAppsTill")),
         images=photos,
         documents=documents,
-        contacts={k: v for k, v in {"owner": seller_name, "phone": ", ".join(phones[:2]) or None}.items() if v},
-        extra={"auction_type": auction_type, "lot_number": card.get("number"), "object_type": object_type,
-               "fund": pair("фонд"), "purpose": pair("функциональное назначение")},
+        contacts={k: v for k, v in {"owner": seller_name, "phone": ", ".join(phones(seller)[:2]) or None}.items() if v},
+        extra={"auction_type": auction_type, "lot_number": cfg.get("number") or card.get("number"),
+               "object_type": object_type, "fund": pair("фонд"), "purpose": pair("функциональное назначение")},
     )
 
 
@@ -215,19 +229,18 @@ class SaudaParser(Parser):
         for object_type in OBJECT_TYPES:
             page = 1
             while True:
-                resp = http.get(f"{BASE}/ru/list", params={
-                    "searchStatus": "ApplicationsAccept", "objectType": object_type, "p": page})
+                resp = http.get(LIST_URL, params={"flObjectType": object_type, "flCoarseStatus": "Active", "p": page})
                 cards = parse_list(resp.text)
                 if not cards:
                     break
                 for card in cards:
-                    if _NOT_SALE_RE.search(card["auction_type"]):
-                        continue
                     sid = card["id"]
                     if sid in known and known[sid] == card["price"]:
-                        # уже есть в базе с той же ценой — карточку не загружаем
+                        # уже есть в базе с той же ценой — карточку не загружаем, но дату торгов из списка передаём:
+                        # перенос торгов не должен снять лот как прошедший
                         yield ParsedLot(source_id=sid, url=f"{BASE}/ru/list/{sid}", title=card["title"],
-                                        origin="state", category="other", price=card["price"], partial=True)
+                                        origin="state", category="other", price=card["price"],
+                                        auction_start=_dt(card["start"]), partial=True)
                         continue
                     try:
                         detail = http.get(f"{BASE}/ru/list/{sid}").text
@@ -236,5 +249,5 @@ class SaudaParser(Parser):
                     if lot := parse_detail(detail, card, object_type):
                         yield lot
                 page += 1
-                if page > 200:  # страховка от бесконечного цикла
+                if page > 400:  # страховка от бесконечного цикла (11.11.2026 у недвижимости 85 страниц)
                     break
