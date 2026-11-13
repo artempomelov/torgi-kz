@@ -184,7 +184,8 @@ jobs:
             if [ "${{ inputs.refresh_posts }}" = "true" ]; then
               uv run python -m torgi.cli post --refresh || echo "::warning::Не удалось переписать посты"
             fi
-            uv run python -m torgi.cli post --limit 5 || echo "::warning::Публикация в канал не удалась"
+            # выпуск в каналы — раз в день в 17:30 по Алматы (telegram_slots): запуск 17:17 ждёт его до 15 минут
+            uv run python -m torgi.cli post --limit 5 --wait 900 || echo "::warning::Публикация в канал не удалась"
           fi
           uv run python -m torgi.cli bot --check || echo "::warning::Токен бота не принят Telegram — проверьте секрет TORGI_TELEGRAM_BOT_TOKEN"
           uv run python -m torgi.cli post --about || echo "::warning::Не удалось обновить описания каналов и бота"

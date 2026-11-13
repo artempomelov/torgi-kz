@@ -31,6 +31,8 @@ def main() -> None:
     t.add_argument("--mark-all", action="store_true", help="пометить все текущие лоты опубликованными")
     t.add_argument("--refresh", action="store_true", help="переписать опубликованные посты по текущему шаблону")
     t.add_argument("--about", action="store_true", help="выставить описания каналов и бота (telegram.channel_about)")
+    t.add_argument("--wait", type=float, default=0, metavar="СЕК",
+                   help="если до выпуска (telegram_slots) не больше СЕК секунд — дождаться его и опубликовать")
     b = sub.add_parser("bot", help="бот подписок: обработать входящие и разослать уведомления")
     b.add_argument("--dry-run", action="store_true", help="только показать уведомления")
     b.add_argument("--check", action="store_true", help="проверить токен (getMe), не раскрывая его")
@@ -94,7 +96,7 @@ def main() -> None:
             if args.refresh:
                 telegram.refresh(session)
                 return
-            telegram.run(session, limit=args.limit, dry_run=args.dry_run, mark_all=args.mark_all)
+            telegram.run(session, limit=args.limit, dry_run=args.dry_run, mark_all=args.mark_all, wait=args.wait)
     elif args.cmd == "bot":
         from torgi import bot
 

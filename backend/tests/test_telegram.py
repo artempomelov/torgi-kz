@@ -139,7 +139,11 @@ def test_main_channel_mix(monkeypatch):
                 session.add(post)
             session.commit()
 
-        # 2 поста в день: доли считаются за три дня — машина и коммерция выходят раз в три дня, в разные дни
+        # с 13.11.2026 — 1 пост в день (17:30): доли считаются за шесть дней
+        assert telegram._mix_days() == 6
+        # логика долей та же при любом ритме — проверяем на 2 постах в день: доли за три дня, машина и коммерция
+        # выходят раз в три дня, в разные дни
+        monkeypatch.setattr(telegram.settings, "telegram_slots", ("10:00", "19:00"))
         assert telegram._mix_days() == 3
         publish(picked, now - timedelta(days=2))
         day1 = telegram.mixed_lots(session, ch, 2, badges)
@@ -185,14 +189,19 @@ def test_market_badge_on_photo(tmp_path):
     assert img.getpixel((40, 40)) == (225, 29, 72)  # красная плашка у левого верхнего угла
 
 
-def test_two_batches_a_day():
-    """По 1 посту в канал в 10:00 и 19:00 по Алматы (UTC+5) — 2 в день."""
-    from torgi.telegram import slot_quota
+def test_one_batch_a_day_at_1730():
+    """1 пост в канал в день, в 17:30 по Алматы (UTC+5); запуск 17:17 доходит до публикации к ~17:20 и ждёт выпуска."""
+    from torgi.telegram import seconds_to_slot, slot_quota
 
-    def at(hour):
-        return datetime(2026, 10, 21, hour - 5, 15, tzinfo=timezone.utc)
+    def at(hour, minute=0):
+        return datetime(2026, 11, 13, hour - 5, minute, tzinfo=timezone.utc)
 
-    assert [slot_quota(at(h)) for h in (9, 10, 14, 18, 19, 20)] == [0, 1, 1, 1, 2, 2]
+    assert [slot_quota(at(h, m)) for h, m in ((9, 47), (17, 20), (17, 29), (17, 30), (17, 50), (20, 47))] == \
+        [0, 0, 0, 1, 1, 1]
+    assert seconds_to_slot(900, at(17, 20)) == 600  # ждём 10 минут
+    assert seconds_to_slot(900, at(17, 0)) == 0  # до выпуска больше 15 минут — не ждём
+    assert seconds_to_slot(900, at(17, 31)) == 0  # выпуск уже наступил
+    assert seconds_to_slot(0, at(17, 20)) == 0  # без --wait не ждём
 
 
 def test_bank_slide_goes_last(monkeypatch):

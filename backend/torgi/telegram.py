@@ -216,9 +216,9 @@ def _presentable_car(lot: Lot) -> bool:
 
 # Основной канал — не все новые лоты подряд (на 80% это паркоместа и земля), а смесь по долям (решение владельца
 # сайта от 21.10.2026): из 6 постов 4–5 квартир Алматы и Астаны, остальное — машина и коммерческое помещение
-# (по всему Казахстану) или квартира в регионах. Постов в день меньше шести (с 01.11.2026 — 2), поэтому доли
-# считаем за несколько дней, чтобы в окно попадало ~6 постов (MIX_POSTS): при 2 в день — за три дня, машина
-# и коммерция выходят раз в три дня каждая. Квартиры Алматы и Астаны дублируются с городскими каналами — так
+# (по всему Казахстану) или квартира в регионах. Постов в день меньше шести (с 13.11.2026 — 1, в 17:30), поэтому
+# доли считаем за несколько дней, чтобы в окно попадало ~6 постов (MIX_POSTS): при 1 в день — за шесть дней, машина
+# и коммерция выходят раз в шесть дней каждая. Квартиры Алматы и Астаны дублируются с городскими каналами — так
 # и задумано. Дома, земля, паркоместа и промышленные объекты в основной канал не идут.
 MAIN_MIX = [
     ("квартиры Алматы и Астаны", 0.7, lambda lot: lot.category == "apartment" and _big_city(lot)),
@@ -497,10 +497,26 @@ def channels() -> list[tuple[str, dict | None, int]]:
     return out
 
 
+def _slots() -> list[tuple[int, int]]:
+    """Время выпусков из настройки telegram_slots («17:30» → (17, 30)), по Алматы."""
+    return [(int(s.split(":")[0]), int((s.split(":") + ["0"])[1])) for s in map(str, settings.telegram_slots)]
+
+
 def slot_quota(now: datetime | None = None) -> int:
-    """Сколько постов в канал положено к этому часу: по telegram_batch за каждый наступивший выпуск."""
-    hour = (now or utcnow()).astimezone(KZ_TZ).hour
-    return settings.telegram_batch * sum(1 for slot in settings.telegram_slots if hour >= slot)
+    """Сколько постов в канал положено к этому моменту: по telegram_batch за каждый наступивший выпуск."""
+    local = (now or utcnow()).astimezone(KZ_TZ)
+    return settings.telegram_batch * sum(1 for slot in _slots() if (local.hour, local.minute) >= slot)
+
+
+def seconds_to_slot(max_wait: float, now: datetime | None = None) -> float:
+    """Сколько секунд ждать ближайшего выпуска, если до него не больше max_wait секунд, иначе 0.
+    Запуски идут в :17 и :47, а выпуск в 17:30: запуск 17:17 доходит до публикации к ~17:20 и ждёт 17:30."""
+    local = (now or utcnow()).astimezone(KZ_TZ)
+    for hour, minute in _slots():
+        delta = (local.replace(hour=hour, minute=minute, second=0, microsecond=0) - local).total_seconds()
+        if 0 < delta <= max_wait:
+            return delta
+    return 0
 
 
 def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule: dict | None, daily: int,
@@ -519,7 +535,7 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
         limit = min(limit, settings.telegram_batch, slot_quota() - posted_today(session, channel), daily)
         if limit <= 0:
             log.info("канал %s: выпуск уже был, следующий — по расписанию %s", channel,
-                     ", ".join(f"{h}:00" for h in settings.telegram_slots))
+                     ", ".join(f"{h}:{m:02d}" for h, m in _slots()))
             return 0
     if rule is None and channel == settings.telegram_channel:
         lots = mixed_lots(session, channel, limit, badges or {})
@@ -547,7 +563,7 @@ def run_channel(session: Session, bot: "TelegramBot | None", channel: str, rule:
     return len(lots)
 
 
-def run(session: Session, limit: int = 5, dry_run: bool = False, mark_all: bool = False) -> int:
+def run(session: Session, limit: int = 5, dry_run: bool = False, mark_all: bool = False, wait: float = 0) -> int:
     targets = channels() or [("dry-run", None, settings.telegram_batch * len(settings.telegram_slots))]
     if mark_all:
         for channel, rule, _ in targets:
@@ -564,6 +580,10 @@ def run(session: Session, limit: int = 5, dry_run: bool = False, mark_all: bool 
         if not start <= hour < end:
             log.info("вне часов публикации (%s–%s по Алматы)", start, end)
             return 0
+        delay = seconds_to_slot(wait)
+        if delay:
+            log.info("до выпуска %.0f с — ждём", delay)
+            time.sleep(delay)
     bot = None if dry_run else TelegramBot(settings.telegram_bot_token)
     badges = load_badges(Path(settings.telegram_badges))
     total = 0
