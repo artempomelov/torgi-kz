@@ -135,6 +135,9 @@ def test_bcc():
     flat = next(lot for lot in lots if "Момышулы" in (lot.address or ""))
     assert flat.category == "apartment"
     assert (flat.rooms, flat.floor, flat.floors_total, flat.price) == (3, 5, 5, 25_460_019)
+    # страниц у объектов нет — ссылка на список, сайт подсказывает вкладку
+    assert flat.url == bcc.URL and flat.extra["list_tab"] == "Жилая недвижимость"
+    assert court.extra["list_tab"] == "Коммерческая недвижимость"  # судебная реализация, но во вкладке коммерческой
 
 
 def test_freedom():
@@ -238,6 +241,7 @@ def test_eurasian():
     assert tl.address == "г.Астана, р-н Сарыарка, пр. Нұрғиса Тілендиев, д. 36"
     assert tl.images[0].startswith("https://eubank.kz/media/")
     assert tl.documents and tl.documents[0]["url"].startswith("https://eubank.kz/")
+    assert tl.url == "https://eubank.kz/ru/marketplace-details/57"  # страница объекта, не общий список
 
 
 def test_rbk():
@@ -249,6 +253,7 @@ def test_rbk():
     assert (office.category, office.city, office.area_m2, office.price) == ("commercial", "Алматы", 577.6, 720_000_000)
     assert (office.lat, office.lon) == (43.2518903, 76.9670429)
     assert len(office.images) == 4 and office.contacts == {"phone": "87779899771"}
+    assert office.url == "https://bankrbk.kz/ru/bank-property/22"  # страница объекта, не главная банка
     assert lots[1].category == "apartment" and lots[1].rooms == 2
 
 

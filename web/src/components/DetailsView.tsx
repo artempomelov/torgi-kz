@@ -32,6 +32,9 @@ export function LotDetailsView({ details, isAuction, note }: {
 }) {
   const contacts = Object.entries(details.contacts ?? {}).filter(([, v]) => v);
   const documents = details.documents ?? [];
+  // У источника нет страницы объекта (BCC): ссылка ведёт на общий список, подсказываем вкладку
+  const listTab = typeof details.extra?.list_tab === "string" ? details.extra.list_tab : null;
+  const sourceLabel = listTab ? "Открыть список объектов банка" : isAuction ? "Перейти к торгам у источника" : "Открыть у источника";
 
   return (
     <section id="lot-details" className="scroll-mt-4 rounded-xl border border-border bg-surface p-5">
@@ -50,7 +53,7 @@ export function LotDetailsView({ details, isAuction, note }: {
         {details.url && (
           <a href={details.url} target="_blank" rel="noopener noreferrer" data-goal="source_click"
              className="flex-1 rounded-lg bg-brand px-4 py-3 text-center font-semibold text-white hover:bg-brand-hover">
-            {isAuction ? "Перейти к торгам у источника" : "Открыть у источника"}
+            {sourceLabel}
           </a>
         )}
         {details.lat && details.lon ? (
@@ -60,6 +63,9 @@ export function LotDetailsView({ details, isAuction, note }: {
           </a>
         ) : null}
       </div>
+      {details.url && listTab && (
+        <p className="mt-2 text-xs text-muted">Отдельной страницы у объекта нет — на сайте банка он во вкладке «{listTab}».</p>
+      )}
       {note && <p className="mt-3 text-xs text-muted">{note}</p>}
 
       {documents.length > 0 && (

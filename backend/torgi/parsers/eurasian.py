@@ -9,7 +9,8 @@ from torgi.parsers.base import HttpClient, ParsedLot, Parser
 
 SITE = "https://eubank.kz"
 API = f"{SITE}/api/marketplace_items"
-LIST_URL = f"{SITE}/ru/property-for-sale"  # у лотов нет отдельных страниц — открываются окном на списке
+LIST_URL = f"{SITE}/ru/property-for-sale"
+DETAIL_URL = f"{SITE}/ru/marketplace-details"  # страница объекта: DETAIL_URL/<id из API> (появилась к 13.11.2026)
 
 CATEGORIES = {
     "Коммерческая недвижимость": "commercial",
@@ -70,7 +71,7 @@ def parse_item(item: dict) -> ParsedLot | None:
 
     return ParsedLot(
         source_id=str(item["id"]),
-        url=LIST_URL,
+        url=f"{DETAIL_URL}/{item['id']}",
         title=title,
         origin="bank_balance",
         category=category,

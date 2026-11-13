@@ -8,7 +8,7 @@ from torgi import normalize as nz
 from torgi.parsers.base import HttpClient, ParsedLot, Parser
 
 API = "https://backend.bankrbk.kz/api/v1/deposit_guarantee/getThreeNextEstates"
-SITE = "https://bankrbk.kz/ru"  # отдельных страниц у объектов нет
+SITE = "https://bankrbk.kz/ru/bank-property"  # раздел «Имущество банка»; объект — SITE/<id из API> (проверено 13.11.2026)
 KZ_TZ = timezone(timedelta(hours=5))
 CATEGORIES = {"flat": None, "house": "house", "commercial": "commercial", "land": "land"}
 
@@ -38,7 +38,7 @@ def parse_item(item: dict) -> ParsedLot | None:
 
     return ParsedLot(
         source_id=str(item["id"]),
-        url=SITE,
+        url=f"{SITE}/{item['id']}",
         title=f"{title}, {address}" if address else title,
         origin="bank_pledge",
         category=category,

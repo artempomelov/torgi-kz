@@ -16,6 +16,9 @@ URL = "https://www.bcc.kz/personal/collateral-base/"
 
 # Вкладки страницы: 1 — коммерческая, 2 — жилая, 3 — реализация с торгов, 4 — движимое (пропускаем)
 SKIP_TABS = {"4"}
+# Страниц у объектов нет, якорь #description-card-… скрытую вкладку не открывает (и номер в нём — позиция в списке),
+# поэтому ссылка — на список, а сайт подсказывает вкладку (extra.list_tab, web/src/components/DetailsView.tsx)
+TAB_TITLES = {"1": "Коммерческая недвижимость", "2": "Жилая недвижимость", "3": "Реализация с торгов"}
 
 _CARD_ID_RE = re.compile(r"description-card-(\d+)-(\d+)")
 _LABEL_RE = re.compile(r"^([^:]{2,60}):\s*(.+)$")
@@ -115,7 +118,7 @@ def parse_card(section: Tag) -> ParsedLot | None:
         price=price,
         images=images,
         contacts={k: v for k, v in {"contact": contact, "email": email.group(0) if email else None}.items() if v},
-        extra={"tab": tab, "card_id": section.get("id")},
+        extra={"tab": tab, "card_id": section.get("id"), "list_tab": TAB_TITLES.get(tab)},
     )
 
 
