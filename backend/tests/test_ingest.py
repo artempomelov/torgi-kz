@@ -181,3 +181,35 @@ def test_export_gated_private(tmp_path):
         assert "+77001234567" not in full and "bank.kz/1" not in full
         session.delete(lot)
         session.commit()
+
+
+def test_export_keeps_removed_car_pages(tmp_path):
+    """Снятая машина — не в каталоге (cars.json), но её страница остаётся 30 дней (cars-removed.json):
+    на неё ведут посты @torgi_kz_auto, бот и письма. Снятая раньше — уже нигде."""
+    import json
+    from datetime import timedelta
+
+    from torgi.db import SessionLocal, init_db
+    from torgi.export import export
+    from torgi.models import Lot, utcnow
+
+    init_db()
+    now = utcnow()
+
+    def car(sid, status, removed_days=None):
+        return Lot(source="fake_auto", source_id=sid, url=f"https://bank.kz/{sid}", origin="arrested",
+                   category="vehicle", title=f"Kia K5 {sid}, 2022 г.", price=8e6, status=status,
+                   removed_at=now - timedelta(days=removed_days) if removed_days is not None else None,
+                   first_seen_at=now, last_seen_at=now, updated_at=now, images=[], flags=[], extra={"brand": "Kia"})
+
+    with SessionLocal() as session:
+        cars = [car("c1", "active"), car("c2", "removed", 3), car("c3", "removed", 40)]
+        session.add_all(cars)
+        session.commit()
+        export(session, tmp_path)
+        ids = [c.id for c in cars]
+    active = {x["id"] for x in json.loads((tmp_path / "cars.json").read_text(encoding="utf-8"))["items"]}
+    removed = {x["id"]: x for x in json.loads((tmp_path / "cars-removed.json").read_text(encoding="utf-8"))["items"]}
+    assert ids[0] in active and ids[1] not in active and ids[2] not in active
+    assert set(removed) & set(ids) == {ids[1]} and removed[ids[1]]["status"] == "removed"
+    assert removed[ids[1]]["last_seen_at"]

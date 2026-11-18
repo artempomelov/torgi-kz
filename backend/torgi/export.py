@@ -200,7 +200,6 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
     ).all()
     # машины — отдельный раздел /avto/ со своим файлом; плашка «−N% к рынку» — по объявлениям aster.kz
     vehicles = [lot for lot in lots if lot.category == VEHICLE and lot.status == "active"]
-    lots = [lot for lot in lots if lot.category != VEHICLE]
     cars = [car_item(lot) for lot in vehicles]
     if car_market_index and car_market_index.exists():
         from torgi.car_market import CarIndex, car_badge
@@ -209,6 +208,12 @@ def export(session: Session, out_dir: Path, gated: bool = False, market_index: P
         for car in cars:
             car["market"] = car_badge(car, car_index)
     _dump(out_dir / "cars.json", {"generated_at": utcnow().isoformat(), "items": cars})
+    # снятые машины — только страницы /avto/N/ с пометкой «снят с продажи», REMOVED_KEEP_DAYS, как у недвижимости:
+    # на них ведут посты @torgi_kz_auto, бот и письма, а без страницы ссылка вела на 404
+    removed_cars = [{**car_item(lot), "status": lot.status, "last_seen_at": lot.last_seen_at.isoformat()}
+                    for lot in lots if lot.category == VEHICLE and lot.status != "active"]
+    _dump(out_dir / "cars-removed.json", {"items": removed_cars})
+    lots = [lot for lot in lots if lot.category != VEHICLE]
 
     dups = find_duplicates(lots)
     short = [

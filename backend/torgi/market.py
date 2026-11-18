@@ -36,6 +36,10 @@ log = logging.getLogger(__name__)
 BASE = "https://krisha.kz"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 DELAY_S = 1.5
+# пустая или неудачная страница посреди выдачи — обычно Крыша на минуту ограничила запросы: ждём и повторяем один раз
+RETRY_S = 30
+# город и раздел, где объявлений собрано меньше этой доли от прошлой сводки, считаем несобранными
+MIN_SHARE = 0.3
 KEEP_DAYS = 90  # объявления старше — не учитываем и удаляем
 MIN_SAMPLE = 8
 DB_PATH = Path(__file__).resolve().parents[1] / "market.db"
@@ -127,40 +131,67 @@ def parse_page(html: str, category: str, city: str) -> list[dict]:
 PAGE_FACTOR = {("apartment", True): 3, ("commercial", True): 3, ("commercial", False): 1.5, ("house", True): 1}
 
 
+class Blocked(Exception):
+    """Крыша закрыла доступ (403): так она с 18.11.2026 отвечает серверам GitHub. Повторы не помогают — сбор
+    останавливаем, сводка остаётся прошлой; свежие цены собираются с компьютера (backend/scripts/market-local.ps1)."""
+
+
+def _fetch_page(client: httpx.Client, url: str, category: str, city: str) -> list[dict]:
+    """Объявления со страницы выдачи. Пустую или неудачную страницу запрашиваем ещё раз через RETRY_S:
+    15.11.2026 Крыша отдала вторую страницу квартир Алматы без объявлений, сбор по городу остановился
+    на 22 объявлениях, и квартиры Алматы остались без оценки."""
+    for attempt in (1, 2):
+        try:
+            res = client.get(url)
+        except httpx.HTTPError as e:
+            log.warning("krisha %s: %s", url, e)
+            res = None
+        time.sleep(DELAY_S)
+        if res is not None and res.status_code == 403:
+            raise Blocked(url)
+        if res is not None and res.status_code == 200:
+            rows = parse_page(res.text, category, city)
+            if rows:
+                return rows
+            log.warning("krisha %s: нет объявлений (попытка %d)", url, attempt)
+        elif res is not None:
+            log.warning("krisha %s: %s (попытка %d)", url, res.status_code, attempt)
+        if attempt == 1:
+            time.sleep(RETRY_S)
+    return []
+
+
 def collect(db: sqlite3.Connection, pages: int = 25, cities: list[str] | None = None) -> dict[str, int]:
     """Обойти выдачу Крыши: по городам и разделам, первые страницы (сколько — PAGE_FACTOR × pages)."""
     client = httpx.Client(timeout=30, headers={"User-Agent": UA, "Accept-Language": "ru"}, follow_redirects=True)
     now = datetime.now(timezone.utc).isoformat()
     stats = {"pages": 0, "listings": 0}
-    for slug in cities or CITIES:
-        city = CITIES[slug]
-        for section, category in SECTIONS.items():
-            limit = round(pages * PAGE_FACTOR.get((category, slug in BIG), 0.5))
-            for page in range(1, max(limit, 1) + 1):
-                url = f"{BASE}/prodazha/{section}/{slug}/" + (f"?page={page}" if page > 1 else "")
-                try:
-                    res = client.get(url)
-                except httpx.HTTPError as e:
-                    log.warning("krisha %s: %s", url, e)
-                    break
-                time.sleep(DELAY_S)
-                if res.status_code != 200:
-                    log.warning("krisha %s: %s", url, res.status_code)
-                    break
-                rows = parse_page(res.text, category, city)
-                stats["pages"] += 1
-                if not rows:
-                    break
-                db.executemany(
-                    "INSERT INTO listings (id, category, city, district, rooms, area, price, seen_at, shell) "
-                    "VALUES (:id, :category, :city, :district, :rooms, :area, :price, :seen_at, :shell) "
-                    "ON CONFLICT(id) DO UPDATE SET price = excluded.price, district = excluded.district, "
-                    "seen_at = excluded.seen_at, shell = excluded.shell",
-                    [{**r, "seen_at": now} for r in rows],
-                )
-                stats["listings"] += len(rows)
-            db.commit()
-            log.info("krisha %s / %s: собрано, всего %d", city, section, stats["listings"])
+    try:
+        for slug in cities or CITIES:
+            city = CITIES[slug]
+            for section, category in SECTIONS.items():
+                limit = round(pages * PAGE_FACTOR.get((category, slug in BIG), 0.5))
+                for page in range(1, max(limit, 1) + 1):
+                    url = f"{BASE}/prodazha/{section}/{slug}/" + (f"?page={page}" if page > 1 else "")
+                    rows = _fetch_page(client, url, category, city)
+                    stats["pages"] += 1
+                    if not rows:
+                        break
+                    db.executemany(
+                        "INSERT INTO listings (id, category, city, district, rooms, area, price, seen_at, shell) "
+                        "VALUES (:id, :category, :city, :district, :rooms, :area, :price, :seen_at, :shell) "
+                        "ON CONFLICT(id) DO UPDATE SET price = excluded.price, district = excluded.district, "
+                        "seen_at = excluded.seen_at, shell = excluded.shell",
+                        [{**r, "seen_at": now} for r in rows],
+                    )
+                    stats["listings"] += len(rows)
+                db.commit()
+                log.info("krisha %s / %s: собрано, всего %d", city, section, stats["listings"])
+    except Blocked as e:
+        # собранное до запрета сохраняем, старые объявления не удаляем: недособранные города возьмёт index --prev
+        db.commit()
+        log.error("krisha: доступ закрыт (403) на %s — сбор остановлен", e)
+        return {**stats, "blocked": 1}
     cutoff = (datetime.now(timezone.utc) - timedelta(days=KEEP_DAYS)).isoformat()
     db.execute("DELETE FROM listings WHERE seen_at < ?", (cutoff,))
     db.commit()
@@ -228,6 +259,25 @@ class MarketIndex:
             "segments": {"|".join(k or "" for k in key): list(v) for key, v in sorted(self.stats.items(), key=lambda kv: [k or "" for k in kv[0]])},
         }
         path.write_text(json.dumps(data, ensure_ascii=False, indent=0), encoding="utf-8")
+
+    def keep_previous(self, prev: "MarketIndex", min_share: float = MIN_SHARE) -> list[str]:
+        """Город и раздел, где сбор не удался (объявлений меньше min_share от прошлой сводки), берём из прошлой
+        сводки целиком. Иначе один сбойный запрос оставляет город без оценки до следующего сбора."""
+        kept = []
+        for key, old in sorted(prev.stats.items(), key=lambda kv: [k or "" for k in kv[0]]):
+            category, city, district, extra = key
+            if district or extra:
+                continue
+            new = self.stats.get(key)
+            if new and new[3] >= min_share * old[3]:
+                continue
+            for k in [k for k in self.stats if k[:2] == (category, city)]:
+                del self.stats[k]
+            self.stats.update({k: v for k, v in prev.stats.items() if k[:2] == (category, city)})
+            kept.append(f"{category} {city}: {new[3] if new else 0} объявл. против {old[3]}")
+        if not self.updated_at:  # не собралось ничего — сводка целиком прошлая
+            self.updated_at = prev.updated_at
+        return kept
 
     @classmethod
     def from_json(cls, path: Path) -> "MarketIndex":

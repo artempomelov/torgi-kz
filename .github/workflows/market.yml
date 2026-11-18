@@ -37,12 +37,25 @@ jobs:
       - name: Сбор цен и сводка
         working-directory: backend
         run: |
+          # с 18.11.2026 Крыша отвечает серверам GitHub 403: сбор сразу останавливается, сводка остаётся прошлой,
+          # свежие цены собираются с компьютера владельца — backend/scripts/market-local.ps1
           uv run python -m torgi.cli market collect
-          uv run python -m torgi.cli market index --out ../market-index.json
-          # меньше 200 сегментов — сбор не удался (например, сайт ограничил запросы): старую сводку не трогаем
+          # прошлая сводка: город, где сбор не удался (Крыша ограничила запросы), берём из неё, а не оставляем без оценки
+          gh release download data --pattern market-index.json --output ../prev-market-index.json || echo "прошлой сводки нет"
+          uv run python -m torgi.cli market index --out ../market-index.json --prev ../prev-market-index.json
+          # меньше 200 сегментов — сбор не удался, а прошлой сводки нет: старую сводку не трогаем
           n=$(python3 -c "import json; print(len(json.load(open('../market-index.json'))['segments']))")
           echo "сегментов: $n"
           [ "$n" -ge 200 ] || { echo "::error::Слишком мало данных ($n сегментов)"; exit 1; }
+          # письмо о сбое — только когда цены устарели больше чем на две недели; раньше — предупреждение в запуске
+          age=$(python3 -c "import json, datetime as d; u = json.load(open('../market-index.json')).get('updated_at') or '2000-01-01T00:00:00+00:00'; print((d.datetime.now(d.timezone.utc) - d.datetime.fromisoformat(u)).days)")
+          echo "сводке дней: $age"
+          if [ "$age" -gt 14 ]; then
+            echo "::error::Цены Крыши не обновлялись $age дн.: Крыша не пускает серверы GitHub. Соберите с компьютера: backend/scripts/market-local.ps1"
+            exit 1
+          elif [ "$age" -ge 1 ]; then
+            echo "::warning::Крыша не отдала новых объявлений — оставлена сводка $age-дневной давности. Свежие цены — с компьютера: backend/scripts/market-local.ps1"
+          fi
       - name: Сохранить в релиз «data»
         run: gh release upload data market-index.json --clobber
 

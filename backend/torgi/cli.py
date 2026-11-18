@@ -10,6 +10,7 @@
 
 import argparse
 import logging
+import os
 import sys
 
 from torgi.db import SessionLocal, init_db
@@ -43,7 +44,9 @@ def main() -> None:
                    help="cars — собрать цены машин с aster.kz и сохранить сводку")
     k.add_argument("--out", help="для index и cars: куда сохранить сводку (market-index.json / car-market-index.json)")
     k.add_argument("--pages", type=int, default=25, help="страниц выдачи на город и раздел")
+    k.add_argument("--prev", help="для index: прошлая сводка — города, где сбор не удался, берутся из неё")
     k.add_argument("--city", action="append", help="slug города на Крыше (almaty, astana…); по умолчанию все")
+    k.add_argument("--db", help="своя база объявлений вместо backend/market.db (для чистого сбора с компьютера)")
     e = sub.add_parser("export", help="выгрузить JSON для статического сайта")
     e.add_argument("out_dir", help="каталог, например ../web/data")
     e.add_argument("--gated", action="store_true", help="платный режим: без закрытых полей (адрес, контакты…)")
@@ -122,20 +125,24 @@ def main() -> None:
         with SessionLocal() as session:
             logging.info("email: %s", run_from_env(session, dry_run=args.dry_run))
     elif args.cmd == "market":
+        from pathlib import Path
+
         from torgi import market
 
-        db = market.connect()
+        db = market.connect(Path(args.db)) if args.db else market.connect()
         if args.action == "collect":
             logging.info("krisha: %s", market.collect(db, pages=args.pages, cities=args.city))
         elif args.action == "index":
-            from pathlib import Path
-
             index = market.MarketIndex.from_db(db)
+            if args.prev and Path(args.prev).exists():
+                if kept := index.keep_previous(market.MarketIndex.from_json(Path(args.prev))):
+                    logging.warning("сбор не удался, оставлена прошлая сводка (%d): %s", len(kept), "; ".join(kept))
+                    if os.environ.get("GITHUB_ACTIONS"):
+                        print(f"::warning::Крыша не отдала объявления по {len(kept)} городам и разделам — "
+                              "для них оставлены прошлые цены")
             index.to_json(Path(args.out or "market-index.json"))
             logging.info("сводные цены: %d сегментов → %s", len(index.stats), args.out or "market-index.json")
         elif args.action == "cars":
-            from pathlib import Path
-
             from torgi import car_market
 
             logging.info("aster: %s", car_market.collect(db))

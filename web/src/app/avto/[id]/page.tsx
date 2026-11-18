@@ -8,15 +8,15 @@ import { LotImage } from "@/components/LotImage";
 import { ShareButtons } from "@/components/ShareButtons";
 import { TelegramCta } from "@/components/TelegramCta";
 import { VEHICLE_TYPES, carName, type Car } from "@/lib/cars";
-import { getCar, getCars } from "@/lib/data";
+import { getCar, getCars, getRemovedCars } from "@/lib/data";
 import { ORIGIN_LABELS, SALE_TYPE_LABELS, SOURCE_LABELS, formatDate, formatPrice, formatPriceShort } from "@/lib/format";
 import { consultLink } from "@/lib/subscribe";
 
-// Статическая сборка: страница на каждую машину из выгрузки
+// Статическая сборка: страница на каждую машину из выгрузки и на снятые за 30 дней (с пометкой «снят с продажи»)
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  const cars = getCars();
+  const cars = [...getCars(), ...getRemovedCars()];
   // пустой список ломает статическую сборку — тогда одна страница-заглушка (отдаёт 404)
   return cars.length ? cars.map((c) => ({ id: String(c.id) })) : [{ id: "0" }];
 }
@@ -47,6 +47,7 @@ export default async function CarPage({ params }: PageProps<"/avto/[id]">) {
   const car = getCar((await params).id);
   if (!car) notFound();
   const isAuction = car.sale_type === "auction" || car.sale_type === "auction_down";
+  const active = !car.status || car.status === "active";
   const name = carName(car);
   const specs: [string, string | number | null | undefined][] = [
     ["Тип", VEHICLE_TYPES[car.vehicle_type]],
@@ -71,6 +72,15 @@ export default async function CarPage({ params }: PageProps<"/avto/[id]">) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <Link href="/avto/" className="text-sm text-muted hover:text-brand-ink">← Все автомобили</Link>
+
+      {active ? null : (
+        <div className="mt-4 rounded-lg border border-accent/40 bg-accent/15 p-3 text-sm text-accent-ink">
+          {car.status === "ended" && car.auction_date
+            ? `Торги прошли ${formatDate(car.auction_date, true)}. Итоги — у продавца.`
+            : `Автомобиль снят с продажи у источника${car.last_seen_at ? ` ${formatDate(car.last_seen_at)}` : "."}`}{" "}
+          <Link href="/avto/" className="font-medium underline">Другие автомобили с торгов</Link>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {car.sale_type && <Badge tone={isAuction ? "success" : "neutral"}>{SALE_TYPE_LABELS[car.sale_type]}</Badge>}
@@ -147,14 +157,16 @@ export default async function CarPage({ params }: PageProps<"/avto/[id]">) {
             </a>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
-            <div className="text-sm font-semibold">Нужна помощь с покупкой?</div>
-            <a href={consultLink(car.id)} target="_blank" rel="noopener noreferrer"
-               className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
-              Бесплатная консультация по лоту
-            </a>
-            <p className="text-xs text-muted">Ответим на вопросы и подскажем, что проверить перед покупкой, — в Telegram.</p>
-          </div>
+          {active && (
+            <div className="space-y-2 rounded-xl border border-border bg-surface p-4">
+              <div className="text-sm font-semibold">Нужна помощь с покупкой?</div>
+              <a href={consultLink(car.id)} target="_blank" rel="noopener noreferrer"
+                 className="block rounded-lg bg-brand-ink px-4 py-2.5 text-center text-sm font-semibold text-white hover:opacity-90">
+                Бесплатная консультация по лоту
+              </a>
+              <p className="text-xs text-muted">Ответим на вопросы и подскажем, что проверить перед покупкой, — в Telegram.</p>
+            </div>
+          )}
 
           <div className="rounded-xl border border-border bg-surface p-4">
             <ShareButtons url={`https://torgi.kz/avto/${car.id}/`} text={`${name} — ${formatPrice(car.price)}`} />

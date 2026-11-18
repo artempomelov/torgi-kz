@@ -207,3 +207,63 @@ def test_car_market():
               origin="bank_balance", sale_type="direct", extra={})
     text = format_post(lot, badge=car_market.car_badge(car, index))
     assert "🔥 Цена на 15% ниже рынка" in text
+
+
+def test_index_keeps_previous_city_when_collect_failed():
+    def idx(almaty_n):
+        stats = {("apartment", "Алматы", None, None): (500_000, 700_000, 900_000, almaty_n),
+                 ("apartment", "Астана", None, None): (450_000, 650_000, 800_000, 900)}
+        if almaty_n > 100:
+            stats[("apartment", "Алматы", "Медеуский район", "2")] = (800_000, 950_000, 1_100_000, 40)
+        return market.MarketIndex(stats)
+
+    prev, failed = idx(1250), idx(21)
+    assert failed.keep_previous(prev) == ["apartment Алматы: 21 объявл. против 1250"]
+    assert failed.stats[("apartment", "Алматы", None, None)][3] == 1250
+    assert ("apartment", "Алматы", "Медеуский район", "2") in failed.stats
+    # нормальный сбор и город, которого не было в прошлой сводке, не трогаем
+    fresh = idx(1100)
+    fresh.stats[("apartment", "Конаев", None, None)] = (300_000, 400_000, 500_000, 30)
+    assert fresh.keep_previous(prev) == [] and fresh.stats[("apartment", "Алматы", None, None)][3] == 1100
+
+
+def test_fetch_page_retries_empty_page(monkeypatch):
+    monkeypatch.setattr(market.time, "sleep", lambda s: None)
+    card = page({"id": 7, "title": "1-комнатная квартира · 40 м² · 3/9 этаж", "price": "25&nbsp;000&nbsp;000",
+                 "subtitle": "Есильский р-н"})
+
+    def client(*texts):
+        answers = iter(texts)
+        return type("Client", (), {"get": lambda self, url: type("Res", (), {"status_code": 200, "text": next(answers)})()})()
+
+    assert [r["id"] for r in market._fetch_page(client("<html>подождите</html>", card), "u", "apartment", "Астана")] == [7]
+    assert market._fetch_page(client("", ""), "u", "apartment", "Астана") == []
+
+
+def test_collect_stops_when_krisha_blocks(monkeypatch, tmp_path):
+    """403 — доступ закрыт (так Крыша с 18.11.2026 отвечает серверам GitHub): без повторов и без обхода всех городов,
+    собранное до запрета остаётся, старые объявления не удаляются."""
+    sleeps = []
+    monkeypatch.setattr(market.time, "sleep", sleeps.append)
+    card = page({"id": 7, "title": "1-комнатная квартира · 40 м² · 3/9 этаж", "price": "25&nbsp;000&nbsp;000",
+                 "subtitle": "Есильский р-н"})
+    urls = []
+
+    class Client:
+        def __init__(self, **kw):
+            pass
+
+        def get(self, url):
+            urls.append(url)
+            ok = url.endswith("/kvartiry/astana/")
+            return type("Res", (), {"status_code": 200 if ok else 403, "text": card if ok else ""})()
+
+    monkeypatch.setattr(market.httpx, "Client", Client)
+    db = market.connect(tmp_path / "m.db")
+    db.execute("INSERT INTO listings (id, category, city, district, rooms, area, price, seen_at, shell) "
+               "VALUES (1, 'apartment', 'Алматы', NULL, 1, 40, 2e7, '2020-01-01T00:00:00+00:00', 0)")
+    stats = market.collect(db, pages=1, cities=["astana", "almaty"])
+    assert stats["blocked"] == 1 and stats["listings"] == 1
+    # вторая страница квартир Астаны — 403: дальше не идём, повторов через RETRY_S нет
+    assert len(urls) == 2 and market.RETRY_S not in sleeps
+    assert {r["id"] for r in db.execute("SELECT id FROM listings")} == {1, 7}

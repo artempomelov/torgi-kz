@@ -31,6 +31,8 @@ export type Car = {
   market?: MarketBadge | null; // плашка «−N% к рынку» по объявлениям aster.kz (backend/torgi/car_market.py)
   images: string[];
   description: string | null;
+  status?: "active" | "removed" | "ended"; // только у снятых (cars-removed.json); в cars.json — все активные
+  last_seen_at?: string;
 };
 
 export const VEHICLE_TYPES: Record<string, string> = {

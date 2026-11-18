@@ -29,7 +29,17 @@ export function getCars(): Car[] {
   }
 }
 
-export const getCar = (id: string) => getCars().find((c) => String(c.id) === id);
+/** Снятые машины за 30 дней — только для их страниц: на них ведут старые посты канала, бот и письма. */
+export function getRemovedCars(): Car[] {
+  try {
+    return read<{ items: Car[] }>("cars-removed.json").items;
+  } catch {
+    return [];
+  }
+}
+
+export const getCar = (id: string) =>
+  getCars().find((c) => String(c.id) === id) ?? getRemovedCars().find((c) => String(c.id) === id);
 
 /** Раздел «ТОП»; без файла (старая выгрузка) — пустой. */
 export function getTop(): TopData {

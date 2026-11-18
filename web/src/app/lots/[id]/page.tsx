@@ -100,7 +100,7 @@ export default async function LotPage({ params }: PageProps<"/lots/[id]">) {
         <div className="mt-4 rounded-lg border border-accent/40 bg-accent/15 p-3 text-sm text-accent-ink">
           {lot.status === "ended"
             ? `Торги прошли ${formatDate(lot.auction_end ?? lot.auction_start!, true)}. Итоги — у продавца.`
-            : `Объект снят с продажи у источника ${formatDate(lot.last_seen_at)}.`}
+            : `Объект снят с продажи у источника ${formatDate(lot.last_seen_at)}`}
         </div>
       )}
 
