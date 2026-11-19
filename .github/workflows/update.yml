@@ -38,7 +38,7 @@ jobs:
     timeout-minutes: 120
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url }}
     env:
       GH_TOKEN: ${{ github.token }}
       TORGI_DATABASE_URL: sqlite:///${{ github.workspace }}/torgi.db
@@ -172,15 +172,31 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/out
+      # GitHub Pages иногда отвечает 502 (18.11.2026: «Failed to create deployment … Server error»). Повторяем
+      # через минуту; бот подписок работает в любом случае, а посты в каналы и письма ждут, пока сайт опубликуется
+      # (следующий запуск их доделает: выпуск и письма считаются от последней публикации/проверки)
       - name: Публикация на GitHub Pages
         id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Пауза перед повторной публикацией
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - name: Публикация на GitHub Pages — повтор
+        id: deploy_retry
+        if: steps.deploy.outcome == 'failure'
+        continue-on-error: true
         uses: actions/deploy-pages@v4
 
       - name: Telegram — канал и бот подписок
         if: env.TORGI_TELEGRAM_BOT_TOKEN != '' && steps.parse.outputs.sources != ''
         working-directory: backend
+        env:
+          SITE_DEPLOYED: ${{ steps.deploy.outcome == 'success' || steps.deploy_retry.outcome == 'success' }}
         run: |
-          if [ -n "$TORGI_TELEGRAM_CHANNEL" ]; then
+          if [ "$SITE_DEPLOYED" != "true" ]; then
+            echo "::warning::Сайт не опубликован — посты в каналы будут в следующий запуск (без новых страниц ссылки вели бы на 404)"
+          elif [ -n "$TORGI_TELEGRAM_CHANNEL" ]; then
             if [ "${{ inputs.refresh_posts }}" = "true" ]; then
               uv run python -m torgi.cli post --refresh || echo "::warning::Не удалось переписать посты"
             fi
@@ -193,7 +209,9 @@ jobs:
           (cd .. && bash .github/scripts/db-release.sh save)
 
       - name: Письма о новых лотах по подпискам с сайта
-        if: env.BREVO_API_KEY != '' && steps.cf.outputs.db_id != '' && steps.parse.outputs.sources != ''
+        if: >-
+          env.BREVO_API_KEY != '' && steps.cf.outputs.db_id != '' && steps.parse.outputs.sources != ''
+          && (steps.deploy.outcome == 'success' || steps.deploy_retry.outcome == 'success')
         working-directory: backend
         env:
           CF_D1_DATABASE_ID: ${{ steps.cf.outputs.db_id }}
@@ -211,3 +229,10 @@ jobs:
             git commit --allow-empty -m "keepalive: расписание обновлений активно"
             git push
           fi
+
+      # письмо о сбое — только если GitHub Pages не принял сайт и со второй попытки (после того как бот отработал)
+      - name: Итог публикации сайта
+        if: steps.deploy.outcome == 'failure' && steps.deploy_retry.outcome != 'success'
+        run: |
+          echo "::error::GitHub Pages не принял публикацию и со второй попытки — сайт обновится в следующий запуск (через 30 мин). Если повторяется — githubstatus.com"
+          exit 1
